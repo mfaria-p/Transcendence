@@ -10,6 +10,6 @@
 4. User Management
 
 6. Server side
-   - API para o cliente comunicar com o server
+   - API for the client communication with the server
 
 5. Remote players
