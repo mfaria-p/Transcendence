@@ -1,0 +1,21 @@
+{
+  "name": "frontend",
+  "version": "1.0.0",
+  "scripts": {
+    "dev:css": "tailwindcss -i src/input.css -o dist/output.css --watch",
+    "dev:ts": "tsc --watch",
+    "dev": "npm run dev:css & npm run dev:ts",
+    "build:css": "tailwindcss -i src/input.css -o dist/output.css --minify",
+    "build:ts": "tsc",
+    "build": "npm run build:ts && npm run build:css",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "devDependencies": {
+    "tailwindcss": "^4.1.13",
+    "typescript": "^5.9.2"
+  }
+}
