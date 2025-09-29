@@ -11,7 +11,7 @@ const fastify = Fastify({
   logger: true
 })
 
-await fastify.register(swagger, {
+fastify.register(swagger, {
   openapi: {
     info: {
       title: 'My API',
@@ -21,7 +21,7 @@ await fastify.register(swagger, {
   }
 });
 
-await fastify.register(swaggerUI, {
+fastify.register(swaggerUI, {
   routePrefix: '/docs',
   staticCSP: true,
   uiConfig: { docExpansion: 'list' }
@@ -31,7 +31,7 @@ fastify.register(routes)
 
 const start = async () => {
   try {
-    await fastify.listen({port:PORT, host:'localhost'}, (err,addr) => {
+    await fastify.listen({port:PORT, host:'0.0.0.0'}, (err,addr) => {
       fastify.log.info(`server listening on ${addr}`)
     })
   } catch (err) {

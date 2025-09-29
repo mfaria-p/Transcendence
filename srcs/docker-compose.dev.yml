@@ -1,0 +1,14 @@
+services:
+  backend:
+    image: node:20-alpine
+    working_dir: /app
+    command: sh -lc "npm install && npm run dev"
+    ports:
+      - "3000:3000"
+      - "9229:9229"
+    environment:
+      NODE_ENV: development
+      FASTIFY_ADDRESS: 0.0.0.0
+    volumes:
+      - ./backend:/app
+      - /app/node_modules

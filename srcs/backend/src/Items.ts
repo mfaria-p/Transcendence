@@ -3,7 +3,7 @@
 const Items = [
   {
     id:'1',
-    name:'item one'
+    name:'item ONE'
   },
   {
     id:'2',
