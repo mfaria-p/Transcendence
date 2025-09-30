@@ -4,7 +4,8 @@
   "scripts": {
     "dev:css": "tailwindcss -i src/input.css -o dist/output.css --watch",
     "dev:ts": "tsc --watch",
-    "dev": "npm run dev:css & npm run dev:ts",
+    "dev:liveserver": "live-server dist",
+    "dev": "npm run dev:css & npm run dev:ts & npm run dev:liveserver",
     "build:css": "tailwindcss -i src/input.css -o dist/output.css --minify",
     "build:ts": "tsc",
     "copy:html": "cp src/index.html dist/index.html",
@@ -17,6 +18,7 @@
   "description": "",
   "devDependencies": {
     "@tailwindcss/cli": "^4.1.13",
+    "live-server": "^1.2.2",
     "tailwindcss": "^4.1.13",
     "typescript": "^5.9.2"
   }
