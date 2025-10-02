@@ -1,0 +1,25 @@
+{
+  "name": "auth",
+  "version": "1.0.0",
+  "main": "src/server.js",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/server.ts"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "devDependencies": {
+    "prisma": "^6.16.2"
+  },
+  "dependencies": {
+    "@fastify/cookie": "^11.0.2",
+    "@fastify/jwt": "^10.0.0",
+    "@prisma/client": "^6.16.2",
+    "argon2": "^0.44.0",
+    "dotenv": "^17.2.2",
+    "fastify": "^5.6.1",
+    "fastify-plugin": "^5.1.0"
+  }
+}
