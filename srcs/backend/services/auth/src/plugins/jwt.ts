@@ -1,13 +1,20 @@
 // src/plugins/jwt.ts
 
+import type {FastifyRequest, FastifyReply} from 'fastify'
 import fp from 'fastify-plugin';
 import jwt from '@fastify/jwt';
 
-export default fp(async (auth, opts) => {
-  const jwtSecret = process.env.JWT_SECRET;
-  if (!jwtSecret) throw new Error("Missing JWT_SECRET in environment");
-  await auth.register(jwt, {
-    secret: jwtSecret,
+declare module 'fastify' { 
+  interface FastifyInstance {
+    authenticate(req: FastifyRequest, reply: FastifyReply): void;
+  }
+}
+
+// TODO
+// use private/public key pair
+export default fp(async (auth) => {
+  auth.register(jwt as any, {
+    secret: process.env.JWT_SECRET!,
     sign: {issuer: 'auth-svc'},
     verify: {issuer: 'auth-svc'},
   });

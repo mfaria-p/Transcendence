@@ -1,18 +1,14 @@
 // src/build.ts
 
-import Fastify, {
-  FastifyInstance,
-  FastifyReply,
-  FastifyRequest,
-  FastifyServerOptions,
-} from 'fastify';
-import swagger from './plugins/swagger';
-import cookie from './plugins/cookie';
-import jwt from './plugins/jwt';
+import type {FastifyInstance, FastifyServerOptions} from 'fastify';
+import Fastify from 'fastify';
+import swagger from './plugins/swagger.js';
+import cookie from './plugins/cookie.js';
+import jwt from './plugins/jwt.js';
 // import oauth2 from '@fastify/oauth2';
-import prisma from './plugins/prisma';
-import routes from './routes';
-import dotenv from 'dotenv';
+import prisma from './plugins/prisma.js';
+import routes from './routes.js';
+import * as dotenv from 'dotenv';
 dotenv.config();
 
 export async function buildServer(opts: FastifyServerOptions = {}): Promise<FastifyInstance> {
