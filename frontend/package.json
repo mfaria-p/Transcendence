@@ -2,7 +2,7 @@
   "name": "frontend",
   "version": "1.0.0",
   "scripts": {
-    "copy:html": "mkdir dist && cp src/index.html dist/index.html",
+    "copy:html": "mkdir -p dist && cp src/index.html dist/index.html",
     "dev:css": "tailwindcss -i src/input.css -o dist/output.css --watch",
     "dev:ts": "tsc --watch",
     "dev:liveserver": "sleep 5 && live-server dist",
