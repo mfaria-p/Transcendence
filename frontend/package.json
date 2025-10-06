@@ -1,0 +1,25 @@
+{
+  "name": "frontend",
+  "version": "1.0.0",
+  "scripts": {
+    "copy:html": "mkdir -p dist && cp src/index.html dist/index.html",
+    "dev:css": "tailwindcss -i src/input.css -o dist/output.css --watch",
+    "dev:ts": "tsc --watch",
+    "dev:liveserver": "sleep 5 && live-server dist",
+    "dev": "npm run copy:html && (npm run dev:css & npm run dev:ts & npm run dev:liveserver)",
+    "build:css": "tailwindcss -i src/input.css -o dist/output.css --minify",
+    "build:ts": "tsc",
+    "build": "npm run build:ts && npm run build:css && npm run copy:html",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "devDependencies": {
+    "@tailwindcss/cli": "^4.1.13",
+    "live-server": "^1.2.2",
+    "tailwindcss": "^4.1.13",
+    "typescript": "^5.9.2"
+  }
+}
