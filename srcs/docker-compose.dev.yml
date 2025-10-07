@@ -1,11 +1,12 @@
 services:
   nginx:
-    image: nginx:alpine
+    build:
+      context: ./nginx
+      dockerfile: Dockerfile.dev
     ports:
-      - "8080:80"
+      - "9000:80"
     volumes:
       - ./nginx/dev.conf:/etc/nginx/nginx.conf:ro
-      - ./nginx/example:/example:ro
     depends_on:
       - auth
     networks: [appnet]
@@ -16,9 +17,9 @@ services:
       dockerfile: services/auth/Dockerfile.dev
     expose:
       - "3001"
-    networks: [appnet]
     volumes:
       - ./backend/services/auth:/app/services/auth
+    networks: [appnet]
 
 networks:
   appnet:
