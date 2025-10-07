@@ -1,0 +1,12 @@
+FROM node:20-alpine
+WORKDIR /app
+COPY package*.json ./
+COPY .env ./
+COPY services/auth/package.json ./services/auth/
+RUN npm ci #--workspace ./services/auth
+COPY services/auth ./services/auth
+RUN npx prisma generate --schema ./services/auth/prisma/schema.prisma
+WORKDIR /app/services/auth
+RUN npm i
+EXPOSE 3001
+CMD ["npm","run","dev"]
