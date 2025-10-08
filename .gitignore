@@ -1,5 +1,6 @@
-# Dependencies
 node_modules/
-
-# Build outputs
+.env
+example/
+*.db
 dist/
+.idea/

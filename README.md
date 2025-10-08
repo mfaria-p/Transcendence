@@ -7,9 +7,9 @@
 
 2. AI algorithm
 
-4. User Management
+3. User Management
 
-6. Server side
+4. Server side
    - API for the client communication with the server
 
 5. Remote players
