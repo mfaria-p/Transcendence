@@ -2,10 +2,10 @@
   "name": "frontend",
   "version": "1.0.0",
   "scripts": {
-    "copy:html": "mkdir -p dist && cp src/index.html dist/index.html",
+    "copy:html": "mkdir -p dist && cp src/*.html dist/",
     "dev:css": "tailwindcss -i src/input.css -o dist/output.css --watch",
     "dev:ts": "tsc --watch",
-    "dev:liveserver": "sleep 5 && live-server dist",
+    "dev:liveserver": "sleep 5 && live-server dist --no-cache",
     "dev": "npm run copy:html && (npm run dev:css & npm run dev:ts & npm run dev:liveserver)",
     "build:css": "tailwindcss -i src/input.css -o dist/output.css --minify",
     "build:ts": "tsc",
