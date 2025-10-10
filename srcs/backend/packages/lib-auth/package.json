@@ -1,0 +1,25 @@
+{
+  "name": "@pkg/lib-auth",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "type": "module",
+  "exports": "./dist/jwt.js",
+  "types": "./dist/jwt.d.js",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "typecheck": "tsc --noEmit --watch src/jwt.ts",
+    "build": "tsc -p tsconfig.json"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "packageManager": "pnpm@10.18.1",
+  "dependencies": {
+    "@fastify/jwt": "^10.0.0",
+    "fastify": "^5.6.1",
+    "fastify-plugin": "^5.1.0"
+  }
+}

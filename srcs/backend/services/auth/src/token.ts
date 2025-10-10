@@ -2,7 +2,7 @@
 
 import type {FastifyInstance} from 'fastify';
 import type {User, RefreshToken, Prisma} from '@prisma/client';
-
+import type {JWT} from '@fastify/jwt';
 import * as argon from 'argon2';
 import {randomBytes, createHash} from 'crypto';
 
@@ -93,6 +93,6 @@ export async function rtVerifyHash(db: FastifyInstance['prisma'], rtHash: string
 }
 
 // access token
-export function atGenerate(jwt: FastifyInstance['jwt'], payload: Object): string {
+export function atGenerate(jwt: JWT, payload: Object): string {
   return jwt.sign(payload, {expiresIn: '15m'});
 }
