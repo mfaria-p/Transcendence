@@ -1,12 +1,13 @@
 FROM node:20-alpine
+RUN corepack enable
 WORKDIR /app
-COPY package*.json ./
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY packages/lib-auth/package.json ./packages/lib-auth/package.json
+COPY services/auth/package.json ./services/auth/package.json
 COPY .env ./
-COPY services/auth/package.json ./services/auth/
-RUN npm ci #--workspace ./services/auth
-COPY services/auth ./services/auth
+RUN pnpm install -r --filter "@svc/auth" --frozen-lockfile
+COPY . .
 RUN npx prisma generate --schema ./services/auth/prisma/schema.prisma
 WORKDIR /app/services/auth
-RUN npm i
 EXPOSE 3001
-CMD ["npm","run","dev"]
+CMD ["pnpm","-r","dev"]

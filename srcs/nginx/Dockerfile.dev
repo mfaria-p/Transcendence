@@ -1,4 +1,3 @@
 FROM nginx:alpine
-COPY ./example /usr/share/nginx/html/example
 EXPOSE 80
 CMD ["nginx","-g","daemon off;","-c","/etc/nginx/nginx.conf"]

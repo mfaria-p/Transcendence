@@ -2,7 +2,7 @@
 
 import type {FastifyInstance} from 'fastify';
 import type {User, RefreshToken, Prisma} from '@prisma/client';
-import type {JWT} from '@fastify/jwt';
+import type {JWT} from '@pkg/lib-auth';
 import * as argon from 'argon2';
 import {randomBytes, createHash} from 'crypto';
 
