@@ -4,3 +4,4 @@ example/
 *.db
 dist/
 .idea/
+generated/
