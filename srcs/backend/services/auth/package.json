@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "tsx watch src/server.ts",
     "test": "npx vitest",
-    "typecheck": "tsc --noEmit --watch src/server.ts"
+    "typecheck": "tsc --noEmit --watch src/server.ts",
+    "build": "tsc -p tsconfig.json"
   },
   "keywords": [],
   "author": "",

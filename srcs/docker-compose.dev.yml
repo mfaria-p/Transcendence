@@ -23,11 +23,9 @@ services:
   auth:
     build:
       context: ./backend
-      dockerfile: services/auth/Dockerfile.dev
+      dockerfile: services/auth/Dockerfile
     expose:
       - "3001"
-    volumes:
-      - ./backend/services/auth:/app/services/auth
     networks: [appnet]
 
 networks:

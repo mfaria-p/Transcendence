@@ -2,12 +2,12 @@
   "name": "@pkg/lib-auth",
   "version": "1.0.0",
   "description": "",
-  "main": "index.js",
+  "main": "main.js",
   "type": "module",
-  "exports": "./dist/jwt.js",
-  "types": "./dist/jwt.d.js",
+  "exports": "./dist/src/jwt.js",
+  "types": "./dist/src/jwt.d.ts",
   "files": [
-    "dist"
+    "dist/src"
   ],
   "scripts": {
     "typecheck": "tsc --noEmit --watch src/jwt.ts",

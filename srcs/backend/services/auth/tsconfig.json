@@ -2,5 +2,5 @@
   "extends": "../../tsconfig.json",
   "include": ["src"],
   "compilerOptions": { "outDir": "dist" },
-  "references": [{ "path": "../../packages" }]
+  "references": [{ "path": "../../packages/lib-auth" }]
 }
