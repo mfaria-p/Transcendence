@@ -1,6 +1,7 @@
 {
   "name": "backend",
   "version": "1.0.0",
+  "type": "module",
   "scripts": {
     "test": "vitest run",
     "lint": "eslint services --ext .ts",

@@ -1,16 +1,17 @@
 // src/jwt.ts
 
-import type {FastifyRequest, FastifyReply, FastifyInstance} from 'fastify';
+import type {FastifyRequest, FastifyReply} from 'fastify';
+import type {JWT} from '@fastify/jwt';
 import fp from 'fastify-plugin';
 import jwt from '@fastify/jwt';
+
 
 declare module 'fastify' { 
   interface FastifyInstance {
     authenticate(req: FastifyRequest, reply: FastifyReply): void;
+    jwt: JWT;
   }
 }
-
-export type JWT = FastifyInstance['jwt'];
 
 // TODO
 // use private/public key pair

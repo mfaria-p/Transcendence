@@ -3,6 +3,7 @@ lockfileVersion: '9.0'
 settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
+  injectWorkspacePackages: true
 
 importers:
 
@@ -95,7 +96,7 @@ importers:
         specifier: ^5.6.1
         version: 5.6.1
 
-  services/profiles: {}
+  services/users: {}
 
 packages:
 
