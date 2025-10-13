@@ -7,6 +7,7 @@
     "dev": "tsx watch src/server.ts",
     "test": "npx vitest",
     "typecheck": "tsc --noEmit --watch src/server.ts",
+    "prisma": "npx prisma generate --schema prisma/schema.prisma",
     "build": "tsc -p tsconfig.json"
   },
   "keywords": [],

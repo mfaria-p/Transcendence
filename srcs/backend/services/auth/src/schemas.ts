@@ -2,6 +2,15 @@
 
 import type {FastifySchema} from 'fastify'
 
+const user = {
+  type: 'object',
+  properties: {
+    id: {type: 'string'},
+    username: {type: 'string'},
+    email: {type: 'string'},
+  },
+}
+
 export const postMeOpts: FastifySchema = {
   summary: 'Get user info',
   description: '',
@@ -26,6 +35,16 @@ export const postSignupOpts: FastifySchema = {
       password: {type: 'string'},
     }
   },
+  response: {
+    200: {
+      type: 'object',
+      properties: {
+        success: {type: 'boolean'},
+        message: {type: 'string'},
+        user: user,
+      },
+    },
+  },
 }
 
 export const postLoginOpts: FastifySchema = {
@@ -38,6 +57,24 @@ export const postLoginOpts: FastifySchema = {
       email: {type: 'string'},
       password: {type: 'string'},
     }
+  },
+  response: {
+    200: {
+      type: 'object',
+      properties: {
+        success: {type: 'boolean'},
+        message: {type: 'string'},
+        user: user,
+        at: {type: 'string'},
+      },
+    },
+    401: {
+      type: 'object',
+      properties: {
+        success: {type: 'boolean'},
+        message: {type: 'string'},
+      },
+    },
   },
 }
 
@@ -56,10 +93,43 @@ export const postRefreshOpts: FastifySchema = {
   //     refresh_token: {type: 'string'},
   //   }
   // },
+  response: {
+    200: {
+      type: 'object',
+      properties: {
+        success: {type: 'boolean'},
+        message: {type: 'string'},
+        at: {type: 'string'},
+      },
+    },
+    401: {
+      type: 'object',
+      properties: {
+        success: {type: 'boolean'},
+        message: {type: 'string'},
+      },
+    },
+  },
 }
 
 // should require rt cookie
 export const postLogoutOpts: FastifySchema = {
   summary: 'End session',
   description: '',
+  response: {
+    200: {
+      type: 'object',
+      properties: {
+        success: {type: 'boolean'},
+        message: {type: 'string'},
+      },
+    },
+    401: {
+      type: 'object',
+      properties: {
+        success: {type: 'boolean'},
+        message: {type: 'string'},
+      },
+    },
+  },
 }
