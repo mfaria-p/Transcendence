@@ -1,4 +1,11 @@
 services:
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.dev
+    volumes:
+      -  frontend_data:/app/dist
+
   nginx:
     build:
       context: ./nginx
@@ -7,20 +14,23 @@ services:
       - "9000:80"
     volumes:
       - ./nginx/dev.conf:/etc/nginx/nginx.conf:ro
+      -  frontend_data:/usr/share/nginx/html
     depends_on:
+      - frontend
       - auth
     networks: [appnet]
 
   auth:
     build:
       context: ./backend
-      dockerfile: services/auth/Dockerfile.dev
+      dockerfile: services/auth/Dockerfile
     expose:
       - "3001"
-    volumes:
-      - ./backend/services/auth:/app/services/auth
     networks: [appnet]
 
 networks:
   appnet:
     driver: bridge
+
+volumes:
+  frontend_data:

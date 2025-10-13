@@ -1,0 +1,4 @@
+packages:
+  - "services/*"
+  - "packages/*"
+injectWorkspacePackages: true

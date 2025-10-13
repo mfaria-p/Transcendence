@@ -1,8 +1,7 @@
 // src/token.ts
 
 import type {FastifyInstance} from 'fastify';
-import type {User, RefreshToken, Prisma} from '@prisma/client';
-
+import type {User, RefreshToken, Prisma} from './generated/prisma/client.js';
 import * as argon from 'argon2';
 import {randomBytes, createHash} from 'crypto';
 

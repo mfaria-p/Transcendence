@@ -3,7 +3,7 @@
 // oauth2
 
 import type {FastifyInstance, FastifyRequest, FastifyReply} from 'fastify';
-import type {User, RefreshToken} from '@prisma/client';
+import type {User, RefreshToken} from './generated/prisma/client.js';
 import * as schemas from './schemas.js';
 import * as token from './token.js';
 
@@ -16,7 +16,7 @@ const RT_COOKIE: string = 'refresh_token';
 // best practice would be not delete refresh right away
 // private public key for jwt
 export default async function (auth: FastifyInstance): Promise<void> {
-  auth.post('/signup', {schema: schemas.postSignupOpts}, async (req: FastifyRequest, reply) => {
+  auth.post('/signup', {schema: schemas.postSignupOpts}, async (req: FastifyRequest, reply: FastifyReply) => {
     const {username, email, password} = req.body as {username: string, email: string, password: string};
 
     await token.userCreate(auth.prisma, {name: username, email: email, passwordHash: await token.pwHash(password)});

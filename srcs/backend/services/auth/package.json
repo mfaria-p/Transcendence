@@ -1,11 +1,13 @@
 {
-  "name": "auth",
+  "name": "@svc/auth",
   "version": "1.0.0",
   "main": "src/server.js",
   "type": "module",
   "scripts": {
     "dev": "tsx watch src/server.ts",
-    "typecheck": "tsc --noEmit --watch src/server.ts"
+    "test": "npx vitest",
+    "typecheck": "tsc --noEmit --watch src/server.ts",
+    "build": "tsc -p tsconfig.json"
   },
   "keywords": [],
   "author": "",
@@ -19,6 +21,7 @@
     "@fastify/jwt": "^9.1.0",
     "@fastify/swagger": "^9.5.2",
     "@fastify/swagger-ui": "^5.2.3",
+    "@pkg/lib-auth": "workspace:*",
     "@prisma/client": "^6.16.2",
     "argon2": "^0.44.0",
     "dotenv": "^17.2.2",
