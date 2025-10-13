@@ -1,5 +1,6 @@
-# Dependencies
-node_modules/
-
-# Build outputs
+# Ignore node modules and build outputs
 dist/
+node_modules/
+.env
+example/
+*.db
