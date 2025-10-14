@@ -16,5 +16,6 @@ RUN pnpm --filter "@svc/auth" deploy --prod /out
 FROM node:20-alpine AS run
 WORKDIR /app
 COPY --from=build /out .
+RUN npx prisma migrate deploy --schema ./prisma/schema.prisma
 RUN mv ./src/generated/prisma/libquery_engine-linux-musl-openssl-*.so.node ./prisma
 CMD ["node","dist/server.js"]
