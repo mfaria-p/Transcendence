@@ -15,7 +15,7 @@
   "license": "ISC",
   "description": "",
   "devDependencies": {
-    "prisma": "^6.16.2"
+    "prisma": "^6.17.0"
   },
   "dependencies": {
     "@fastify/cookie": "^11.0.2",
