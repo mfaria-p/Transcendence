@@ -1,5 +1,6 @@
 interface SignupCredentials {
   username: string;
+  email: string;
   password: string;
   confirmPassword: string;
 }
@@ -7,13 +8,15 @@ interface SignupCredentials {
 interface SignupResponse {
   success: boolean;
   message: string;
-  token?: string;
-  user?: { id: string; username: string };
+  access_token?: string;
+  refresh_token?: string;
+  user?: { id: string; username: string; email: string };
 }
 
 class SignupManager {
   private form: HTMLFormElement;
   private usernameInput: HTMLInputElement;
+  private emailInput: HTMLInputElement;
   private passwordInput: HTMLInputElement;
   private confirmPasswordInput: HTMLInputElement;
   private signupButton: HTMLButtonElement;
@@ -23,6 +26,7 @@ class SignupManager {
   constructor() {
     this.form = document.getElementById('signupForm') as HTMLFormElement;
     this.usernameInput = document.getElementById('username') as HTMLInputElement;
+    this.emailInput = document.getElementById('email') as HTMLInputElement;
     this.passwordInput = document.getElementById('password') as HTMLInputElement;
     this.confirmPasswordInput = document.getElementById('confirmPassword') as HTMLInputElement;
     this.signupButton = document.getElementById('signupButton') as HTMLButtonElement;
@@ -37,21 +41,29 @@ class SignupManager {
       e.preventDefault();
       this.handleSignup();
     });
+
+    // Real-time validation
+    /* this.usernameInput.addEventListener('blur', () => this.validateUsername());
+    this.emailInput.addEventListener('blur', () => this.validateEmail());
+    this.passwordInput.addEventListener('input', () => this.validatePassword());
+    this.confirmPasswordInput.addEventListener('input', () => this.validatePasswordMatch()); */
   }
 
   private async handleSignup(): Promise<void> {
     const credentials: SignupCredentials = {
       username: this.usernameInput.value.trim(),
+      email: this.emailInput.value.trim(),
       password: this.passwordInput.value,
       confirmPassword: this.confirmPasswordInput.value
     };
 
     // Validate all fields
     const isUsernameValid = this.validateUsername();
+    const isEmailValid = this.validateEmail();
     const isPasswordValid = this.validatePassword();
     const isPasswordMatchValid = this.validatePasswordMatch();
 
-    if (!isUsernameValid || !isPasswordValid || !isPasswordMatchValid) {
+    if (!isUsernameValid || !isEmailValid || !isPasswordValid || !isPasswordMatchValid) {
       this.showError('Please fix the errors above');
       return;
     }
@@ -60,17 +72,23 @@ class SignupManager {
     this.hideMessages();
     
     try {
-      //  backend call later
       const response = await this.signupWithBackend({
-          username: credentials.username,
-          password: credentials.password
+        username: credentials.username,
+        email: credentials.email,
+        password: credentials.password
       });
       
       if (response.success) {
+        // Store user info
+        if (response.access_token) {
+          localStorage.setItem('access_token', response.access_token);
+        }
         
-        // Store user info (for future use)
-        if (response.token && response.user) {
-          localStorage.setItem('authToken', response.token);
+        if (response.refresh_token) {
+          localStorage.setItem('refresh_token', response.refresh_token);
+        }
+        
+        if (response.user) {
           localStorage.setItem('user', JSON.stringify(response.user));
         }
 
@@ -83,9 +101,9 @@ class SignupManager {
       } else {
         this.showError(response.message || 'Signup failed');
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Signup error:', error);
-      this.showError('Connection error. Please try again.');
+      this.showError(error.message || 'Connection error. Please try again.');
     } finally {
       this.setLoading(false);
     }
@@ -110,6 +128,24 @@ class SignupManager {
     }
     
     this.clearInputError(this.usernameInput);
+    return true;
+  }
+
+  private validateEmail(): boolean {
+    const email = this.emailInput.value.trim();
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    
+    if (!email) {
+      this.setInputError(this.emailInput, 'Email is required');
+      return false;
+    }
+    
+    if (!emailRegex.test(email)) {
+      this.setInputError(this.emailInput, 'Please enter a valid email address');
+      return false;
+    }
+    
+    this.clearInputError(this.emailInput);
     return true;
   }
 
@@ -165,6 +201,81 @@ class SignupManager {
     }
   }
 
+  private async simulateSignup(credentials: { username: string; email: string; password: string }): Promise<SignupResponse> {
+  // Simulate network delay
+  await new Promise(resolve => setTimeout(resolve, 1500));
+  
+  // Simulate existing user check
+  if (credentials.username.toLowerCase() === 'admin' || credentials.username.toLowerCase() === 'test') {
+    return {
+      success: false,
+      message: 'Username already taken. Please choose another one.'
+    };
+  }
+
+  // Simulate invalid email check
+  if (credentials.email.includes('invalid')) {
+    return {
+      success: false,
+      message: 'Email address is not valid.'
+    };
+  }
+  
+  // Simulate successful signup
+  return {
+    success: true,
+    message: 'Account created successfully!',
+    access_token: 'access-token-' + Date.now(),
+    refresh_token: 'refresh-token-' + Date.now(),
+    user: {
+      id: Date.now().toString(),
+      username: credentials.username,
+      email: credentials.email
+    }
+  };
+}
+
+  private async signupWithBackend(payload: { username: string; email: string; password: string }): Promise<SignupResponse> {
+    const url = '/api/auth/signup';
+    const controller = new AbortController();
+    const timeoutMs = 10_000;
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+    try {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify(payload),
+        signal: controller.signal,
+      });
+      
+      let data: any = null;
+      try {
+        data = await res.json();
+      } catch {
+        const text = await res.text();
+        data = { message: text || 'Unknown error' };
+      }
+
+      if (!res.ok) {
+        const message = data?.message || `Signup failed (${res.status})`;
+        return { success: false, message };
+      }
+
+      return data as SignupResponse;
+    } catch (err: any) {
+      if (err.name === 'AbortError') {
+        throw new Error('Request timed out. Please try again.');
+      }
+      throw new Error(err?.message || 'Network error');
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  }
+
   private showError(message: string): void {
     this.errorMessage.textContent = message;
     this.errorMessage.classList.remove('hidden');
@@ -192,82 +303,7 @@ class SignupManager {
     this.errorMessage.classList.add('hidden');
     this.successMessage.classList.add('hidden');
   }
-
-  private async simulateSignup(credentials: SignupCredentials): Promise<SignupResponse> {
-    // Simulate network delay
-    await new Promise(resolve => setTimeout(resolve, 1500));
-    // Simulate existing user check
-    if (credentials.username.toLowerCase() === 'admin' || credentials.username.toLowerCase() === 'test') {
-      return {
-        success: false,
-        message: 'Username already taken. Please choose another one.'
-      };
-    }
-    // Simulate successful signup
-    return {
-      success: true,
-      message: 'Account created successfully!',
-      token: 'signup-token-' + Date.now(),
-      user: {
-        id: Date.now().toString(),
-        username: credentials.username
-      }
-    };
-  }
-
-    private async signupWithBackend(
-        payload: { username: string; password: string }
-    ): Promise<SignupResponse> {
-        const url = '/api/auth/signup';
-        const controller = new AbortController();
-        const timeoutMs = 10_000;
-        const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
-
-        try {
-            const res = await fetch(url, {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                credentials: 'include',
-                body: JSON.stringify(payload),
-                signal: controller.signal,
-            });
-
-            let data: any = null;
-            try {
-                data = await res.json();
-            } catch {
-                const text = await res.text();
-                data = {message: text || null};
-            }
-
-            // 🔸 Caso o backend devolva só um token simples
-            const token =
-                typeof data === 'string'
-                    ? data
-                    : data?.token || data?.accessToken || null;
-
-            if (token) {
-                localStorage.setItem('authToken', token);
-            }
-
-            if (!res.ok) {
-                const message = data?.message || `Signup failed (${res.status})`;
-                return {success: false, message};
-            }
-
-            return {success: true, message: data?.message ?? 'Signup successful'};
-        } catch (err: any) {
-            if (err.name === 'AbortError') {
-                throw new Error('Request timed out. Please try again.');
-            }
-            throw new Error(err?.message || 'Network error');
-        } finally {
-            clearTimeout(timeoutId);
-        }
-    }
 }
-
-
 
 document.addEventListener('DOMContentLoaded', () => {
   new SignupManager();

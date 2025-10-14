@@ -33,11 +33,6 @@ async function build(): Promise<FastifyInstance> {
                 host: origReq.headers.host as string,
             };
         },
-        // necessário para Set-Cookie do serviço chegar ao browser
-        onResponse: async (_, reply: FastifyReply, res) => {
-            // o replyFrom já trata o pipe do body; aqui poderias mapear headers se precisares
-            return reply.send(res);
-        }
     };
 
     // Rota aberta para healthcheck

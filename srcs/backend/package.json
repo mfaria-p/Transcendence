@@ -24,7 +24,7 @@
     "@fastify/cors": "^10.1.0",
     "@fastify/jwt": "^10.0.0",
     "@fastify/rate-limit": "^10.3.0",
-    "@fastify/reply-from": "^9.8.0",
+    "@fastify/reply-from": "^12.3.1",
     "dotenv": "^17.2.3",
     "fastify": "^5.6.1",
     "fastify-plugin": "^5.1.0"
