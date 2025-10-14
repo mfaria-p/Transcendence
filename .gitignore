@@ -1,7 +1,8 @@
 node_modules/
-srcs/backend/.env
+.env
 example/
 *.db
 dist/
 .idea/
 generated/
+.pnpm-store/

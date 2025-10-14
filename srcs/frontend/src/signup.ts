@@ -61,7 +61,10 @@ class SignupManager {
     
     try {
       //  backend call later
-      const response = await this.simulateSignup(credentials);
+      const response = await this.signupWithBackend({
+          username: credentials.username,
+          password: credentials.password
+      });
       
       if (response.success) {
         
@@ -212,45 +215,56 @@ class SignupManager {
     };
   }
 
-  private async signupWithBackend(payload: { username: string; password: string }): Promise<SignupResponse> {
-    const url = '/api/auth/signup';
-    const controller = new AbortController();
-    const timeoutMs = 10_000;
-    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+    private async signupWithBackend(
+        payload: { username: string; password: string }
+    ): Promise<SignupResponse> {
+        const url = '/api/auth/signup';
+        const controller = new AbortController();
+        const timeoutMs = 10_000;
+        const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
-    try {
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-        signal: controller.signal,
-      });
-      
-      // parse; if fails, get text fallback
-      let data: any = null;
-      try {
-        data = await res.json();
-      } catch {
-        const text = await res.text();
-        data = { message: text || null };
-      }
+        try {
+            const res = await fetch(url, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                credentials: 'include',
+                body: JSON.stringify(payload),
+                signal: controller.signal,
+            });
 
-      if (!res.ok) {
-        const message = data?.message || `Signup failed (${res.status})`;
-        return { success: false, message };
-      }
+            let data: any = null;
+            try {
+                data = await res.json();
+            } catch {
+                const text = await res.text();
+                data = {message: text || null};
+            }
 
-      // here i could validate shape before casting
-      return data as SignupResponse;
-    } catch (err: any) {
-      if (err.name === 'AbortError') {
-        throw new Error('Request timed out. Please try again.');
-      }
-      throw new Error(err?.message || 'Network error');
-    } finally {
-      clearTimeout(timeoutId);
+            // 🔸 Caso o backend devolva só um token simples
+            const token =
+                typeof data === 'string'
+                    ? data
+                    : data?.token || data?.accessToken || null;
+
+            if (token) {
+                localStorage.setItem('authToken', token);
+            }
+
+            if (!res.ok) {
+                const message = data?.message || `Signup failed (${res.status})`;
+                return {success: false, message};
+            }
+
+            return {success: true, message: data?.message ?? 'Signup successful'};
+        } catch (err: any) {
+            if (err.name === 'AbortError') {
+                throw new Error('Request timed out. Please try again.');
+            }
+            throw new Error(err?.message || 'Network error');
+        } finally {
+            clearTimeout(timeoutId);
+        }
     }
-  }
 }
 
 
