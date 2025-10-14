@@ -158,7 +158,7 @@ describe('Signup => Login => Me => Logout', () => {
     expect(r1.statusCode).toBe(200);
     const cookies = extractCookies(r1.headers['set-cookie']);
     rt1 = cookies.refresh_token!;
-    at = r1.body;
+    at = r1.json().at;
   })
 
   it('POST /auth/me - after login', async () => {
