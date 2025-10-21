@@ -114,7 +114,27 @@ importers:
         specifier: ^5.6.1
         version: 5.6.1
 
-  services/users: {}
+  services/user:
+    dependencies:
+      '@pkg/lib-auth':
+        specifier: workspace:*
+        version: link:../../packages/lib-auth
+      '@pkg/lib-docs':
+        specifier: workspace:*
+        version: link:../../packages/lib-docs
+      '@prisma/client':
+        specifier: ^6.17.0
+        version: 6.17.0(prisma@6.17.0(typescript@5.9.3))(typescript@5.9.3)
+      dotenv:
+        specifier: ^17.2.3
+        version: 17.2.3
+      fastify:
+        specifier: ^5.6.1
+        version: 5.6.1
+    devDependencies:
+      prisma:
+        specifier: ^6.17.0
+        version: 6.17.0(typescript@5.9.3)
 
 packages:
 

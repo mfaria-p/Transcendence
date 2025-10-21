@@ -7,7 +7,7 @@ const start = async (): Promise<void> => {
   const app: FastifyInstance = await buildServer({logger: true});
   try {
     await app.listen({host: '0.0.0.0', port: Number(process.env.AUTH_PORT)}, (err, addr) => {
-      app.log.info(`auth server listening on ${addr}`);
+      app.log.info(`user server listening on ${addr}`);
     });
   } catch (err) {
     app.log.error(err);

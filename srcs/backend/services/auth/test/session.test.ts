@@ -2,7 +2,7 @@ import type {FastifyInstance} from 'fastify';
 import {describe, it, beforeAll, afterAll, expect} from 'vitest';
 import argon2 from 'argon2';
 import {buildServer} from '../src/build.js';
-import * as token from '../src/token.js'
+import * as utils from '../src/utils.js'
 
 const RT_COOKIE: string = 'refresh_token';
 
@@ -27,13 +27,13 @@ describe('Signup => Login => Me => Logout', () => {
     app = await buildServer();
     await app.ready();
     try {
-      await token.userDeleteByEmail(app.prisma, 'test@example.com')
+      await utils.userDeleteByEmail(app.prisma, 'test@example.com')
     } catch(err) {}
   })
 
   afterAll(async () => {
     try {
-      await token.userDeleteByEmail(app.prisma, 'test@example.com')
+      await utils.userDeleteByEmail(app.prisma, 'test@example.com')
     } catch(err) {}
     await app.close();
   })
