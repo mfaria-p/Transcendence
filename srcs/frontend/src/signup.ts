@@ -8,8 +8,6 @@ interface SignupCredentials {
 interface SignupResponse {
   success: boolean;
   message: string;
-  access_token?: string;
-  refresh_token?: string;
   user?: { id: string; username: string; email: string };
 }
 
@@ -79,14 +77,6 @@ class SignupManager {
       });
       
       if (response.success) {
-        // Store user info
-        if (response.access_token) {
-          localStorage.setItem('access_token', response.access_token);
-        }
-        
-        if (response.refresh_token) {
-          localStorage.setItem('refresh_token', response.refresh_token);
-        }
         
         if (response.user) {
           localStorage.setItem('user', JSON.stringify(response.user));
@@ -225,8 +215,6 @@ class SignupManager {
   return {
     success: true,
     message: 'Account created successfully!',
-    access_token: 'access-token-' + Date.now(),
-    refresh_token: 'refresh-token-' + Date.now(),
     user: {
       id: Date.now().toString(),
       username: credentials.username,
@@ -261,8 +249,10 @@ class SignupManager {
       }
 
       if (!res.ok) {
-        const message = data?.message || `Signup failed (${res.status})`;
-        return { success: false, message };
+        const message = res.status === 401 
+        ? (data?.message || 'Signup failed') 
+        : `Signup failed (${res.status})`;
+      return { success: false, message };
       }
 
       return data as SignupResponse;
