@@ -236,7 +236,7 @@ class SignupManager {
 }
 
   private async signupWithBackend(payload: { username: string; email: string; password: string }): Promise<SignupResponse> {
-    const url = '/auth/signup';  
+    const url = '/api/auth/signup';
     const controller = new AbortController();
     const timeoutMs = 10_000;
     const timeoutId = setTimeout(() => controller.abort(), timeoutMs);

@@ -20,6 +20,18 @@ services:
       - auth
     networks: [appnet]
 
+  gateway:
+    build:
+      context: ./backend
+      dockerfile: services/gateway/Dockerfile
+    expose:
+      - "3000"
+    env_file:
+      - ./backend/services/gateway/.env
+    depends_on:
+      - auth
+    networks: [appnet]
+
   auth:
     build:
       context: ./backend

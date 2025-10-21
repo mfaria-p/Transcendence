@@ -3,4 +3,10 @@ node_modules/
 example/
 *.db
 dist/
+<<<<<<< HEAD
 generated/
+=======
+.idea/
+generated/
+.pnpm-store/
+>>>>>>> origin
