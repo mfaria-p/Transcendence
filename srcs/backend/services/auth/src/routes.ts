@@ -21,6 +21,15 @@ export default async function (app: FastifyInstance): Promise<void> {
 
     const user = await utils.userCreate(app.prisma, {name: username, email: email, passwordHash: await utils.pwHash(password)});
 
+    // Auto-login after signup
+    const at: string = utils.atGenerate(app.jwt, {sub: user.id});
+    const rt: string = utils.rtGenerate();
+    await utils.rtCreate(app.prisma, rt, user.id);
+
+    reply.setCookie(RT_COOKIE, rt, {
+      httpOnly: true, secure: true, sameSite: 'lax', path: '/auth/refresh', maxAge: 30 * 24 * 60 * 60,
+    });
+
     return {
       success: true,
       message: "Account Created Successfully",
@@ -29,6 +38,7 @@ export default async function (app: FastifyInstance): Promise<void> {
         username: username,
         email: email,
       },
+      at: at,
     };
   });
 

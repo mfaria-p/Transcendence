@@ -42,6 +42,7 @@ export const postSignupOpts: FastifySchema = {
         success: {type: 'boolean'},
         message: {type: 'string'},
         user: user,
+        at: {type: 'string'},
       },
     },
   },
