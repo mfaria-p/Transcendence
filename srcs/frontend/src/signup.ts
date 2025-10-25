@@ -9,6 +9,7 @@ interface SignupResponse {
   success: boolean;
   message: string;
   user?: { id: string; username: string; email: string };
+  at?: string;  // Access token - auto-login after signup
 }
 
 class SignupManager {
@@ -76,10 +77,22 @@ class SignupManager {
         password: credentials.password
       });
       
+      console.log('Signup response:', response);
+      
       if (response.success) {
+        
+        console.log('Access token from signup:', response.at);
+        
+        if (response.at) {
+          localStorage.setItem('access_token', response.at);
+          console.log('Stored access_token in localStorage');
+        } else {
+          console.warn('No access token in signup response!');
+        }
         
         if (response.user) {
           localStorage.setItem('user', JSON.stringify(response.user));
+          console.log('Stored user in localStorage');
         }
 
         this.showSuccess(response.message || 'Account created successfully!');
