@@ -21,6 +21,7 @@ class SignupManager {
   private signupButton: HTMLButtonElement;
   private errorMessage: HTMLElement;
   private successMessage: HTMLElement;
+  private passwordRequirements: HTMLElement;
   
   constructor() {
     this.form = document.getElementById('signupForm') as HTMLFormElement;
@@ -31,6 +32,7 @@ class SignupManager {
     this.signupButton = document.getElementById('signupButton') as HTMLButtonElement;
     this.errorMessage = document.getElementById('errorMessage') as HTMLElement;
     this.successMessage = document.getElementById('successMessage') as HTMLElement;
+    this.passwordRequirements = document.getElementById('passwordRequirements') as HTMLElement;
 
     this.setupEventListeners();
   }
@@ -41,11 +43,12 @@ class SignupManager {
       this.handleSignup();
     });
 
-    // Real-time validation
-    /* this.usernameInput.addEventListener('blur', () => this.validateUsername());
-    this.emailInput.addEventListener('blur', () => this.validateEmail());
-    this.passwordInput.addEventListener('input', () => this.validatePassword());
-    this.confirmPasswordInput.addEventListener('input', () => this.validatePasswordMatch()); */
+    // Real-time password validation
+    this.passwordInput.addEventListener('input', () => this.updatePasswordRequirements());
+    this.passwordInput.addEventListener('focus', () => {
+      this.passwordRequirements.classList.remove('hidden');
+    });
+    this.confirmPasswordInput.addEventListener('input', () => this.validatePasswordMatch());
   }
 
   private async handleSignup(): Promise<void> {
@@ -154,14 +157,57 @@ class SignupManager {
 
   private validatePassword(): boolean {
     const password = this.passwordInput.value;
+    
+    const hasMinLength = password.length >= 8;
+    const hasUppercase = /[A-Z]/.test(password);
+    const hasLowercase = /[a-z]/.test(password);
+    const hasNumber = /[0-9]/.test(password);
 
-    if (password.length < 8) {
-      this.setInputError(this.passwordInput, 'Password must be at least 8 characters');
+    if (!hasMinLength || !hasUppercase || !hasLowercase || !hasNumber) {
+      this.setInputError(this.passwordInput, 'Password does not meet all requirements');
       return false;
     }
     
     this.clearInputError(this.passwordInput);
     return true;
+  }
+
+  private updatePasswordRequirements(): void {
+    const password = this.passwordInput.value;
+    
+    // Check each requirement
+    const hasMinLength = password.length >= 8;
+    const hasUppercase = /[A-Z]/.test(password);
+    const hasLowercase = /[a-z]/.test(password);
+    const hasNumber = /[0-9]/.test(password);
+    
+    // Update indicators
+    this.updateRequirement('req-length', hasMinLength);
+    this.updateRequirement('req-uppercase', hasUppercase);
+    this.updateRequirement('req-lowercase', hasLowercase);
+    this.updateRequirement('req-number', hasNumber);
+  }
+
+  private updateRequirement(id: string, isValid: boolean): void {
+    const element = document.getElementById(id);
+    if (!element) return;
+    
+    const indicator = element.querySelector('.indicator');
+    const text = element.querySelector('span:last-child');
+    
+    if (indicator) {
+      indicator.textContent = isValid ? '✅' : '❌';
+    }
+    
+    if (text) {
+      if (isValid) {
+        text.classList.remove('text-gray-400');
+        text.classList.add('text-green-400');
+      } else {
+        text.classList.remove('text-green-400');
+        text.classList.add('text-gray-400');
+      }
+    }
   }
 
   private validatePasswordMatch(): boolean {

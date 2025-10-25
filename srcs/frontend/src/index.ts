@@ -12,7 +12,6 @@ document.addEventListener('DOMContentLoaded', () => {
     return;
   }
 
-  // STEP 1: Check if user is logged in
   const userStr = localStorage.getItem('user');
   const accessToken = localStorage.getItem('access_token');
   
@@ -20,7 +19,6 @@ document.addEventListener('DOMContentLoaded', () => {
   console.log('Auth check - accessToken:', accessToken);
   
   if (userStr && accessToken) {
-    // User is logged in
     try {
       const user: User = JSON.parse(userStr);
       console.log('User logged in:', user);
@@ -30,7 +28,6 @@ document.addEventListener('DOMContentLoaded', () => {
       showLoggedOutState(authContainer);
     }
   } else {
-    // User is logged out
     console.log('No user found, showing logged out state');
     showLoggedOutState(authContainer);
   }
@@ -69,7 +66,7 @@ function showLoggedOutState(container: HTMLElement): void {
 
 async function handleLogout(): Promise<void> {
   try {
-    // Call backend logout endpoint (clears refresh token cookie)
+    // Call backend logout endpoint
     await fetch('/api/auth/logout', {
       method: 'POST',
       credentials: 'include', // Send cookies
@@ -77,13 +74,11 @@ async function handleLogout(): Promise<void> {
   } catch (error) {
     console.error('Logout error:', error);
   } finally {
-    // Clear localStorage regardless of API success
     localStorage.removeItem('access_token');
     localStorage.removeItem('user');
     
     console.log('Logged out, refreshing UI...');
     
-    // Refresh the page to show logged out state
     window.location.reload();
   }
 }
