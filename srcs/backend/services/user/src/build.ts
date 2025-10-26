@@ -1,6 +1,6 @@
 // src/build.ts
 
-import type {FastifyInstance, FastifyServerOptions} from 'fastify';
+import type {FastifyInstance, FastifyServerOptions, FastifyError, FastifyRequest, FastifyReply} from 'fastify';
 import Fastify from 'fastify';
 import swagger from '@pkg/lib-docs';
 import jwt from '@pkg/lib-auth';
@@ -16,6 +16,16 @@ export async function buildServer(opts: FastifyServerOptions = {}): Promise<Fast
   await app.register(prisma);
   await app.register(jwt);
   await app.register(routes, {prefix: '/user'});
+
+  app.setErrorHandler((error: FastifyError, req: FastifyRequest, reply: FastifyReply) => {
+    const status = error.statusCode ?? 500;
+
+    reply.status(status).send({
+      success: false,
+      code: error.code ?? 'INTERNAL_ERROR',
+      message: error.message,
+    });
+  });
 
   return app;
 }

@@ -88,21 +88,13 @@ export default async function (app: FastifyInstance): Promise<void> {
     const {toUserId} = req.params as {toUserId: string};
     const {message} = req.body as {message?: string};
 
-    try {
-      const request: FriendRequest = await utils.requestCreate(app.prisma, userId, toUserId, message);
-      return {
-        success: true,
-        message: "Pending Friend Requests",
-        request: request,
-      };
-    } catch (err: any) {
-      if (err.code = 'P2002') return reply.code(409).send({
-        sucess: false,
-        message: 'Friend Request Already Exists',
-        request: null,
-      });
-      throw err;
-    }
+    const request: FriendRequest = await utils.requestCreate(app.prisma, userId, toUserId, message);
+
+    return {
+      success: true,
+      message: "Pending Friend Requests",
+      request: request,
+    };
   });
 
   app.get('/friend-request', {schema: schemas.getRequestsOpts, preHandler: [app.authenticate]}, async (req: FastifyRequest, reply: FastifyReply) => {
@@ -121,65 +113,41 @@ export default async function (app: FastifyInstance): Promise<void> {
     const userId: string = req.jwtPayload!.id
     const {fromUserId} = req.params as {fromUserId: string};
 
-    try {
-      const request = await utils.requestUpdate(app.prisma, fromUserId, userId, 'ACCEPTED');
-      const friend = await utils.friendCreate(app.prisma, fromUserId, userId);
-      return {
-        success: true,
-        message: "Friend Request Accepted",
-        request: request,
-        friendship: friend,
-      };
-    } catch (err: any) {
-      if (err.code = 'P2002') return reply.code(404).send({
-        sucess: false,
-        message: 'Friend Request Not Found',
-        request: null,
-      });
-      throw err;
-    }
+    const request = await utils.requestUpdate(app.prisma, fromUserId, userId, 'ACCEPTED');
+    const friend = await utils.friendCreate(app.prisma, fromUserId, userId);
+
+    return {
+      success: true,
+      message: "Friend Request Accepted",
+      request: request,
+      friendship: friend,
+    };
   });
 
   app.post('/friend-request/:fromUserId/decline', {schema: schemas.postDeclineRequestOpts, preHandler: [app.authenticate]}, async (req: FastifyRequest, reply: FastifyReply) => {
     const userId: string = req.jwtPayload!.id;
     const {fromUserId} = req.params as {fromUserId: string};
 
-    try {
-      const request = await utils.requestDelete(app.prisma, fromUserId, userId, 'PENDING');
-      return {
-        success: true,
-        message: "Friend Request Declined",
-        request: request,
-      };
-    } catch (err: any) {
-      if (err.code = 'P2002') return reply.code(404).send({
-        sucess: false,
-        message: 'Friend Request Not Found',
-        request: null,
-      });
-      throw err;
-    }
+    const request = await utils.requestDelete(app.prisma, fromUserId, userId, 'PENDING');
+
+    return {
+      success: true,
+      message: "Friend Request Declined",
+      request: request,
+    };
   });
 
   app.delete('/friend-request/:toUserId', {schema: schemas.deleteRequestOpts, preHandler: [app.authenticate]}, async (req: FastifyRequest, reply: FastifyReply) => {
     const userId: string = req.jwtPayload!.id;
     const {toUserId} = req.params as {toUserId: string};
 
-    try {
-      const request = await utils.requestDelete(app.prisma, userId, toUserId, 'PENDING');
-      return {
-        success: true,
-        message: "Friend Request Canceled",
-        request: request,
-      };
-    } catch (err: any) {
-      if (err.code = 'P2002') return reply.code(404).send({
-        sucess: false,
-        message: 'Friend Request Not Found',
-        request: null,
-      });
-      throw err;
-    }
+    const request = await utils.requestDelete(app.prisma, userId, toUserId, 'PENDING');
+
+    return {
+      success: true,
+      message: "Friend Request Canceled",
+      request: request,
+    };
   });
 
   app.delete('/friend/:friendUserId', {schema: schemas.deleteFriendOpts, preHandler: [app.authenticate]}, async (req: FastifyRequest, reply: FastifyReply) => {
