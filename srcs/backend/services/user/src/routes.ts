@@ -207,7 +207,6 @@ export default async function (app: FastifyInstance): Promise<void> {
     const userId: string = req.jwtPayload!.id;
     const {blockUserId} = req.params as {blockUserId: string};
 
-    // delete friendship?
     const block: Block = await utils.blockDelete(app.prisma, userId, blockUserId);
 
     return {
