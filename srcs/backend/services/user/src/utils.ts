@@ -162,7 +162,7 @@ export async function requestUpdate(db: FastifyInstance['prisma'], fromId: strin
   };
 };
 
-export async function requestFindByUserIds(db: FastifyInstance['prisma'], fromId: string, toId: string, status?: string): Promise<FriendRequest> {
+export async function requestFindByUserIds(db: FastifyInstance['prisma'], fromId: string, toId: string, status?: string): Promise<FriendRequest | null> {
   const where: any = {fromUserId_toUserId: {fromUserId: fromId, toUserId: toId}};
   if (status) where.status = status;
 
