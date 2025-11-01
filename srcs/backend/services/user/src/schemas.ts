@@ -232,7 +232,7 @@ export const getFriendsOpts: FastifySchema = {
       properties: {
         success: {type: 'boolean'},
         message: {type: 'string'},
-        friendship: {
+        friendships: {
           type: 'array',
           items: friendship,
         },

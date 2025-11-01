@@ -40,6 +40,14 @@ services:
       - "3001"
     networks: [appnet]
 
+  user:
+    build:
+      context: ./backend
+      dockerfile: services/user/Dockerfile
+    expose:
+      - "3002"
+    networks: [appnet]
+
 networks:
   appnet:
     driver: bridge

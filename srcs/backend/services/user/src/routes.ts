@@ -56,7 +56,7 @@ export default async function (app: FastifyInstance): Promise<void> {
   app.get('/me', {schema: schemas.getMeOpts, preHandler: [app.authenticate]}, async (req: FastifyRequest, reply: FastifyReply) => {
     const userId: string = req.jwtPayload!.id;
 
-    const profile: Profile = await utils.profileFindByUserId(app.prisma, userId);
+    const profile: Profile | null = await utils.profileFindByUserId(app.prisma, userId);
     if (!profile) return reply.code(404).send({
       sucess: false,
       message: 'Nonexistent User Profile',
@@ -88,21 +88,13 @@ export default async function (app: FastifyInstance): Promise<void> {
     const {toUserId} = req.params as {toUserId: string};
     const {message} = req.body as {message?: string};
 
-    try {
-      const request: FriendRequest = await utils.requestCreate(app.prisma, userId, toUserId, message);
-      return {
-        success: true,
-        message: "Pending Friend Requests",
-        request: request,
-      };
-    } catch (err: any) {
-      if (err.code = 'P2002') return reply.code(409).send({
-        sucess: false,
-        message: 'Friend Request Already Exists',
-        request: null,
-      });
-      throw err;
-    }
+    const request: FriendRequest = await utils.requestCreate(app.prisma, userId, toUserId, message);
+
+    return {
+      success: true,
+      message: "Pending Friend Requests",
+      request: request,
+    };
   });
 
   app.get('/friend-request', {schema: schemas.getRequestsOpts, preHandler: [app.authenticate]}, async (req: FastifyRequest, reply: FastifyReply) => {
@@ -121,65 +113,41 @@ export default async function (app: FastifyInstance): Promise<void> {
     const userId: string = req.jwtPayload!.id
     const {fromUserId} = req.params as {fromUserId: string};
 
-    try {
-      const request = await utils.requestUpdate(app.prisma, fromUserId, userId, 'ACCEPTED');
-      const friend = await utils.friendCreate(app.prisma, fromUserId, userId);
-      return {
-        success: true,
-        message: "Friend Request Accepted",
-        request: request,
-        friendship: friend,
-      };
-    } catch (err: any) {
-      if (err.code = 'P2002') return reply.code(404).send({
-        sucess: false,
-        message: 'Friend Request Not Found',
-        request: null,
-      });
-      throw err;
-    }
+    const request = await utils.requestUpdate(app.prisma, fromUserId, userId, 'ACCEPTED');
+    const friend = await utils.friendCreate(app.prisma, fromUserId, userId);
+
+    return {
+      success: true,
+      message: "Friend Request Accepted",
+      request: request,
+      friendship: friend,
+    };
   });
 
   app.post('/friend-request/:fromUserId/decline', {schema: schemas.postDeclineRequestOpts, preHandler: [app.authenticate]}, async (req: FastifyRequest, reply: FastifyReply) => {
     const userId: string = req.jwtPayload!.id;
     const {fromUserId} = req.params as {fromUserId: string};
 
-    try {
-      const request = await utils.requestDelete(app.prisma, fromUserId, userId, 'PENDING');
-      return {
-        success: true,
-        message: "Friend Request Declined",
-        request: request,
-      };
-    } catch (err: any) {
-      if (err.code = 'P2002') return reply.code(404).send({
-        sucess: false,
-        message: 'Friend Request Not Found',
-        request: null,
-      });
-      throw err;
-    }
+    const request = await utils.requestDelete(app.prisma, fromUserId, userId, 'PENDING');
+
+    return {
+      success: true,
+      message: "Friend Request Declined",
+      request: request,
+    };
   });
 
   app.delete('/friend-request/:toUserId', {schema: schemas.deleteRequestOpts, preHandler: [app.authenticate]}, async (req: FastifyRequest, reply: FastifyReply) => {
     const userId: string = req.jwtPayload!.id;
     const {toUserId} = req.params as {toUserId: string};
 
-    try {
-      const request = await utils.requestDelete(app.prisma, userId, toUserId, 'PENDING');
-      return {
-        success: true,
-        message: "Friend Request Canceled",
-        request: request,
-      };
-    } catch (err: any) {
-      if (err.code = 'P2002') return reply.code(404).send({
-        sucess: false,
-        message: 'Friend Request Not Found',
-        request: null,
-      });
-      throw err;
-    }
+    const request = await utils.requestDelete(app.prisma, userId, toUserId, 'PENDING');
+
+    return {
+      success: true,
+      message: "Friend Request Canceled",
+      request: request,
+    };
   });
 
   app.delete('/friend/:friendUserId', {schema: schemas.deleteFriendOpts, preHandler: [app.authenticate]}, async (req: FastifyRequest, reply: FastifyReply) => {
@@ -216,48 +184,6 @@ export default async function (app: FastifyInstance): Promise<void> {
       success: true,
       message: "Logged In User Friend List",
       friendships: friendships,
-    };
-  });
-
-  // block user -> impact other url logic!
-  app.post('/block/:blockerUserId', {schema: schemas.postBlockOpts, preHandler: [app.authenticate]}, async (req: FastifyRequest, reply: FastifyReply) => {
-    const userId: string = req.jwtPayload!.id;
-    const {blockUserId} = req.params as {blockUserId: string};
-    const {message} = req.body as {message?: string};
-
-    // delete friendship?
-    const block: Block = await utils.blockCreate(app.prisma, userId, blockUserId, message);
-
-    return {
-      success: true,
-      message: "User Blocked",
-      block: block,
-    };
-  });
-
-  app.delete('/block/:blockerUserId', {schema: schemas.deleteBlockOpts, preHandler: [app.authenticate]}, async (req: FastifyRequest, reply: FastifyReply) => {
-    const userId: string = req.jwtPayload!.id;
-    const {blockUserId} = req.params as {blockUserId: string};
-
-    // delete friendship?
-    const block: Block = await utils.blockDelete(app.prisma, userId, blockUserId);
-
-    return {
-      success: true,
-      message: "User Unblocked",
-      block: block,
-    };
-  });
-
-  app.get('/block', {schema: schemas.getBlocksOpts, preHandler: [app.authenticate]}, async (req: FastifyRequest, reply: FastifyReply) => {
-    const userId: string = req.jwtPayload!.id;
-
-    const blocks: Block[] = await utils.blockFindByBlockerId(app.prisma, userId);
-
-    return {
-      success: true,
-      message: "Logged In User Block List",
-      blocks: blocks,
     };
   });
 };

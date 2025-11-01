@@ -3,7 +3,7 @@ import {describe, it, beforeAll, afterAll, expect} from 'vitest';
 import {buildServer} from '../src/build.js';
 import * as utils from '../src/utils.js'
 
-describe.sequential('Profile', () => {
+describe('Profile', () => {
   let app: FastifyInstance;
   const userId: string = 'profile1';
   let at: string = '';
@@ -12,14 +12,14 @@ describe.sequential('Profile', () => {
     app = await buildServer();
     at = app.jwt.sign({sub: userId}, {expiresIn: '15m'});
     try {
-      app.prisma.profile.delete({where: {id: userId}});
+      await app.prisma.$executeRaw`DELETE FROM Profile;`;
     } catch (err) {}
     await app.ready();
   });
 
   afterAll(async () => {
     try {
-      app.prisma.profile.delete({where: {id: userId}});
+      await app.prisma.$executeRaw`DELETE FROM Profile;`;
     } catch (err) {}
     await app.close();
   });
@@ -42,7 +42,7 @@ describe.sequential('Profile', () => {
         // 'Authorization': `Bearer ${at}`,
       },
       payload: {
-        username: 'test user 1',
+        username: 'profile user 1',
         email: 'test1@example.com',
       },
     });
@@ -58,7 +58,7 @@ describe.sequential('Profile', () => {
         'Authorization': `Bearer ${at}`,
       },
       payload: {
-        // username: 'test user 1',
+        // username: 'profile user 1',
         email: 'test1@example.com',
       },
     });
@@ -74,7 +74,7 @@ describe.sequential('Profile', () => {
         'Authorization': `Bearer ${at}`,
       },
       payload: {
-        username: 'test user 1',
+        username: 'profile user 1',
         // email: 'test1@example.com',
       },
     });
@@ -90,7 +90,32 @@ describe.sequential('Profile', () => {
         'Authorization': `Bearer ${at}`,
       },
       payload: {
-        username: 'test user 1',
+        username: 'profile user 1',
+        email: 'test0@example.com',
+      },
+    });
+    expect(r1.statusCode).toBe(200);
+  });
+
+  it('GET /user/', async() => {
+    const r1 = await app.inject({
+      method: 'GET',
+      url: '/user/',
+    });
+    expect(r1.statusCode).toBe(200);
+    expect(r1.json().profiles).toEqual([{id: userId, email: 'test0@example.com', name: 'profile user 1', avatarUrl: ''}]);
+  });
+
+  it('PUT /user/provision - update email', async() => {
+    const r1 = await app.inject({
+      method: 'PUT',
+      url: '/user/provision',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${at}`,
+      },
+      payload: {
+        username: 'profile user 1',
         email: 'test1@example.com',
       },
     });
@@ -103,7 +128,7 @@ describe.sequential('Profile', () => {
       url: '/user/',
     });
     expect(r1.statusCode).toBe(200);
-    expect(r1.json().profiles).toEqual([{id: userId, email: 'test1@example.com', name: 'test user 1', avatarUrl: ''}]);
+    expect(r1.json().profiles).toEqual([{id: userId, email: 'test1@example.com', name: 'profile user 1', avatarUrl: ''}]);
   });
 
   it('GET /user/:userid', async() => {
