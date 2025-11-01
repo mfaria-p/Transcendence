@@ -14,9 +14,12 @@ export default async function (app: FastifyInstance): Promise<void> {
   // requires broker service...
   app.put('/provision', {schema: schemas.putProfileOpts, preHandler: [app.authenticate]}, async (req: FastifyRequest, reply: FastifyReply) => {
     const userId: string = req.jwtPayload!.id;
-    const {username, email} = req.body as {username: string, email: string};
+    const {username, email, avatarUrl} = req.body as {username: string, email: string, avatarUrl?: string};
 
-    const profile: Profile = await utils.profileProvide(app.prisma, {id: userId, name: username, email: email});
+    const profileData: any = {id: userId, name: username, email: email};
+    if (avatarUrl) profileData.avatarUrl = avatarUrl;
+
+    const profile: Profile = await utils.profileProvide(app.prisma, profileData);
 
     return {
       success: true,

@@ -29,6 +29,7 @@
       <!-- Profile Avatar -->
       <div class="flex flex-col items-center mb-8">
         <div class="relative">
+          <img id="avatarImage" class="w-32 h-32 rounded-full object-cover shadow-lg hidden" alt="Profile picture" />
           <div class="w-32 h-32 rounded-full bg-gradient-to-br from-green-400 to-green-600 flex items-center justify-center text-6xl font-bold text-white shadow-lg" id="avatarPlaceholder">
             <!-- First letter of username -->
           </div>
@@ -39,7 +40,7 @@
             </svg>
           </button>
         </div>
-        <p class="text-gray-400 text-sm mt-3">Click the camera icon to upload a photo (coming soon)</p>
+        <p class="text-gray-400 text-sm mt-3">Click the camera icon to set your profile picture</p>
       </div>
 
       <!-- Profile Information -->
@@ -55,10 +56,50 @@
           <label class="block text-sm font-medium text-gray-400 mb-2">Email</label>
           <p class="text-xl font-semibold text-white" id="profileEmail">email@example.com</p>
         </div>
-
-    <div id="messageContainer" class="mt-4 text-center"></div>
-
       </div>
+    </div>
+  </div>
+
+  <!-- Error/Success Messages -->
+  <div id="messageContainer" class="fixed bottom-4 right-4 max-w-md z-50"></div>
+
+  <!-- Avatar URL Modal -->
+  <div id="avatarModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50">
+    <div class="flex items-center justify-center min-h-screen px-4">
+      <div class="bg-gray-800 rounded-lg p-8 max-w-md w-full">
+        <h2 class="text-2xl font-bold mb-6 text-green-400">Set Profile Picture</h2>
+        <form id="avatarForm" class="space-y-4">
+          <div>
+            <label class="block text-sm font-medium mb-2">Image URL</label>
+            <input 
+              type="url" 
+              id="avatarUrlInput"
+              placeholder="https://example.com/image.jpg"
+              class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-green-400"
+            />
+            <p class="text-xs text-gray-400 mt-1">Enter a direct link to an image (jpg, png, gif)</p>
+          </div>
+          
+          <!-- Preview -->
+          <div id="avatarPreview" class="hidden">
+            <label class="block text-sm font-medium mb-2">Preview</label>
+            <div class="flex justify-center">
+              <img id="previewImage" class="w-32 h-32 rounded-full object-cover border-2 border-green-400" alt="Preview" />
+            </div>
+          </div>
+
+          <div class="flex gap-3 mt-6">
+            <button type="submit" class="flex-1 bg-green-600 hover:bg-green-700 text-white py-2 rounded transition duration-200">
+              Save Picture
+            </button>
+            <button type="button" id="cancelAvatarBtn" class="flex-1 bg-gray-600 hover:bg-gray-700 text-white py-2 rounded transition duration-200">
+              Cancel
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
 
   <script type="module" src="./profile.js"></script>
 </body>
