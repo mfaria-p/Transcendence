@@ -135,6 +135,16 @@ class ProfileManager {
         document.getElementById('avatarPreview')?.classList.add('hidden');
       }
     });
+
+    // Username edit buttons
+    document.getElementById('editUsernameBtn')?.addEventListener('click', () => this.startEditUsername());
+    document.getElementById('saveUsernameBtn')?.addEventListener('click', () => this.saveUsername());
+    document.getElementById('cancelUsernameBtn')?.addEventListener('click', () => this.cancelEditUsername());
+
+    // Email edit buttons
+    document.getElementById('editEmailBtn')?.addEventListener('click', () => this.startEditEmail());
+    document.getElementById('saveEmailBtn')?.addEventListener('click', () => this.saveEmail());
+    document.getElementById('cancelEmailBtn')?.addEventListener('click', () => this.cancelEditEmail());
   }
 
   private openAvatarModal(): void {
@@ -250,6 +260,144 @@ class ProfileManager {
       messageEl.style.opacity = '0';
       setTimeout(() => messageEl.remove(), 300);
     }, 3000);
+  }
+
+  // Username edit methods
+  private startEditUsername(): void {
+    const usernameDisplay = document.getElementById('profileUsername');
+    const usernameForm = document.getElementById('usernameEditForm');
+    const usernameInput = document.getElementById('usernameInput') as HTMLInputElement;
+    
+    if (usernameInput && this.currentProfile) {
+      usernameInput.value = this.currentProfile.name;
+    }
+    
+    usernameDisplay?.classList.add('hidden');
+    usernameForm?.classList.remove('hidden');
+  }
+
+  private cancelEditUsername(): void {
+    const usernameDisplay = document.getElementById('profileUsername');
+    const usernameForm = document.getElementById('usernameEditForm');
+    
+    usernameDisplay?.classList.remove('hidden');
+    usernameForm?.classList.add('hidden');
+  }
+
+  private async saveUsername(): Promise<void> {
+    const usernameInput = document.getElementById('usernameInput') as HTMLInputElement;
+    const newUsername = usernameInput?.value.trim();
+
+    if (!newUsername) {
+      this.showMessage('Username cannot be empty', 'error');
+      return;
+    }
+
+    if (newUsername.length < 3 || newUsername.length > 20) {
+      this.showMessage('Username must be between 3 and 20 characters', 'error');
+      return;
+    }
+
+    if (!/^[a-zA-Z0-9_]+$/.test(newUsername)) {
+      this.showMessage('Username can only contain letters, numbers, and underscores', 'error');
+      return;
+    }
+
+    try {
+      const response = await fetch('/api/user/provision', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${this.accessToken}`,
+        },
+        body: JSON.stringify({
+          username: newUsername,
+          email: this.currentProfile?.email || this.currentUser?.email || '',
+          avatarUrl: this.currentProfile?.avatarUrl,
+        }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        this.currentProfile = data.profile;
+        this.displayProfile();
+        this.cancelEditUsername();
+        this.showMessage('Username updated successfully!', 'success');
+      } else {
+        const data = await response.json();
+        this.showMessage(data.message || 'Failed to update username', 'error');
+      }
+    } catch (error) {
+      console.error('Save username error:', error);
+      this.showMessage('Failed to update username', 'error');
+    }
+  }
+
+  // Email edit methods
+  private startEditEmail(): void {
+    const emailDisplay = document.getElementById('profileEmail');
+    const emailForm = document.getElementById('emailEditForm');
+    const emailInput = document.getElementById('emailInput') as HTMLInputElement;
+    
+    if (emailInput && this.currentProfile) {
+      emailInput.value = this.currentProfile.email;
+    }
+    
+    emailDisplay?.classList.add('hidden');
+    emailForm?.classList.remove('hidden');
+  }
+
+  private cancelEditEmail(): void {
+    const emailDisplay = document.getElementById('profileEmail');
+    const emailForm = document.getElementById('emailEditForm');
+    
+    emailDisplay?.classList.remove('hidden');
+    emailForm?.classList.add('hidden');
+  }
+
+  private async saveEmail(): Promise<void> {
+    const emailInput = document.getElementById('emailInput') as HTMLInputElement;
+    const newEmail = emailInput?.value.trim();
+
+    if (!newEmail) {
+      this.showMessage('Email cannot be empty', 'error');
+      return;
+    }
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(newEmail)) {
+      this.showMessage('Please enter a valid email address', 'error');
+      return;
+    }
+
+    try {
+      const response = await fetch('/api/user/provision', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${this.accessToken}`,
+        },
+        body: JSON.stringify({
+          username: this.currentProfile?.name || this.currentUser?.username || '',
+          email: newEmail,
+          avatarUrl: this.currentProfile?.avatarUrl,
+        }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        this.currentProfile = data.profile;
+        this.displayProfile();
+        this.cancelEditEmail();
+        this.showMessage('Email updated successfully!', 'success');
+      } else {
+        const data = await response.json();
+        this.showMessage(data.message || 'Failed to update email', 'error');
+      }
+    } catch (error) {
+      console.error('Save email error:', error);
+      this.showMessage('Failed to update email', 'error');
+    }
   }
 
   private async handleLogout(): Promise<void> {
