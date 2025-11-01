@@ -67,12 +67,13 @@ document.addEventListener('DOMContentLoaded', () => {
         // Store tokens and user info
         if (data.at) {
           localStorage.setItem('access_token', data.at);
+          
+          // Provision profile in user service (in case it doesn't exist)
+          if (data.user) {
+            await provisionProfile(data.at, data.user.username, data.user.email);
+          }
         }
         
-        /* if (data.refresh_token) {
-          localStorage.setItem('refresh_token', data.refresh_token);
-        }
-         */
         if (data.user) {
           localStorage.setItem('user', JSON.stringify(data.user));
         }
@@ -120,3 +121,29 @@ document.addEventListener('DOMContentLoaded', () => {
     errorMessage.classList.add('hidden');
   });
 });
+
+async function provisionProfile(accessToken: string, username: string, email: string): Promise<void> {
+  try {
+    console.log('Provisioning profile in user service...');
+    const response = await fetch('/api/user/provision', {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify({
+        username: username,
+        email: email,
+      }),
+    });
+
+    if (response.ok) {
+      console.log('Profile provisioned successfully');
+    } else {
+      console.warn('Failed to provision profile:', response.status);
+    }
+  } catch (error) {
+    console.error('Profile provision error:', error);
+    // Don't fail login if profile creation fails
+  }
+}

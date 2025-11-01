@@ -89,6 +89,9 @@ class SignupManager {
         if (response.at) {
           localStorage.setItem('access_token', response.at);
           console.log('Stored access_token in localStorage');
+          
+          // Create user profile in user service
+          await this.provisionProfile(response.at, response.user!.username, response.user!.email);
         } else {
           console.warn('No access token in signup response!');
         }
@@ -322,6 +325,32 @@ class SignupManager {
       throw new Error(err?.message || 'Network error');
     } finally {
       clearTimeout(timeoutId);
+    }
+  }
+
+  private async provisionProfile(accessToken: string, username: string, email: string): Promise<void> {
+    try {
+      console.log('Provisioning profile in user service...');
+      const response = await fetch('/api/user/provision', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({
+          username: username,
+          email: email,
+        }),
+      });
+
+      if (response.ok) {
+        console.log('Profile provisioned successfully');
+      } else {
+        console.warn('Failed to provision profile:', response.status);
+      }
+    } catch (error) {
+      console.error('Profile provision error:', error);
+      // Don't fail signup if profile creation fails
     }
   }
 

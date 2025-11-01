@@ -36,7 +36,7 @@ document.addEventListener('DOMContentLoaded', () => {
 function showLoggedInState(container: HTMLElement, user: User): void {
   container.innerHTML = `
     <div class="flex items-center gap-3">
-      <span class="text-gray-300">Welcome, <strong class="text-green-400">${user.username}</strong></span>
+      <span class="text-gray-300">Welcome, <a href="./profile.html" class="text-green-400 hover:text-green-300 font-bold underline transition duration-200">${user.username}</a></span>
       <button 
         id="logoutButton"
         class="bg-red-600 hover:bg-red-700 text-white text-sm py-1.5 px-4 rounded transition duration-200"
