@@ -58,7 +58,7 @@ class ProfileManager {
     authContainer.innerHTML = `
       <a href="./index.html" class="text-gray-300 hover:text-white transition">Game</a>
       <span class="text-gray-400">|</span>
-      <span class="text-gray-300">Welcome, <strong class="text-green-400">${this.currentUser.username}</strong></span>
+      <span class="text-gray-300">Welcome, <a href="./profile.html" class="text-green-400 hover:text-green-300 font-bold underline transition duration-200">${this.currentUser.username}</a></span>
       <button id="logoutButton" class="bg-red-600 hover:bg-red-700 text-white text-sm py-1.5 px-4 rounded transition duration-200">
         Logout
       </button>
@@ -581,7 +581,7 @@ class ProfileManager {
           if (this.currentUser && profile.id === this.currentUser.id) return;
           
           const userDiv = document.createElement('div');
-          userDiv.className = 'flex items-center p-3 bg-gray-700 rounded-lg mt-2 hover:bg-gray-600 transition';
+          userDiv.className = 'flex items-center p-3 bg-gray-700 rounded-lg mt-2 hover:bg-gray-600 transition cursor-pointer';
           
           // Show avatar image if exists, otherwise show initial
           const avatarHtml = profile.avatarUrl 
@@ -599,6 +599,11 @@ class ProfileManager {
               </div>
             </div>
           `;
+          
+          // Make the whole div clickable to view user profile
+          userDiv.addEventListener('click', () => {
+            window.location.href = `./other-profiles.html?id=${profile.id}`;
+          });
           
           searchResults.appendChild(userDiv);
         });
