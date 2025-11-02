@@ -145,6 +145,23 @@ class ProfileManager {
     document.getElementById('editEmailBtn')?.addEventListener('click', () => this.startEditEmail());
     document.getElementById('saveEmailBtn')?.addEventListener('click', () => this.saveEmail());
     document.getElementById('cancelEmailBtn')?.addEventListener('click', () => this.cancelEditEmail());
+
+    // Password edit buttons
+    document.getElementById('editPasswordBtn')?.addEventListener('click', () => this.startEditPassword());
+    document.getElementById('savePasswordBtn')?.addEventListener('click', () => this.savePassword());
+    document.getElementById('cancelPasswordBtn')?.addEventListener('click', () => this.cancelEditPassword());
+    
+    // Real-time password validation
+    const newPasswordInput = document.getElementById('newPasswordInput') as HTMLInputElement;
+    newPasswordInput?.addEventListener('input', () => this.updatePasswordRequirements());
+
+    // Real-time user search
+    const searchInput = document.getElementById('searchUserInput') as HTMLInputElement;
+    let searchTimeout: number;
+    searchInput?.addEventListener('input', () => {
+      clearTimeout(searchTimeout);
+      searchTimeout = window.setTimeout(() => this.searchUsers(), 300);
+    });
   }
 
   private openAvatarModal(): void {
@@ -397,6 +414,200 @@ class ProfileManager {
     } catch (error) {
       console.error('Save email error:', error);
       this.showMessage('Failed to update email', 'error');
+    }
+  }
+
+  // Password edit methods
+  private startEditPassword(): void {
+    const passwordForm = document.getElementById('passwordEditForm');
+    passwordForm?.classList.remove('hidden');
+  }
+
+  private cancelEditPassword(): void {
+    const passwordForm = document.getElementById('passwordEditForm');
+    const currentPasswordInput = document.getElementById('currentPasswordInput') as HTMLInputElement;
+    const newPasswordInput = document.getElementById('newPasswordInput') as HTMLInputElement;
+    const confirmNewPasswordInput = document.getElementById('confirmNewPasswordInput') as HTMLInputElement;
+    
+    if (currentPasswordInput) currentPasswordInput.value = '';
+    if (newPasswordInput) newPasswordInput.value = '';
+    if (confirmNewPasswordInput) confirmNewPasswordInput.value = '';
+    
+    passwordForm?.classList.add('hidden');
+  }
+
+  private updatePasswordRequirements(): void {
+    const newPasswordInput = document.getElementById('newPasswordInput') as HTMLInputElement;
+    const password = newPasswordInput?.value || '';
+    
+    // Check each requirement
+    const hasMinLength = password.length >= 8;
+    const hasUppercase = /[A-Z]/.test(password);
+    const hasLowercase = /[a-z]/.test(password);
+    const hasNumber = /[0-9]/.test(password);
+    
+    // Update indicators
+    this.updateRequirement('req-length-edit', hasMinLength);
+    this.updateRequirement('req-uppercase-edit', hasUppercase);
+    this.updateRequirement('req-lowercase-edit', hasLowercase);
+    this.updateRequirement('req-number-edit', hasNumber);
+  }
+
+  private updateRequirement(id: string, isValid: boolean): void {
+    const element = document.getElementById(id);
+    if (!element) return;
+    
+    const indicator = element.querySelector('.indicator');
+    const text = element.querySelector('span:last-child');
+    
+    if (indicator) {
+      indicator.textContent = isValid ? '✅' : '❌';
+    }
+    
+    if (text) {
+      if (isValid) {
+        text.classList.remove('text-gray-400');
+        text.classList.add('text-green-400');
+      } else {
+        text.classList.remove('text-green-400');
+        text.classList.add('text-gray-400');
+      }
+    }
+  }
+
+  private async savePassword(): Promise<void> {
+    const currentPasswordInput = document.getElementById('currentPasswordInput') as HTMLInputElement;
+    const newPasswordInput = document.getElementById('newPasswordInput') as HTMLInputElement;
+    const confirmNewPasswordInput = document.getElementById('confirmNewPasswordInput') as HTMLInputElement;
+    
+    const currentPassword = currentPasswordInput?.value || '';
+    const newPassword = newPasswordInput?.value || '';
+    const confirmNewPassword = confirmNewPasswordInput?.value || '';
+
+    // Validate inputs
+    if (!currentPassword) {
+      this.showMessage('Please enter your current password', 'error');
+      return;
+    }
+
+    if (!newPassword) {
+      this.showMessage('Please enter a new password', 'error');
+      return;
+    }
+
+    // Validate new password requirements
+    const hasMinLength = newPassword.length >= 8;
+    const hasUppercase = /[A-Z]/.test(newPassword);
+    const hasLowercase = /[a-z]/.test(newPassword);
+    const hasNumber = /[0-9]/.test(newPassword);
+
+    if (!hasMinLength || !hasUppercase || !hasLowercase || !hasNumber) {
+      this.showMessage('New password does not meet all requirements', 'error');
+      return;
+    }
+
+    if (newPassword !== confirmNewPassword) {
+      this.showMessage('New passwords do not match', 'error');
+      return;
+    }
+
+    try {
+      const response = await fetch('/api/auth/change-password', { //does not exist yet
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${this.accessToken}`,
+        },
+        body: JSON.stringify({
+          currentPassword: currentPassword,
+          newPassword: newPassword,
+        }),
+      });
+
+      if (response.ok) {
+        this.cancelEditPassword();
+        this.showMessage('Password updated successfully!', 'success');
+      } else {
+        const data = await response.json();
+        this.showMessage(data.message || 'Failed to update password', 'error');
+      }
+    } catch (error) {
+      console.error('Save password error:', error);
+      this.showMessage('Failed to update password', 'error');
+    }
+  }
+
+  private async searchUsers(): Promise<void> {
+    const searchInput = document.getElementById('searchUserInput') as HTMLInputElement;
+    const searchResults = document.getElementById('searchResults');
+    
+    if (!searchInput || !searchResults) return;
+    
+    const searchTerm = searchInput.value.trim();
+    
+    // Clear results if search is empty
+    if (!searchTerm) {
+      searchResults.innerHTML = '';
+      return;
+    }
+
+    try {
+      const response = await fetch('/api/user/', {
+        headers: {
+          'Authorization': `Bearer ${this.accessToken}`,
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const allProfiles = data.profiles || [];
+        
+        // Filter profiles by search term (case-insensitive)
+        const filteredProfiles = allProfiles.filter((profile: any) => {
+          const searchLower = searchTerm.toLowerCase();
+          return profile.name.toLowerCase().includes(searchLower) || 
+                 profile.email.toLowerCase().includes(searchLower);
+        });
+        
+        searchResults.innerHTML = '';
+        
+        if (filteredProfiles.length === 0) {
+          searchResults.innerHTML = '<p class="text-gray-400 text-sm p-3 bg-gray-700 rounded-lg">No users found</p>';
+          return;
+        }
+
+        filteredProfiles.forEach((profile: any) => {
+          // Don't show current user in search results
+          if (this.currentUser && profile.id === this.currentUser.id) return;
+          
+          const userDiv = document.createElement('div');
+          userDiv.className = 'flex items-center p-3 bg-gray-700 rounded-lg mt-2 hover:bg-gray-600 transition';
+          
+          // Show avatar image if exists, otherwise show initial
+          const avatarHtml = profile.avatarUrl 
+            ? `<img src="${profile.avatarUrl}" class="w-10 h-10 rounded-full object-cover mr-3" alt="${profile.name}'s avatar" />`
+            : `<div class="w-10 h-10 rounded-full bg-blue-500 flex items-center justify-center text-white font-bold mr-3">
+                ${profile.name.charAt(0).toUpperCase()}
+              </div>`;
+          
+          userDiv.innerHTML = `
+            <div class="flex items-center">
+              ${avatarHtml}
+              <div>
+                <p class="text-white font-semibold">${profile.name}</p>
+                <p class="text-gray-400 text-sm">${profile.email}</p>
+              </div>
+            </div>
+          `;
+          
+          searchResults.appendChild(userDiv);
+        });
+      } else {
+        this.showMessage('Failed to search users', 'error');
+      }
+    } catch (error) {
+      console.error('Search users error:', error);
+      this.showMessage('Failed to search users', 'error');
     }
   }
 
