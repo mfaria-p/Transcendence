@@ -16,6 +16,7 @@ class UserProfileViewer {
   private viewedProfile: Profile | null = null;
   private accessToken: string | null = null;
   private userId: string | null = null;
+  private friendshipStatus: 'none' | 'friend' | 'pending_sent' | 'pending_received' = 'none';
 
   constructor() {
     this.init();
@@ -89,6 +90,8 @@ class UserProfileViewer {
         }
 
         this.displayProfile();
+        await this.checkFriendshipStatus();
+        this.displayFriendActions();
       } else if (response.status === 404) {
         this.showMessage('User not found', 'error');
         setTimeout(() => window.location.href = './profile.html', 2000);
@@ -140,6 +143,216 @@ class UserProfileViewer {
       messageEl.style.opacity = '0';
       setTimeout(() => messageEl.remove(), 300);
     }, 3000);
+  }
+
+  private async checkFriendshipStatus(): Promise<void> {
+    if (!this.userId) return;
+
+    try {
+      // Check if already friends
+      const friendsResponse = await fetch('/api/user/friend', {
+        headers: {
+          'Authorization': `Bearer ${this.accessToken}`,
+        },
+      });
+
+      if (friendsResponse.ok) {
+        const data = await friendsResponse.json();
+        const friendships = data.friendships || [];
+        const isFriend = friendships.some((friendship: any) => {
+          return friendship.user1.id === this.userId || friendship.user2.id === this.userId;
+        });
+
+        if (isFriend) {
+          this.friendshipStatus = 'friend';
+          return;
+        }
+      }
+
+      // Check pending requests
+      const requestsResponse = await fetch('/api/user/friend-request', {
+        headers: {
+          'Authorization': `Bearer ${this.accessToken}`,
+        },
+      });
+
+      if (requestsResponse.ok) {
+        const data = await requestsResponse.json();
+        const requests = data.requests || [];
+        
+        // Check if we have a pending request to this user
+        const hasSentRequest = requests.some((req: any) => req.toUserId === this.userId);
+        
+        if (hasSentRequest) {
+          this.friendshipStatus = 'pending_sent';
+          return;
+        }
+
+        // Check if this user sent us a request
+        const hasReceivedRequest = requests.some((req: any) => req.fromUserId === this.userId);
+        
+        if (hasReceivedRequest) {
+          this.friendshipStatus = 'pending_received';
+          return;
+        }
+      }
+
+      this.friendshipStatus = 'none';
+    } catch (error) {
+      console.error('Check friendship status error:', error);
+      this.friendshipStatus = 'none';
+    }
+  }
+
+  private displayFriendActions(): void {
+    const friendActions = document.getElementById('friendActions');
+    if (!friendActions) return;
+
+    switch (this.friendshipStatus) {
+      case 'friend':
+        friendActions.innerHTML = `
+          <button id="removeFriendBtn" class="px-6 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition">
+            Remove Friend
+          </button>
+        `;
+        document.getElementById('removeFriendBtn')?.addEventListener('click', () => this.removeFriend());
+        break;
+
+      case 'pending_sent':
+        friendActions.innerHTML = `
+          <p class="text-yellow-400">Friend request pending...</p>
+        `;
+        break;
+
+      case 'pending_received':
+        friendActions.innerHTML = `
+          <div class="flex gap-3">
+            <button id="acceptRequestBtn" class="px-6 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition">
+              Accept Friend Request
+            </button>
+            <button id="declineRequestBtn" class="px-6 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition">
+              Decline
+            </button>
+          </div>
+        `;
+        document.getElementById('acceptRequestBtn')?.addEventListener('click', () => this.acceptFriendRequest());
+        document.getElementById('declineRequestBtn')?.addEventListener('click', () => this.declineFriendRequest());
+        break;
+
+      case 'none':
+      default:
+        friendActions.innerHTML = `
+          <button id="sendFriendRequestBtn" class="px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition">
+            Send Friend Request
+          </button>
+        `;
+        document.getElementById('sendFriendRequestBtn')?.addEventListener('click', () => this.sendFriendRequest());
+        break;
+    }
+  }
+
+  private async sendFriendRequest(): Promise<void> {
+    if (!this.userId) return;
+
+    try {
+      const response = await fetch(`/api/user/friend-request/${this.userId}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${this.accessToken}`,
+        },
+        body: JSON.stringify({}),
+      });
+
+      if (response.ok) {
+        this.showMessage('Friend request sent!', 'success');
+        this.friendshipStatus = 'pending_sent';
+        this.displayFriendActions();
+      } else {
+        const data = await response.json();
+        this.showMessage(data.message || 'Failed to send friend request', 'error');
+      }
+    } catch (error) {
+      console.error('Send friend request error:', error);
+      this.showMessage('Failed to send friend request', 'error');
+    }
+  }
+
+  private async acceptFriendRequest(): Promise<void> {
+    if (!this.userId) return;
+
+    try {
+      const response = await fetch(`/api/user/friend-request/${this.userId}/accept`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${this.accessToken}`,
+        },
+      });
+
+      if (response.ok) {
+        this.showMessage('Friend request accepted!', 'success');
+        this.friendshipStatus = 'friend';
+        this.displayFriendActions();
+      } else {
+        const data = await response.json();
+        this.showMessage(data.message || 'Failed to accept friend request', 'error');
+      }
+    } catch (error) {
+      console.error('Accept friend request error:', error);
+      this.showMessage('Failed to accept friend request', 'error');
+    }
+  }
+
+  private async declineFriendRequest(): Promise<void> {
+    if (!this.userId) return;
+
+    try {
+      const response = await fetch(`/api/user/friend-request/${this.userId}/decline`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${this.accessToken}`,
+        },
+      });
+
+      if (response.ok) {
+        this.showMessage('Friend request declined', 'success');
+        this.friendshipStatus = 'none';
+        this.displayFriendActions();
+      } else {
+        const data = await response.json();
+        this.showMessage(data.message || 'Failed to decline friend request', 'error');
+      }
+    } catch (error) {
+      console.error('Decline friend request error:', error);
+      this.showMessage('Failed to decline friend request', 'error');
+    }
+  }
+
+  private async removeFriend(): Promise<void> {
+    if (!this.userId) return;
+    
+    if (!confirm('Are you sure you want to remove this friend?')) return;
+
+    try {
+      const response = await fetch(`/api/user/friend/${this.userId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${this.accessToken}`,
+        },
+      });
+
+      if (response.ok) {
+        this.showMessage('Friend removed', 'success');
+        this.friendshipStatus = 'none';
+        this.displayFriendActions();
+      } else {
+        const data = await response.json();
+        this.showMessage(data.message || 'Failed to remove friend', 'error');
+      }
+    } catch (error) {
+      console.error('Remove friend error:', error);
+      this.showMessage('Failed to remove friend', 'error');
+    }
   }
 
   private async handleLogout(): Promise<void> {
