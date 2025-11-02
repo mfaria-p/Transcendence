@@ -38,6 +38,7 @@ class ProfileManager {
       await this.loadProfile();
       
       this.setupEventListeners();
+      this.loadFriendRequests();
     } catch (error) {
       console.error('Init error:', error);
       this.showMessage('Session expired or profile not found. Redirecting to login...', 'error');
@@ -613,6 +614,120 @@ class ProfileManager {
     } catch (error) {
       console.error('Search users error:', error);
       this.showMessage('Failed to search users', 'error');
+    }
+  }
+
+  private async loadFriendRequests(): Promise<void> {
+    const friendRequestsList = document.getElementById('friendRequestsList');
+    if (!friendRequestsList) return;
+
+    try {
+      const response = await fetch('/api/user/friend-request', {
+        headers: {
+          'Authorization': `Bearer ${this.accessToken}`,
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        console.log('Friend requests response:', data);
+        const requests = data.requests || [];
+        console.log('Requests array:', requests);
+        
+        friendRequestsList.innerHTML = '';
+        
+        if (requests.length === 0) {
+          friendRequestsList.innerHTML = '<p class="text-gray-400 text-sm">No pending friend requests</p>';
+          return;
+        }
+
+        requests.forEach((request: any) => {
+          console.log('Processing request:', request);
+          const requestDiv = document.createElement('div');
+          requestDiv.className = 'flex items-center justify-between p-4 bg-gray-700 rounded-lg';
+          
+          const avatarHtml = request.fromUser.avatarUrl 
+            ? `<img src="${request.fromUser.avatarUrl}" class="w-12 h-12 rounded-full object-cover mr-4" alt="${request.fromUser.name}'s avatar" />`
+            : `<div class="w-12 h-12 rounded-full bg-purple-500 flex items-center justify-center text-white font-bold mr-4">
+                ${request.fromUser.name.charAt(0).toUpperCase()}
+              </div>`;
+          
+          requestDiv.innerHTML = `
+            <div class="flex items-center">
+              ${avatarHtml}
+              <div>
+                <p class="text-white font-semibold">${request.fromUser.name}</p>
+                <p class="text-gray-400 text-sm">${request.fromUser.email}</p>
+              </div>
+            </div>
+            <div class="flex gap-2">
+              <button class="accept-btn px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition" data-user-id="${request.fromUserId}">
+                Accept
+              </button>
+              <button class="decline-btn px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition" data-user-id="${request.fromUserId}">
+                Decline
+              </button>
+            </div>
+          `;
+          
+          const acceptBtn = requestDiv.querySelector('.accept-btn');
+          const declineBtn = requestDiv.querySelector('.decline-btn');
+          
+          acceptBtn?.addEventListener('click', () => this.acceptFriendRequest(request.fromUserId));
+          declineBtn?.addEventListener('click', () => this.declineFriendRequest(request.fromUserId));
+          
+          friendRequestsList.appendChild(requestDiv);
+        });
+      } else {
+        this.showMessage('Failed to load friend requests', 'error');
+      }
+    } catch (error) {
+      console.error('Load friend requests error:', error);
+      this.showMessage('Failed to load friend requests', 'error');
+    }
+  }
+
+  private async acceptFriendRequest(fromUserId: string): Promise<void> {
+    try {
+      const response = await fetch(`/api/user/friend-request/${fromUserId}/accept`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${this.accessToken}`,
+        },
+      });
+
+      if (response.ok) {
+        this.showMessage('Friend request accepted!', 'success');
+        await this.loadFriendRequests();
+      } else {
+        const data = await response.json();
+        this.showMessage(data.message || 'Failed to accept friend request', 'error');
+      }
+    } catch (error) {
+      console.error('Accept friend request error:', error);
+      this.showMessage('Failed to accept friend request', 'error');
+    }
+  }
+
+  private async declineFriendRequest(fromUserId: string): Promise<void> {
+    try {
+      const response = await fetch(`/api/user/friend-request/${fromUserId}/decline`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${this.accessToken}`,
+        },
+      });
+
+      if (response.ok) {
+        this.showMessage('Friend request declined', 'success');
+        await this.loadFriendRequests();
+      } else {
+        const data = await response.json();
+        this.showMessage(data.message || 'Failed to decline friend request', 'error');
+      }
+    } catch (error) {
+      console.error('Decline friend request error:', error);
+      this.showMessage('Failed to decline friend request', 'error');
     }
   }
 
