@@ -641,10 +641,34 @@ class ProfileManager {
           return;
         }
 
-        requests.forEach((request: any) => {
+        // Fetch user profiles using fromUserId
+        for (const request of requests) {
           console.log('Processing request:', request);
+          
+          // Always fetch the user profile using fromUserId
+          try {
+            const userResponse = await fetch(`/api/user/${request.fromUserId}`, {
+              headers: {
+                'Authorization': `Bearer ${this.accessToken}`,
+              },
+            });
+            
+            if (userResponse.ok) {
+              const userData = await userResponse.json();
+              request.fromUser = userData.profile;
+            }
+          } catch (error) {
+            console.error('Failed to fetch user profile:', error);
+            // Set a default fromUser if fetch fails
+            request.fromUser = {
+              name: 'Unknown User',
+              email: '',
+              avatarUrl: null
+            };
+          }
+          
           const requestDiv = document.createElement('div');
-          requestDiv.className = 'flex items-center justify-between p-4 bg-gray-700 rounded-lg';
+          requestDiv.className = 'flex items-center justify-between p-4 bg-gray-700 rounded-lg mb-2';
           
           const avatarHtml = request.fromUser.avatarUrl 
             ? `<img src="${request.fromUser.avatarUrl}" class="w-12 h-12 rounded-full object-cover mr-4" alt="${request.fromUser.name}'s avatar" />`
@@ -677,7 +701,7 @@ class ProfileManager {
           declineBtn?.addEventListener('click', () => this.declineFriendRequest(request.fromUserId));
           
           friendRequestsList.appendChild(requestDiv);
-        });
+        }
       } else {
         this.showMessage('Failed to load friend requests', 'error');
       }

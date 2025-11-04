@@ -160,7 +160,7 @@ class UserProfileViewer {
         const data = await friendsResponse.json();
         const friendships = data.friendships || [];
         const isFriend = friendships.some((friendship: any) => {
-          return friendship.user1.id === this.userId || friendship.user2.id === this.userId;
+          return friendship.userAId === this.userId || friendship.userBId === this.userId;
         });
 
         if (isFriend) {
