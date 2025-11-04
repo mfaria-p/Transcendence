@@ -39,6 +39,7 @@ class ProfileManager {
       
       this.setupEventListeners();
       this.loadFriendRequests();
+      this.loadFriends();
     } catch (error) {
       console.error('Init error:', error);
       this.showMessage('Session expired or profile not found. Redirecting to login...', 'error');
@@ -752,6 +753,117 @@ class ProfileManager {
     } catch (error) {
       console.error('Decline friend request error:', error);
       this.showMessage('Failed to decline friend request', 'error');
+    }
+  }
+
+  private async loadFriends(): Promise<void> {
+    const friendsList = document.getElementById('friendsList');
+    if (!friendsList) return;
+
+    try {
+      const response = await fetch('/api/user/friend', {
+        headers: {
+          'Authorization': `Bearer ${this.accessToken}`,
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const friendships = data.friendships || [];
+        
+        friendsList.innerHTML = '';
+        
+        if (friendships.length === 0) {
+          friendsList.innerHTML = '<p class="text-gray-400 text-sm">No friends yet</p>';
+          return;
+        }
+
+        // Fetch friend profiles
+        for (const friendship of friendships) {
+          // Determine which user is the friend (not current user)
+          const friendId = friendship.userAId === this.currentUser?.id 
+            ? friendship.userBId 
+            : friendship.userAId;
+          
+          try {
+            const userResponse = await fetch(`/api/user/${friendId}`, {
+              headers: {
+                'Authorization': `Bearer ${this.accessToken}`,
+              },
+            });
+            
+            if (userResponse.ok) {
+              const userData = await userResponse.json();
+              const friend = userData.profile;
+              
+              const friendDiv = document.createElement('div');
+              friendDiv.className = 'flex items-center justify-between p-4 bg-gray-700 rounded-lg';
+              
+              const avatarHtml = friend.avatarUrl 
+                ? `<img src="${friend.avatarUrl}" class="w-12 h-12 rounded-full object-cover mr-4" alt="${friend.name}'s avatar" />`
+                : `<div class="w-12 h-12 rounded-full bg-blue-500 flex items-center justify-center text-white font-bold mr-4">
+                    ${friend.name.charAt(0).toUpperCase()}
+                  </div>`;
+              
+              friendDiv.innerHTML = `
+                <div class="flex items-center cursor-pointer flex-1" data-friend-id="${friendId}">
+                  ${avatarHtml}
+                  <div>
+                    <p class="text-white font-semibold">${friend.name}</p>
+                    <p class="text-gray-400 text-sm">${friend.email}</p>
+                  </div>
+                </div>
+                <button class="remove-friend-btn px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition" data-friend-id="${friendId}">
+                  Remove
+                </button>
+              `;
+              
+              // Make profile clickable
+              const profileClick = friendDiv.querySelector('[data-friend-id]');
+              profileClick?.addEventListener('click', () => {
+                window.location.href = `./other-profiles.html?id=${friendId}`;
+              });
+              
+              // Add remove button handler
+              const removeBtn = friendDiv.querySelector('.remove-friend-btn');
+              removeBtn?.addEventListener('click', () => this.removeFriend(friendId));
+              
+              friendsList.appendChild(friendDiv);
+            }
+          } catch (error) {
+            console.error('Failed to fetch friend profile:', error);
+          }
+        }
+      } else {
+        this.showMessage('Failed to load friends', 'error');
+      }
+    } catch (error) {
+      console.error('Load friends error:', error);
+      this.showMessage('Failed to load friends', 'error');
+    }
+  }
+
+  private async removeFriend(friendId: string): Promise<void> {
+    if (!confirm('Are you sure you want to remove this friend?')) return;
+
+    try {
+      const response = await fetch(`/api/user/friend/${friendId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${this.accessToken}`,
+        },
+      });
+
+      if (response.ok) {
+        this.showMessage('Friend removed', 'success');
+        await this.loadFriends();
+      } else {
+        const data = await response.json();
+        this.showMessage(data.message || 'Failed to remove friend', 'error');
+      }
+    } catch (error) {
+      console.error('Remove friend error:', error);
+      this.showMessage('Failed to remove friend', 'error');
     }
   }
 
