@@ -9,7 +9,7 @@ const user = {
     username: {type: 'string'},
     email: {type: 'string'},
   },
-}
+};
 
 export const postMeOpts: FastifySchema = {
   summary: 'Get user info',
@@ -21,7 +21,7 @@ export const postMeOpts: FastifySchema = {
       email: {type: 'string'},
     }
   },
-}
+};
 
 export const postSignupOpts: FastifySchema = {
   summary: 'Create user',
@@ -45,7 +45,7 @@ export const postSignupOpts: FastifySchema = {
       },
     },
   },
-}
+};
 
 export const postLoginOpts: FastifySchema = {
   summary: 'Login with email',
@@ -76,7 +76,7 @@ export const postLoginOpts: FastifySchema = {
       },
     },
   },
-}
+};
 
 // TODO
 // should require rt cookie
@@ -110,7 +110,7 @@ export const postRefreshOpts: FastifySchema = {
       },
     },
   },
-}
+};
 
 // should require rt cookie
 export const postLogoutOpts: FastifySchema = {

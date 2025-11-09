@@ -6,8 +6,19 @@
   <link href="./output.css" rel="stylesheet">
 </head>
 <body class="bg-gray-900 text-white flex flex-col items-center justify-center min-h-screen">
+  <!-- Navigation buttons in top-right corner -->
+  <div style="position: fixed; top: 1rem; right: 1rem; display: flex; gap: 0.5rem; z-index: 50;">
+    <a href="./login.html" class="bg-gray-700 hover:bg-gray-600 text-gray-300 hover:text-white text-sm py-1.5 px-4 rounded transition duration-200">
+      Login
+    </a>
+    <a href="./signup.html" class="bg-gray-700 hover:bg-gray-600 text-gray-300 hover:text-white text-sm py-1.5 px-4 rounded transition duration-200">
+      Sign Up
+    </a>
+  </div>
+
   <div id="app" class="text-center">
     <h1 class="text-4xl font-bold mb-8 text-green-400">PONG</h1>
+
     <div class="bg-black p-4 rounded-lg shadow-2xl">
       <canvas id="gameCanvas" width="800" height="400" class="border border-white"></canvas>
     </div>

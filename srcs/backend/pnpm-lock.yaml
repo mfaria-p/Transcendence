@@ -9,27 +9,12 @@ importers:
 
   .:
     dependencies:
-      '@fastify/cors':
-        specifier: ^10.1.0
-        version: 10.1.0
       '@fastify/jwt':
         specifier: ^10.0.0
         version: 10.0.0
-      '@fastify/rate-limit':
-        specifier: ^10.3.0
-        version: 10.3.0
-      '@fastify/reply-from':
-        specifier: ^12.3.1
-        version: 12.3.1
       dotenv:
         specifier: ^17.2.3
         version: 17.2.3
-      fastify:
-        specifier: ^5.6.1
-        version: 5.6.1
-      fastify-plugin:
-        specifier: ^5.1.0
-        version: 5.1.0
     devDependencies:
       '@types/node':
         specifier: ^24.5.2
@@ -114,8 +99,20 @@ importers:
         version: 5.1.0
     devDependencies:
       prisma:
-        specifier: ^6.16.2
+        specifier: ^6.17.0
         version: 6.17.0(typescript@5.9.3)
+
+  services/example:
+    dependencies:
+      '@fastify/swagger':
+        specifier: ^9.5.2
+        version: 9.5.2
+      '@fastify/swagger-ui':
+        specifier: ^5.2.3
+        version: 5.2.3
+      fastify:
+        specifier: ^5.6.1
+        version: 5.6.1
 
   services/gateway:
     dependencies:
@@ -145,7 +142,7 @@ importers:
         version: 5.1.0
       pnpm:
         specifier: ^10.18.3
-        version: 10.18.3
+        version: 10.19.0
     devDependencies:
       tsx:
         specifier: ^4.20.6
@@ -154,7 +151,27 @@ importers:
         specifier: ^5.9.2
         version: 5.9.3
 
-  services/users: {}
+  services/user:
+    dependencies:
+      '@pkg/lib-auth':
+        specifier: workspace:*
+        version: link:../../packages/lib-auth
+      '@pkg/lib-docs':
+        specifier: workspace:*
+        version: link:../../packages/lib-docs
+      '@prisma/client':
+        specifier: ^6.17.0
+        version: 6.17.0(prisma@6.17.0(typescript@5.9.3))(typescript@5.9.3)
+      dotenv:
+        specifier: ^17.2.3
+        version: 17.2.3
+      fastify:
+        specifier: ^5.6.1
+        version: 5.6.1
+    devDependencies:
+      prisma:
+        specifier: ^6.17.0
+        version: 6.17.0(typescript@5.9.3)
 
 packages:
 
@@ -1249,8 +1266,8 @@ packages:
   pkg-types@2.3.0:
     resolution: {integrity: sha512-SIqCzDRg0s9npO5XQ3tNZioRY1uK06lA41ynBC1YmFTmnY6FjUjVt6s4LoADmwoig1qqD0oK8h1p/8mlMx8Oig==}
 
-  pnpm@10.18.3:
-    resolution: {integrity: sha512-u9FubXKG/X4B9rPAs8kyzaKWXAapCDKPdGY/EKmupR8RKe6mFRNL+ZKDGwCeq+Fn7LcAi1l/QP+bx1lGqt+wjQ==}
+  pnpm@10.19.0:
+    resolution: {integrity: sha512-yfxyNukq31yK9C/VvxYS35nCzrYvJwRwMvRyCzP46s3eMRhl6RxBHyd09hjYLzIICOy1Fxi/qCwGDEunx2oyuA==}
     engines: {node: '>=18.12'}
     hasBin: true
 
@@ -2674,7 +2691,7 @@ snapshots:
       exsolve: 1.0.7
       pathe: 2.0.3
 
-  pnpm@10.18.3: {}
+  pnpm@10.19.0: {}
 
   postcss@8.5.6:
     dependencies:

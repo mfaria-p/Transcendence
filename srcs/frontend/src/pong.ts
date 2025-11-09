@@ -38,9 +38,9 @@ class PongGame {
       y: this.canvas.height / 2,
       width: 10,
       height: 10,
-      dx: 5,
+      dx: 15,
       dy: 3,
-      speed: 5
+      speed: 15
     };
 
     // Left paddle
@@ -127,18 +127,23 @@ class PongGame {
     // Ball collision with top/bottom walls
     if (this.ball.y <= 0 || this.ball.y >= this.canvas.height - this.ball.height) {
       this.ball.dy = -this.ball.dy; // reverse vertical direction
+      this.ball.dx *= 1.05; // gradually increase ball speed  
     }
 
     // Ball collision with left paddle
     if (this.checkCollision(this.ball, this.player1)) {
       this.ball.dx = Math.abs(this.ball.dx); // always move right
       this.ball.x = this.player1.x + this.player1.width; // push ball out so it doesn't stick
+      this.ball.dx *= 1.05; // gradually increase ball speed  
+      this.ball.dy = (Math.random() - 0.5) * (0.7 * this.ball.dx);     
     }
 
     // Ball collision with right paddle
     if (this.checkCollision(this.ball, this.player2)) {
       this.ball.dx = -Math.abs(this.ball.dx); // always move left
       this.ball.x = this.player2.x - this.ball.width; // push ball out
+      this.ball.dx *= 1.05; // gradually increase ball speed  
+      this.ball.dy = (Math.random() - 0.5) * (0.7 * this.ball.dx);
     }
 
     // Ball out of bounds (scoring)

@@ -11,6 +11,9 @@ declare module 'fastify' {
     authenticate(req: FastifyRequest, reply: FastifyReply): void;
     jwt: JWT;
   }
+  interface FastifyRequest {
+    jwtPayload?: {id:string; email?:string;};
+  }
 }
 
 // TODO
@@ -21,9 +24,13 @@ export default fp(async (auth) => {
   });
   auth.decorate('authenticate', async (req: FastifyRequest, reply: FastifyReply) => {
     try {
-      await req.jwtVerify();
+      const payload: {sub:string} = await req.jwtVerify();
+      req.jwtPayload = {id: payload.sub as string};
     } catch {
-      return reply.code(401).send({error: 'Unauthorized'});
+      return reply.code(401).send({
+        sucessful: false,
+        message: 'Unauthorized'
+      });
     }
   });
 });
