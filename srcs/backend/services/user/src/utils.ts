@@ -13,7 +13,10 @@ const DatabaseError = createError('DATABASE_ERROR', 'Database operation failed',
 function handlePrismaError(error: unknown): never {
   if (error instanceof Prisma.PrismaClientKnownRequestError) {
     switch (error.code) {
-      case 'P2002': throw new AlreadyExistsError();
+      case 'P2002':
+        const fields = (error.meta?.target as string[]) || [];
+        const fieldList = fields.join(', ') || 'unkown field';
+        throw new AlreadyExistsError(`${fieldList} already exists`);
       case 'P2003':
       case 'P2014': throw new InvalidRelationError();
       case 'P2001':

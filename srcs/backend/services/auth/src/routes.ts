@@ -120,6 +120,15 @@ export default async function (app: FastifyInstance): Promise<void> {
     };
   });
 
+  app.put('/me/password', {schema: schemas.postMeOpts, preHandler: [app.authenticate]}, async (req: FastifyRequest, reply) => {
+    const userId: string = req.jwtPayload!.id;
+    const {pw} = req.body as {pw: string};
+    const user: User | null = await utils.userUpdatePassword(app.prisma, userId, await utils.pwHash(pw));
+    if (!user) return reply.code(401).send({message: 'Nonexisting user'});
+
+    return user;
+  });
+
   app.post('/me', {schema: schemas.postMeOpts, preHandler: [app.authenticate]}, async (req: FastifyRequest, reply) => {
     const {email} = req.body as {email: string};
     const user: User | null = await utils.userFindByEmail(app.prisma, email);
