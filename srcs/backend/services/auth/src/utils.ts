@@ -1,36 +1,71 @@
 // src/utils.ts
 
 import type {FastifyInstance} from 'fastify';
-import type {User, RefreshToken, Prisma} from './generated/prisma/client.js';
+import type {User, RefreshToken} from './generated/prisma/client.js';
+import {Prisma} from './generated/prisma/client.js';
+import createError from '@fastify/error';
 import * as argon from 'argon2';
 import {randomBytes, createHash} from 'crypto';
 
+const AlreadyExistsError = createError('ALREADY_EXISTS', 'Record already exists', 409);
+const InvalidRelationError = createError('INVALID_RELATION', 'Invalid reference', 400);
+const NotFoundError = createError('NOT_FOUND', 'Record not found', 404);
+const DatabaseError = createError('DB_ERROR', 'Database error', 500);
+
+function handlePrismaError(error: unknown): never {
+  if (error instanceof Prisma.PrismaClientKnownRequestError) {
+    switch (error.code) {
+      case 'P2002': throw new AlreadyExistsError();
+      case 'P2003':
+      case 'P2014': throw new InvalidRelationError();
+      case 'P2001':
+      case 'P2025': throw new NotFoundError();
+      default: throw new DatabaseError(`Unhandled Prisma error: ${error.code}`);
+    }
+  }
+  if (error instanceof Prisma.PrismaClientRustPanicError || error instanceof Prisma.PrismaClientInitializationError) {
+    throw new DatabaseError('Critical database failure');
+  }
+  throw new DatabaseError();
+}
+
 // user
 export async function userCreate(db: FastifyInstance['prisma'], user: {name: string, email: string, passwordHash: string}): Promise<User> {
-  return db.user.create({
-    data: {
-      name: user.name,
-      email: user.email,
-      passwordHash: user.passwordHash,
-    },
-  });
+  try {
+    return await db.user.create({
+      data: {
+        name: user.name,
+        email: user.email,
+        passwordHash: user.passwordHash,
+      },
+    });
+  } catch(err) {
+    handlePrismaError(err);
+  };
 };
 
 export async function userDeleteByEmail(db: FastifyInstance['prisma'], email: string): Promise<User> {
-  rtDeleteByUserEmail(db, email);
-  return db.user.delete({
-    where: {
-      email,
-    },
-  });
+  try {
+    return await db.user.delete({
+      where: {
+        email,
+      },
+    });
+  } catch(err) {
+    handlePrismaError(err);
+  };
 };
 
 export async function userFindByEmail(db: FastifyInstance['prisma'], email: string): Promise<User | null> {
-  return db.user.findUnique({
-    where: {
-      email,
-    },
-  });
+  try {
+    return await db.user.findUnique({
+      where: {
+        email,
+      },
+    });
+  } catch(err) {
+    handlePrismaError(err);
+  };
 };
 
 // password hash
@@ -53,42 +88,58 @@ export function rtHash(rt: string): string {
 };
 
 export async function rtCreate(db: FastifyInstance['prisma'], rt: string, userId: string): Promise<RefreshToken> {
-  return db.refreshToken.create({
-    data: {
-      tokenHash: rtHash(rt),
-      userId: userId,
-      expiresAt: new Date(Date.now() + 1000 * 60 * 60 * 24 * 30), // 30 days
-    }
-  });
+  try {
+    return await db.refreshToken.create({
+      data: {
+        tokenHash: rtHash(rt),
+        userId: userId,
+        expiresAt: new Date(Date.now() + 1000 * 60 * 60 * 24 * 30), // 30 days
+      }
+    });
+  } catch(err) {
+    handlePrismaError(err);
+  };
 };
 
 export async function rtDeleteByHash(db: FastifyInstance['prisma'], rtHash: string): Promise<RefreshToken> {
-  return db.refreshToken.delete({
-    where: {
-      tokenHash: rtHash,
-    },
-  });
+  try {
+    return await db.refreshToken.delete({
+      where: {
+        tokenHash: rtHash,
+      },
+    });
+  } catch(err) {
+    handlePrismaError(err);
+  };
 };
 
 export async function rtDeleteByUserEmail(db: FastifyInstance['prisma'], email: string): Promise<Prisma.BatchPayload> {
-  return db.refreshToken.deleteMany({
-    where: {
-      user: {
-        email,
+  try {
+    return await db.refreshToken.deleteMany({
+      where: {
+        user: {
+          email,
+        },
       },
-    },
-  });
+    });
+  } catch(err) {
+    handlePrismaError(err);
+  };
 };
 
 export async function rtVerifyHash(db: FastifyInstance['prisma'], rtHash: string): Promise<RefreshToken | null> {
-  return db.refreshToken.findFirst({
-    where: {
-      tokenHash: rtHash,
-      revokedAt: null,
-      expiresAt: {gt: new Date()},
-    },
-    include: {user: true},
-  });
+  try {
+    return await db.refreshToken.findFirst({
+      where: {
+        tokenHash: rtHash,
+        revokedAt: null,
+        expiresAt: {gt: new Date()},
+      },
+      include: {user: true},
+    });
+  } catch(err) {
+    handlePrismaError(err);
+  };
 };
 
 // access token

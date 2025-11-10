@@ -19,10 +19,12 @@
     "prisma": "^6.17.0"
   },
   "dependencies": {
+    "@fastify/error": "^4.2.0",
     "@pkg/lib-auth": "workspace:*",
     "@pkg/lib-docs": "workspace:*",
     "@prisma/client": "^6.17.0",
     "dotenv": "^17.2.3",
-    "fastify": "^5.6.1"
+    "fastify": "^5.6.1",
+    "fastify-plugin": "^5.1.0"
   }
 }

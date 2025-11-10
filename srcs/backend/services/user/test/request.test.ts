@@ -3,7 +3,7 @@ import {describe, it, beforeAll, afterAll, expect} from 'vitest';
 import {buildServer} from '../src/build.js';
 import * as utils from '../src/utils.js'
 
-describe.sequential('Friend Request', () => {
+describe('Friend Request', () => {
   let app: FastifyInstance;
   const userAId: string = 'request1';
   const userBId: string = 'request2';
@@ -12,6 +12,10 @@ describe.sequential('Friend Request', () => {
 
   beforeAll(async () => {
     app = await buildServer();
+
+    try {
+      await app.prisma.$executeRaw`DELETE FROM Profile;`;
+    } catch(err) {}
 
     at1 = app.jwt.sign({sub: userAId}, {expiresIn: '15m'});
     await app.inject({
@@ -42,10 +46,10 @@ describe.sequential('Friend Request', () => {
     });
 
     try {
-      await app.prisma.friendRequest.delete({where: {fromUserId_toUserId: {fromUserId: userAId, toUserId: userBId}}});
+      await app.prisma.$executeRaw`DELETE FROM FriendRequest;`;
     } catch (err) {}
     try {
-      await app.prisma.friendship.delete({where: {userAId_userBId: {userAId: userAId, userBId: userBId}}});
+      await app.prisma.$executeRaw`DELETE FROM Friendship;`;
     } catch (err) {}
 
     await app.ready();
@@ -53,16 +57,13 @@ describe.sequential('Friend Request', () => {
 
   afterAll(async () => {
     try {
-      await app.prisma.friendship.delete({where: {userAId_userBId: {userAId: userAId, userBId: userBId}}});
+      await app.prisma.$executeRaw`DELETE FROM Friendship;`;
     } catch (err) {}
     try {
-      await app.prisma.friendRequest.delete({where: {fromUserId_toUserId: {fromUserId: userAId, toUserId: userBId}}});
+      await app.prisma.$executeRaw`DELETE FROM FriendRequest;`;
     } catch (err) {}
     try {
-      app.prisma.profile.delete({where: {id: userAId}});
-    } catch (err) {}
-    try {
-      app.prisma.profile.delete({where: {id: userBId}});
+      await app.prisma.$executeRaw`DELETE FROM Profile;`;
     } catch (err) {}
     await app.close();
   });
