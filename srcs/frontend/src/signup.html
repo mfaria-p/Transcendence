@@ -55,8 +55,26 @@
           required
           minlength="8"
           class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-green-400 focus:border-transparent"
-          placeholder="Create a password (min 8 characters)"
+          placeholder="Create a password"
         >
+        <div id="passwordRequirements" class="mt-2 space-y-1 text-sm hidden">
+          <div id="req-length" class="flex items-center gap-2">
+            <span class="indicator">❌</span>
+            <span class="text-gray-400">At least 8 characters</span>
+          </div>
+          <div id="req-uppercase" class="flex items-center gap-2">
+            <span class="indicator">❌</span>
+            <span class="text-gray-400">One uppercase letter</span>
+          </div>
+          <div id="req-lowercase" class="flex items-center gap-2">
+            <span class="indicator">❌</span>
+            <span class="text-gray-400">One lowercase letter</span>
+          </div>
+          <div id="req-number" class="flex items-center gap-2">
+            <span class="indicator">❌</span>
+            <span class="text-gray-400">One number</span>
+          </div>
+        </div>
       </div>
 
       <div>

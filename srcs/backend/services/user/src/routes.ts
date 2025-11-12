@@ -56,7 +56,7 @@ export default async function (app: FastifyInstance): Promise<void> {
   app.get('/me', {schema: schemas.getMeOpts, preHandler: [app.authenticate]}, async (req: FastifyRequest, reply: FastifyReply) => {
     const userId: string = req.jwtPayload!.id;
 
-    const profile: Profile = await utils.profileFindByUserId(app.prisma, userId);
+    const profile: Profile | null = await utils.profileFindByUserId(app.prisma, userId);
     if (!profile) return reply.code(404).send({
       sucess: false,
       message: 'Nonexistent User Profile',
@@ -184,48 +184,6 @@ export default async function (app: FastifyInstance): Promise<void> {
       success: true,
       message: "Logged In User Friend List",
       friendships: friendships,
-    };
-  });
-
-  // block user -> impact other url logic!
-  app.post('/block/:blockerUserId', {schema: schemas.postBlockOpts, preHandler: [app.authenticate]}, async (req: FastifyRequest, reply: FastifyReply) => {
-    const userId: string = req.jwtPayload!.id;
-    const {blockUserId} = req.params as {blockUserId: string};
-    const {message} = req.body as {message?: string};
-
-    // delete friendship?
-    const block: Block = await utils.blockCreate(app.prisma, userId, blockUserId, message);
-
-    return {
-      success: true,
-      message: "User Blocked",
-      block: block,
-    };
-  });
-
-  app.delete('/block/:blockerUserId', {schema: schemas.deleteBlockOpts, preHandler: [app.authenticate]}, async (req: FastifyRequest, reply: FastifyReply) => {
-    const userId: string = req.jwtPayload!.id;
-    const {blockUserId} = req.params as {blockUserId: string};
-
-    // delete friendship?
-    const block: Block = await utils.blockDelete(app.prisma, userId, blockUserId);
-
-    return {
-      success: true,
-      message: "User Unblocked",
-      block: block,
-    };
-  });
-
-  app.get('/block', {schema: schemas.getBlocksOpts, preHandler: [app.authenticate]}, async (req: FastifyRequest, reply: FastifyReply) => {
-    const userId: string = req.jwtPayload!.id;
-
-    const blocks: Block[] = await utils.blockFindByBlockerId(app.prisma, userId);
-
-    return {
-      success: true,
-      message: "Logged In User Block List",
-      blocks: blocks,
     };
   });
 };

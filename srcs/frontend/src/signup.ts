@@ -9,6 +9,7 @@ interface SignupResponse {
   success: boolean;
   message: string;
   user?: { id: string; username: string; email: string };
+  at?: string;  // Access token - auto-login after signup
 }
 
 class SignupManager {
@@ -20,6 +21,7 @@ class SignupManager {
   private signupButton: HTMLButtonElement;
   private errorMessage: HTMLElement;
   private successMessage: HTMLElement;
+  private passwordRequirements: HTMLElement;
   
   constructor() {
     this.form = document.getElementById('signupForm') as HTMLFormElement;
@@ -30,6 +32,7 @@ class SignupManager {
     this.signupButton = document.getElementById('signupButton') as HTMLButtonElement;
     this.errorMessage = document.getElementById('errorMessage') as HTMLElement;
     this.successMessage = document.getElementById('successMessage') as HTMLElement;
+    this.passwordRequirements = document.getElementById('passwordRequirements') as HTMLElement;
 
     this.setupEventListeners();
   }
@@ -40,11 +43,12 @@ class SignupManager {
       this.handleSignup();
     });
 
-    // Real-time validation
-    /* this.usernameInput.addEventListener('blur', () => this.validateUsername());
-    this.emailInput.addEventListener('blur', () => this.validateEmail());
-    this.passwordInput.addEventListener('input', () => this.validatePassword());
-    this.confirmPasswordInput.addEventListener('input', () => this.validatePasswordMatch()); */
+    // Real-time password validation
+    this.passwordInput.addEventListener('input', () => this.updatePasswordRequirements());
+    this.passwordInput.addEventListener('focus', () => {
+      this.passwordRequirements.classList.remove('hidden');
+    });
+    this.confirmPasswordInput.addEventListener('input', () => this.validatePasswordMatch());
   }
 
   private async handleSignup(): Promise<void> {
@@ -76,10 +80,25 @@ class SignupManager {
         password: credentials.password
       });
       
+      console.log('Signup response:', response);
+      
       if (response.success) {
+        
+        console.log('Access token from signup:', response.at);
+        
+        if (response.at) {
+          localStorage.setItem('access_token', response.at);
+          console.log('Stored access_token in localStorage');
+          
+          // Create user profile in user service
+          await this.provisionProfile(response.at, response.user!.username, response.user!.email);
+        } else {
+          console.warn('No access token in signup response!');
+        }
         
         if (response.user) {
           localStorage.setItem('user', JSON.stringify(response.user));
+          console.log('Stored user in localStorage');
         }
 
         this.showSuccess(response.message || 'Account created successfully!');
@@ -141,14 +160,57 @@ class SignupManager {
 
   private validatePassword(): boolean {
     const password = this.passwordInput.value;
+    
+    const hasMinLength = password.length >= 8;
+    const hasUppercase = /[A-Z]/.test(password);
+    const hasLowercase = /[a-z]/.test(password);
+    const hasNumber = /[0-9]/.test(password);
 
-    if (password.length < 8) {
-      this.setInputError(this.passwordInput, 'Password must be at least 8 characters');
+    if (!hasMinLength || !hasUppercase || !hasLowercase || !hasNumber) {
+      this.setInputError(this.passwordInput, 'Password does not meet all requirements');
       return false;
     }
     
     this.clearInputError(this.passwordInput);
     return true;
+  }
+
+  private updatePasswordRequirements(): void {
+    const password = this.passwordInput.value;
+    
+    // Check each requirement
+    const hasMinLength = password.length >= 8;
+    const hasUppercase = /[A-Z]/.test(password);
+    const hasLowercase = /[a-z]/.test(password);
+    const hasNumber = /[0-9]/.test(password);
+    
+    // Update indicators
+    this.updateRequirement('req-length', hasMinLength);
+    this.updateRequirement('req-uppercase', hasUppercase);
+    this.updateRequirement('req-lowercase', hasLowercase);
+    this.updateRequirement('req-number', hasNumber);
+  }
+
+  private updateRequirement(id: string, isValid: boolean): void {
+    const element = document.getElementById(id);
+    if (!element) return;
+    
+    const indicator = element.querySelector('.indicator');
+    const text = element.querySelector('span:last-child');
+    
+    if (indicator) {
+      indicator.textContent = isValid ? '✅' : '❌';
+    }
+    
+    if (text) {
+      if (isValid) {
+        text.classList.remove('text-gray-400');
+        text.classList.add('text-green-400');
+      } else {
+        text.classList.remove('text-green-400');
+        text.classList.add('text-gray-400');
+      }
+    }
   }
 
   private validatePasswordMatch(): boolean {
@@ -263,6 +325,32 @@ class SignupManager {
       throw new Error(err?.message || 'Network error');
     } finally {
       clearTimeout(timeoutId);
+    }
+  }
+
+  private async provisionProfile(accessToken: string, username: string, email: string): Promise<void> {
+    try {
+      console.log('Provisioning profile in user service...');
+      const response = await fetch('/api/user/provision', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({
+          username: username,
+          email: email,
+        }),
+      });
+
+      if (response.ok) {
+        console.log('Profile provisioned successfully');
+      } else {
+        console.warn('Failed to provision profile:', response.status);
+      }
+    } catch (error) {
+      console.error('Profile provision error:', error);
+      // Don't fail signup if profile creation fails
     }
   }
 

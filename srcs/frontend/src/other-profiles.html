@@ -1,0 +1,74 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link href="./output.css" rel="stylesheet">
+  <title>Transcendence - User Profile</title>
+</head>
+<body class="bg-gray-900 text-white min-h-screen flex flex-col">
+  <!-- Navigation -->
+  <nav class="bg-gray-800 border-b border-gray-700">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex justify-between h-16">
+        <div class="flex items-center">
+          <a href="./index.html" class="text-2xl font-bold text-green-400">TRANSCENDENCE</a>
+        </div>
+        <div id="authContainer" class="flex items-center gap-3">
+          <!-- Populated by JavaScript -->
+        </div>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Message Container -->
+  <div id="messageContainer" class="fixed top-20 right-4 z-50 space-y-2"></div>
+
+  <!-- Main Content -->
+  <div class="flex-1 flex items-center justify-center px-4 py-12">
+    <div class="bg-gray-800 rounded-lg shadow-2xl p-8 max-w-2xl w-full">
+      <!-- Back Button -->
+      <div class="mb-6">
+        <a href="./profile.html" class="text-blue-400 hover:text-blue-300 flex items-center gap-2">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
+          </svg>
+          Back to My Profile
+        </a>
+      </div>
+
+      <h1 class="text-3xl font-bold text-green-400 mb-8 text-center">User Profile</h1>
+      
+      <!-- Profile Avatar -->
+      <div class="flex flex-col items-center mb-8">
+        <img id="userAvatarImage" class="w-32 h-32 rounded-full object-cover shadow-lg hidden" alt="Profile picture" />
+        <div class="w-32 h-32 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center text-6xl font-bold text-white shadow-lg" id="userAvatarPlaceholder">
+          <!-- First letter of username -->
+        </div>
+      </div>
+
+      <!-- Friend Actions -->
+      <div id="friendActions" class="mb-6 flex justify-center">
+        <!-- Populated by JavaScript -->
+      </div>
+
+      <!-- Profile Information -->
+      <div class="space-y-6">
+        <!-- Username -->
+        <div class="bg-gray-700 rounded-lg p-4">
+          <label class="block text-sm font-medium text-gray-400 mb-2">Username</label>
+          <p id="userUsername" class="text-xl font-semibold text-white"></p>
+        </div>
+
+        <!-- Email -->
+        <div class="bg-gray-700 rounded-lg p-4">
+          <label class="block text-sm font-medium text-gray-400 mb-2">Email</label>
+          <p id="userEmail" class="text-xl text-white"></p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="./other-profiles.js"></script>
+</body>
+</html>

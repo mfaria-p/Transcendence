@@ -68,6 +68,21 @@ export async function userFindByEmail(db: FastifyInstance['prisma'], email: stri
   };
 };
 
+export async function userUpdatePassword(db: FastifyInstance['prisma'], id: string, pwHash: string): Promise<User | null> {
+  try {
+    return await db.user.update({
+      where: {
+        id,
+      },
+      data: {
+        passwordHash: pwHash,
+      }
+    });
+  } catch(err) {
+    handlePrismaError(err);
+  };
+};
+
 // password hash
 export async function pwHash(pw: string): Promise<string> {
   return argon.hash(pw);
