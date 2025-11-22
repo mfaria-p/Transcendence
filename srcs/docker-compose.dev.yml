@@ -40,6 +40,17 @@ services:
       - "3001"
     networks: [appnet]
 
+  ws:
+    build:
+      context: ./backend
+      dockerfile: services/ws/Dockerfile
+    expose:
+      - "3003"
+    environment:
+      - WS_PORT=3003
+      - JWT_SECRET=${JWT_SECRET}
+    networks: [ appnet ]
+
 networks:
   appnet:
     driver: bridge

@@ -9,7 +9,8 @@ dotenv.config();
 const {
     GATEWAY_PORT = '3000',
     AUTH_URL = 'http://auth:3001',
-    USERS_URL = 'http://users:3002'
+    USERS_URL = 'http://users:3002',
+    REALTIME_URL = 'http://ws:3003'
 } = process.env;
 
 async function build(): Promise<FastifyInstance> {
@@ -66,6 +67,28 @@ async function build(): Promise<FastifyInstance> {
         r.all('/api/users/*', async (req, reply) => {
             const path = req.url.replace(/^\/api\/users/, '/users');
             return reply.from(`${USERS_URL}${path}`, proxyOpts);
+        });
+    });
+
+    // Proxy para o serviço de realtime (presença, etc.)
+    app.register(async (app) => {
+        // Todas as rotas de realtime exigem JWT
+        app.addHook('onRequest', app.authenticate);
+
+        app.all('/api/realtime/*', async (req: FastifyRequest, reply: FastifyReply) => {
+            const proxyOpts = {
+                rewriteRequestHeaders: (originalReq: FastifyRequest, headers: Record<string, string>) => {
+                    // Reencaminhar o Authorization header, se existir
+                    const auth = originalReq.headers['authorization'];
+                    if (auth && typeof auth === 'string') {
+                        headers['authorization'] = auth;
+                    }
+                    return headers;
+                },
+            };
+
+            const path = req.url.replace(/^\/api\/realtime/, '');
+            return reply.from(`${REALTIME_URL}${path}`, proxyOpts);
         });
     });
 
