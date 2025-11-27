@@ -9,13 +9,14 @@ RUN pnpm install --filter "@svc/auth..." --frozen-lockfile
 COPY packages/lib-auth ./packages/lib-auth
 COPY packages/lib-docs ./packages/lib-docs
 COPY services/auth ./services/auth
-RUN npx prisma generate --schema ./services/auth/prisma/schema.prisma
+RUN pnpm --filter "@svc/auth" exec prisma generate --schema /app/services/auth/prisma/schema.prisma
+RUN mv ./services/auth/src/generated/prisma/libquery_engine-linux-musl-openssl-*.so.node ./services/auth/prisma
 RUN pnpm -r --filter "@svc/auth..." run build
 RUN pnpm --filter "@svc/auth" deploy --prod /out
 
 FROM node:20-alpine AS run
 WORKDIR /app
 COPY --from=build /out .
-RUN npx prisma migrate deploy --schema ./prisma/schema.prisma
-RUN mv ./src/generated/prisma/libquery_engine-linux-musl-openssl-*.so.node ./prisma
+ENV PRISMA_CLI_VERSION=6.17.0
+RUN npx prisma@${PRISMA_CLI_VERSION} migrate deploy --schema ./prisma/schema.prisma
 CMD ["node","dist/server.js"]
