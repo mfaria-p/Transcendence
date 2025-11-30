@@ -15,6 +15,7 @@ const RT_COOKIE: string = 'refresh_token';
 // pepper for refreshToken
 // best practice would be not delete refresh right away
 // private public key for jwt
+// remote auth
 export default async function (app: FastifyInstance): Promise<void> {
   app.post('/signup', {schema: schemas.postSignupOpts}, async (req: FastifyRequest, reply: FastifyReply) => {
     const {username, email, password} = req.body as {username: string, email: string, password: string};
