@@ -55,8 +55,8 @@ export default async function (app: FastifyInstance): Promise<void> {
   // useless for now
   app.get('/me', {schema: schemas.getMeOpts, preHandler: [app.authenticate]}, async (req: FastifyRequest, reply: FastifyReply) => {
     const userId: string = req.jwtPayload!.id;
-
     const profile: Profile | null = await utils.profileFindByUserId(app.prisma, userId);
+
     if (!profile) return reply.code(404).send({
       sucess: false,
       message: 'Nonexistent User Profile',
