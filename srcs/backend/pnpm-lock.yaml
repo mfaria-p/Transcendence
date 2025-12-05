@@ -181,6 +181,7 @@ importers:
       prisma:
         specifier: ^6.17.0
         version: 6.17.0(typescript@5.9.3)
+
   services/ws:
     dependencies:
       '@fastify/websocket':
