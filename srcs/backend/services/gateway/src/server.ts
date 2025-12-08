@@ -48,14 +48,14 @@ async function build(): Promise<FastifyInstance> {
         });
     });
 
-    // ----- USERS (protegidas) -----
+    // ----- USER (protegidas) -----
     app.register(async (r) => {
         await r.register(replyFrom);
 
         // middleware simples de proteção por JWT no gateway
         r.addHook('onRequest', async (req, reply) => {
-            // Ex.: ignorar /api/users/public/* se quiseres
-            if (req.url.startsWith('/api/users')) {
+            // Ex.: ignorar /api/user/public/* se quiseres
+            if (req.url.startsWith('/api/user')) {
                 try {
                     await r.authenticate(req, reply);
                 } catch {
@@ -64,9 +64,9 @@ async function build(): Promise<FastifyInstance> {
             }
         });
 
-        r.all('/api/users/*', async (req, reply) => {
-            const path = req.url.replace(/^\/api\/users/, '/users');
-            return reply.from(`${USERS_URL}${path}`, proxyOpts);
+        r.all('/api/user/*', async (req, reply) => {
+            const path = req.url.replace(/^\/api\/user/, '/user');
+            return reply.from(`${USER_URL}${path}`, proxyOpts);
         });
     });
 

@@ -13,7 +13,10 @@ const DatabaseError = createError('DATABASE_ERROR', 'Database operation failed',
 function handlePrismaError(error: unknown): never {
   if (error instanceof Prisma.PrismaClientKnownRequestError) {
     switch (error.code) {
-      case 'P2002': throw new AlreadyExistsError();
+      case 'P2002':
+        const fields = (error.meta?.target as string[]) || [];
+        const fieldList = fields.join(', ') || 'unkown field';
+        throw new AlreadyExistsError(`${fieldList} already exists`);
       case 'P2003':
       case 'P2014': throw new InvalidRelationError();
       case 'P2001':
@@ -28,21 +31,30 @@ function handlePrismaError(error: unknown): never {
 }
 
 // profile
-export async function profileProvide(db: FastifyInstance['prisma'], user: {id: string, name: string, email: string}): Promise<Profile> {
+export async function profileProvide(db: FastifyInstance['prisma'], user: {id: string, name: string, email: string, avatarUrl?: string}): Promise<Profile> {
   try {
+    const createData: any = {
+      id:   user.id,
+      name: user.name,
+      email: user.email,
+    };
+    
+    const updateData: any = {
+      name: user.name,
+      email: user.email,
+    };
+    
+    if (user.avatarUrl) {
+      createData.avatarUrl = user.avatarUrl;
+      updateData.avatarUrl = user.avatarUrl;
+    }
+    
     return await db.profile.upsert({
       where: {
         id: user.id
       },
-      create: {
-        id:   user.id,
-        name: user.name,
-        email: user.email,
-      },
-      update: {
-        name: user.name,
-        email: user.email,
-      },
+      create: createData,
+      update: updateData,
     });
   } catch(err) {
     handlePrismaError(err);
@@ -162,7 +174,7 @@ export async function requestUpdate(db: FastifyInstance['prisma'], fromId: strin
   };
 };
 
-export async function requestFindByUserIds(db: FastifyInstance['prisma'], fromId: string, toId: string, status?: string): Promise<FriendRequest> {
+export async function requestFindByUserIds(db: FastifyInstance['prisma'], fromId: string, toId: string, status?: string): Promise<FriendRequest | null> {
   const where: any = {fromUserId_toUserId: {fromUserId: fromId, toUserId: toId}};
   if (status) where.status = status;
 

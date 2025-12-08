@@ -54,6 +54,7 @@ export const putProfileOpts: FastifySchema = {
     properties: {
       username: {type: 'string'},
       email: {type: 'string'},
+      avatarUrl: {type: 'string'},
     }
   },
   response: {
@@ -62,7 +63,7 @@ export const putProfileOpts: FastifySchema = {
       properties: {
         success: {type: 'boolean'},
         message: {type: 'string'},
-        profile: user,
+        profile: profile,
       },
     },
   },
@@ -232,7 +233,7 @@ export const getFriendsOpts: FastifySchema = {
       properties: {
         success: {type: 'boolean'},
         message: {type: 'string'},
-        friendship: {
+        friendships: {
           type: 'array',
           items: friendship,
         },

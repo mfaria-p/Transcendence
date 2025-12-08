@@ -6,14 +6,8 @@
   <link href="./output.css" rel="stylesheet">
 </head>
 <body class="bg-gray-900 text-white flex flex-col items-center justify-center min-h-screen">
-  <!-- Navigation buttons in top-right corner -->
-  <div style="position: fixed; top: 1rem; right: 1rem; display: flex; gap: 0.5rem; z-index: 50;">
-    <a href="./login.html" class="bg-gray-700 hover:bg-gray-600 text-gray-300 hover:text-white text-sm py-1.5 px-4 rounded transition duration-200">
-      Login
-    </a>
-    <a href="./signup.html" class="bg-gray-700 hover:bg-gray-600 text-gray-300 hover:text-white text-sm py-1.5 px-4 rounded transition duration-200">
-      Sign Up
-    </a>
+  <div id="authContainer" style="position: fixed; top: 1rem; right: 1rem; display: flex; gap: 0.5rem; z-index: 50;">
+    <!-- Content will be dynamically inserted by index.js -->
   </div>
 
   <div id="app" class="text-center">
@@ -30,6 +24,7 @@
       <span id="player1Score">0</span> - <span id="player2Score">0</span>
     </div>
   </div>
+  <script type="module" src="./index.js"></script>
   <script type="module" src="./pong.js"></script>
 </body>
 </html>
