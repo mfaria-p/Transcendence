@@ -15,7 +15,13 @@ COPY services/ws/src ./services/ws/src
 RUN corepack enable && pnpm install --filter '@svc/ws...' --frozen-lockfile
 RUN pnpm -r --filter "@pkg/lib-auth" run build
 
-# 4) Correr o serviço ws
+# 4) Build TS -> JS para o serviço ws
+RUN pnpm --filter "@svc/ws" run build
+
+# 5) Runtime
 WORKDIR /app/services/ws
 EXPOSE 3003
-CMD ["pnpm", "dev"]
+
+ENV NODE_ENV=production
+
+CMD ["node", "dist/server.js"]

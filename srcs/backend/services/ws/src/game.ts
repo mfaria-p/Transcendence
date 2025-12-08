@@ -149,7 +149,7 @@ function startLoopIfReady(room: GameRoom): void {
 function stopLoop(room: GameRoom): void {
   if (room.loop) {
     clearInterval(room.loop);
-    room.loop = undefined;
+    delete room.loop; // em vez de room.loop = undefined
   }
 }
 

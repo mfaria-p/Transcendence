@@ -16,7 +16,13 @@ COPY services/gateway/src ./services/gateway/src
 RUN corepack enable && pnpm install --filter '@svc/gateway...' --frozen-lockfile
 RUN pnpm -r --filter "@pkg/lib-auth" run build
 
-# 4) Correr o serviço gateway
+# 4) Build TS -> JS para o gateway
+RUN pnpm --filter "@svc/gateway" run build
+
+# 5) Runtime
 WORKDIR /app/services/gateway
 EXPOSE 3000
-CMD ["pnpm", "dev"]
+
+ENV NODE_ENV=production
+
+CMD ["node", "dist/server.js"]

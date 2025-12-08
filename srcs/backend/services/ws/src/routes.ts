@@ -1,7 +1,4 @@
-// src/routes.ts
-
 import type { FastifyInstance, FastifyRequest } from 'fastify';
-import type { SocketStream } from '@fastify/websocket';
 import type WebSocket from 'ws';
 
 import {
@@ -27,7 +24,7 @@ interface JwtPayload {
 type ClientMessage =
   | { type: 'ping'; ts?: number }
   | { type: 'subscribe_presence' }
-  | { type: string; [key: string]: unknown }; // fallback, usado p/ game:*
+  | { type: string; [key: string]: unknown };
 
 type ServerMessage =
   | { type: 'hello'; userId: string; onlineUsers: string[] }
@@ -72,12 +69,10 @@ function extractToken(req: FastifyRequest): string | null {
 export default async function routes(app: FastifyInstance): Promise<void> {
   // ---------- HTTP ROUTES ----------
 
-  // Healthcheck simples
   app.get('/health', async () => {
     return { ok: true, service: 'ws' };
   });
 
-  // Presença do próprio utilizador (precisa de JWT válido)
   app.get('/presence/me', { preHandler: [app.authenticate] }, async (req) => {
     const userId: string = req.jwtPayload!.id;
     return {
@@ -87,7 +82,6 @@ export default async function routes(app: FastifyInstance): Promise<void> {
     };
   });
 
-  // Presença de outro utilizador
   app.get<{
     Params: { userId: string };
   }>('/presence/:userId', async (req) => {
@@ -101,7 +95,6 @@ export default async function routes(app: FastifyInstance): Promise<void> {
 
   // ---------- TOURNAMENT HTTP API ----------
 
-  // Listar torneios (apenas para users autenticados)
   app.get('/tournaments', { preHandler: [app.authenticate] }, async () => {
     return {
       success: true,
@@ -109,14 +102,26 @@ export default async function routes(app: FastifyInstance): Promise<void> {
     };
   });
 
-  // Criar um novo torneio. O criador entra automaticamente como primeiro player.
   app.post<{
     Body: { name?: string; maxPlayers?: number };
   }>('/tournaments', { preHandler: [app.authenticate] }, async (req, reply) => {
     const userId: string = req.jwtPayload!.id;
-    const { name, maxPlayers } = req.body ?? {};
+
     try {
-      const tournament = createTournament({ ownerId: userId, name, maxPlayers });
+      const { name, maxPlayers } = req.body ?? {};
+
+      const input: { ownerId: string; name?: string; maxPlayers?: number } = {
+        ownerId: userId,
+      };
+
+      if (typeof name === 'string') {
+        input.name = name;
+      }
+      if (typeof maxPlayers === 'number') {
+        input.maxPlayers = maxPlayers;
+      }
+
+      const tournament = createTournament(input);
       return { success: true, tournament };
     } catch (err) {
       req.log.error({ err }, 'createTournament failed');
@@ -127,12 +132,12 @@ export default async function routes(app: FastifyInstance): Promise<void> {
     }
   });
 
-  // Entrar num torneio existente
   app.post<{
     Params: { id: string };
   }>('/tournaments/:id/join', { preHandler: [app.authenticate] }, async (req, reply) => {
     const userId: string = req.jwtPayload!.id;
     const { id } = req.params;
+
     try {
       const tournament = joinTournament(id, userId);
       return { success: true, tournament };
@@ -145,7 +150,6 @@ export default async function routes(app: FastifyInstance): Promise<void> {
     }
   });
 
-  // Iniciar o torneio (gera matches / rooms)
   app.post<{
     Params: { id: string };
   }>('/tournaments/:id/start', { preHandler: [app.authenticate] }, async (req, reply) => {
@@ -172,7 +176,6 @@ export default async function routes(app: FastifyInstance): Promise<void> {
     }
   });
 
-  // Obter detalhes de um torneio
   app.get<{
     Params: { id: string };
   }>('/tournaments/:id', { preHandler: [app.authenticate] }, async (req, reply) => {
@@ -189,8 +192,8 @@ export default async function routes(app: FastifyInstance): Promise<void> {
   app.get(
     '/ws',
     { websocket: true },
-    async (connection: SocketStream, req: FastifyRequest) => {
-      const socket: WebSocket = connection.socket;
+    async (connection, req: FastifyRequest) => {
+      const socket = (connection as any).socket as WebSocket;
 
       // 1) Autenticação por JWT
       const rawToken = extractToken(req);
@@ -210,14 +213,13 @@ export default async function routes(app: FastifyInstance): Promise<void> {
       const userId = payload.sub;
       const { firstConnection } = addConnection(userId, socket);
 
-      // 2) Mensagem inicial para o cliente
+      // 2) Mensagem inicial
       safeSend(socket, {
         type: 'hello',
         userId,
         onlineUsers: getOnlineUsers(),
       });
 
-      // Se for a primeira ligação deste user, broadcast do "online"
       if (firstConnection) {
         broadcastPresenceChange(userId, 'online');
       }
@@ -243,36 +245,31 @@ export default async function routes(app: FastifyInstance): Promise<void> {
           return;
         }
 
-        // Mensagens simples
         switch (msg.type) {
-          case 'ping': {
+          case 'ping':
             safeSend(socket, {
               type: 'pong',
               ts: (msg as any).ts ?? Date.now(),
             });
             return;
-          }
-          case 'subscribe_presence': {
-            // Para já basta reenviar a lista atual
+
+          case 'subscribe_presence':
             safeSend(socket, {
               type: 'hello',
               userId,
               onlineUsers: getOnlineUsers(),
             });
             return;
-          }
-          default: {
-            // Qualquer coisa que comece por "game:" vai para o módulo de jogo
+
+          default:
             if (msg.type.startsWith('game:')) {
               handleGameMessage(userId, socket, msg as any);
               return;
             }
-
             safeSend(socket, {
               type: 'error',
               message: `Unknown message type: ${msg.type}`,
             });
-          }
         }
       });
 
@@ -281,7 +278,6 @@ export default async function routes(app: FastifyInstance): Promise<void> {
         if (lastConnection) {
           broadcastPresenceChange(userId, 'offline');
         }
-        // Notificar o módulo de jogo de que este user caiu (conta como abandono)
         handleDisconnect(userId);
       });
 
