@@ -9,7 +9,7 @@
     "typecheck": "tsc --noEmit --watch src/server.ts"
   },
   "dependencies": {
-    "@fastify/websocket": "^10.0.1",
+    "@fastify/websocket": "^11.2.0",
     "@pkg/lib-auth": "workspace:*",
     "dotenv": "^17.2.3",
     "fastify": "^5.6.1",

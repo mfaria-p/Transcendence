@@ -1,0 +1,99 @@
+services:
+  # Constrói o frontend e coloca o dist/ num volume
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.dev   # já corre "npm run build"
+    command: ["npm", "run", "build"]
+    volumes:
+      - frontend_data:/app/dist
+    networks: [appnet]
+    restart: "no"
+
+  # Nginx expõe a aplicação na porta 80 do host (mapeada em ports)
+  nginx:
+    build:
+      context: ./nginx
+      dockerfile: Dockerfile.dev
+    depends_on:
+      - frontend
+      - gateway
+      - ws
+      - auth
+      - user
+    ports:
+      - "9000:80"          # em produção no host:80 → nginx:80
+    volumes:
+      - ./nginx/prod.conf:/etc/nginx/nginx.conf:ro
+      - frontend_data:/usr/share/nginx/html
+    networks: [appnet]
+    restart: unless-stopped
+
+  auth:
+    build:
+      context: ./backend
+      dockerfile: services/auth/Dockerfile
+    environment:
+      - AUTH_PORT=3001
+      - DATABASE_URL=file:./auth.db
+      - JWT_SECRET=${JWT_SECRET}
+      - NODE_ENV=production
+    expose:
+      - "3001"
+    networks: [appnet]
+    restart: unless-stopped
+
+  user:
+    build:
+      context: ./backend
+      dockerfile: services/user/Dockerfile
+    environment:
+      # o código do user ainda usa AUTH_PORT para a porta :-)
+      - AUTH_PORT=3002
+      - DATABASE_URL=file:./user.db
+      - JWT_SECRET=${JWT_SECRET}
+      - NODE_ENV=production
+    expose:
+      - "3002"
+    networks: [appnet]
+    restart: unless-stopped
+
+  ws:
+    build:
+      context: ./backend
+      dockerfile: services/ws/Dockerfile
+    environment:
+      - WS_PORT=3003
+      - JWT_SECRET=${JWT_SECRET}
+      - NODE_ENV=production
+    expose:
+      - "3003"
+    networks: [appnet]
+    restart: unless-stopped
+
+  gateway:
+    build:
+      context: ./backend
+      dockerfile: services/gateway/Dockerfile
+    environment:
+      - GATEWAY_PORT=3000
+      - AUTH_URL=http://auth:3001
+      - USERS_URL=http://user:3002
+      - REALTIME_URL=http://ws:3003
+      - JWT_SECRET=${JWT_SECRET}
+      - NODE_ENV=production
+    expose:
+      - "3000"
+    depends_on:
+      - auth
+      - user
+      - ws
+    networks: [appnet]
+    restart: unless-stopped
+
+networks:
+  appnet:
+    driver: bridge
+
+volumes:
+  frontend_data:
