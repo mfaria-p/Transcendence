@@ -2,10 +2,7 @@
 <!-- 7M 3m 17pts -->
 
 1. web
-    - M framework
-        - frontend
-            - typescript
-            - tailwindCSS
+    - m framework
         - backend
             - typescript
             - fastify
@@ -15,31 +12,12 @@
     - m database ORM
         - sqlite
         - prisma
-     
-  <!-- What is a Framework? For this project, a framework is defined as a
-comprehensive tool that provides:
-• A structured architecture and conventions for organizing code.
-• Built-in features for common tasks (routing, state management,
-etc.).
-• A complete ecosystem of tools and libraries.
-Examples:
-• Frontend frameworks: React, Vue, Angular, Svelte, Next.js
-(these are frameworks).
-• Backend frameworks: Express, Fastify, NestJS, Django, Flask,
-Ruby on Rails.
-• Not frameworks: jQuery (library), Lodash (utility library),
-Axios (HTTP client).
-Note: React is considered a framework in this context due to its
-ecosystem and architectural patterns, even though it is technically a
-library
-
-PORTANTO, mb n conseguimos este modulo :)-->
 
 2. user
     - M management
         - profiles
         - friends
-        - online status <!-- no frontend -->
+        - online status <!-- Mariana a tentar -->
         - authentication
     - m remote auth <!-- TODO Eduardo a tratar -->
         - OAuth2.0
