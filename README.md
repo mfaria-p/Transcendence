@@ -20,6 +20,7 @@
     - M management
         - profiles
         - friends
+        - online status <!-- TODO -->
         - authentication
     - m remote auth <!-- TODO -->
         - OAuth2.0
