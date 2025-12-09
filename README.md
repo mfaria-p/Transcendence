@@ -29,12 +29,13 @@
     - M pong <!-- bola tem bug quando da mt speed, resolver -->
     - M remote play <!-- no frontend - Pedro? -->
     - m tournaments <!-- Eduardo/Luis, quem acabar primeiro a outra cena :) -->
+
+5. DevOps
+    - M microservices
   
-5.Possibilities:
+6.Possibilities:
 - Web: chart
 - Estatistica: jogos
 - Gamification e espectadores
 
 
-6. DevOps
-    - M microservices
