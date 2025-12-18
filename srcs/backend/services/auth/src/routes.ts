@@ -3,7 +3,8 @@
 // oauth2
 
 import type {FastifyInstance, FastifyRequest, FastifyReply} from 'fastify';
-import type {User, RefreshToken} from './generated/prisma/client.js';
+import type {Account, RefreshToken} from './generated/prisma/client.js';
+import {randomBytes} from 'crypto';
 import * as schemas from './schemas.js';
 import * as utils from './utils.js';
 
@@ -20,12 +21,12 @@ export default async function (app: FastifyInstance): Promise<void> {
   app.post('/signup', {schema: schemas.postSignupOpts}, async (req: FastifyRequest, reply: FastifyReply) => {
     const {username, email, password} = req.body as {username: string, email: string, password: string};
 
-    const user = await utils.userCreate(app.prisma, {name: username, email: email, passwordHash: await utils.pwHash(password)});
+    const account = await utils.accountCreate(app.prisma, {username: username, email: email, passwordHash: await utils.pwHash(password)});
 
     // Auto-login after signup
-    const at: string = utils.atGenerate(app.jwt, {sub: user.id});
+    const at: string = utils.atGenerate(app.jwt, {sub: account.id});
     const rt: string = utils.rtGenerate();
-    await utils.rtCreate(app.prisma, rt, user.id);
+    await utils.rtCreate(app.prisma, rt, account.id);
 
     reply.setCookie(RT_COOKIE, rt, {
       httpOnly: true, secure: true, sameSite: 'lax', path: '/auth/refresh', maxAge: 30 * 24 * 60 * 60,
@@ -33,9 +34,9 @@ export default async function (app: FastifyInstance): Promise<void> {
 
     return {
       success: true,
-      message: "Account Created Successfully",
-      user: {
-        id: user.id,
+      message: 'Account Created Successfully',
+      account: {
+        id: account.id,
         username: username,
         email: email,
       },
@@ -45,17 +46,17 @@ export default async function (app: FastifyInstance): Promise<void> {
 
   app.post('/login', {schema: schemas.postLoginOpts}, async (req: FastifyRequest, reply: FastifyReply) => {
     const {email, password} = req.body as {email: string, password: string};
-    const user: User | null = await app.prisma.user.findUnique({where: {email}});
-    const ok: Boolean = !!user && await utils.pwVerify(user.passwordHash!, password);
+    const account: Account | null = await app.prisma.account.findUnique({where: {email}});
+    const ok: Boolean = !!account && await utils.pwVerify(account.passwordHash!, password);
 
     if (!ok) return reply.code(401).send({
       success: false,
       message: 'Invalid Credentials',
     });
 
-    const at: string = utils.atGenerate(app.jwt, {sub: user!.id});
+    const at: string = utils.atGenerate(app.jwt, {sub: account!.id});
     const rt: string = utils.rtGenerate();
-    await utils.rtCreate(app.prisma, rt, user!.id);
+    await utils.rtCreate(app.prisma, rt, account!.id);
 
     reply.setCookie(RT_COOKIE, rt, {
       httpOnly: true, secure: true, sameSite: 'lax', path: '/auth/refresh', maxAge: 30 * 24 * 60 * 60,
@@ -63,11 +64,11 @@ export default async function (app: FastifyInstance): Promise<void> {
 
     return {
       success: true,
-      message: "User Logged In",
-      user: {
-        id: user!.id,
-        username: user!.name,
-        email: user!.email,
+      message: 'Account Logged In',
+      account: {
+        id: account!.id,
+        username: account!.username,
+        email: account!.email,
       },
       at: at,
     };
@@ -90,8 +91,8 @@ export default async function (app: FastifyInstance): Promise<void> {
 
     await utils.rtDeleteByHash(app.prisma, rtHash);
     const rtNew: string = utils.rtGenerate();
-    await utils.rtCreate(app.prisma, rtNew, rtRecord.userId);
-    const at: string = utils.atGenerate(app.jwt, {sub: rtRecord.userId});
+    await utils.rtCreate(app.prisma, rtNew, rtRecord.accountId);
+    const at: string = utils.atGenerate(app.jwt, {sub: rtRecord.accountId});
 
     reply.setCookie(RT_COOKIE, rtNew, {
       httpOnly: true, secure: true, sameSite: 'lax', path: '/auth/refresh', maxAge: 30 * 24 * 60 * 60,
@@ -99,7 +100,7 @@ export default async function (app: FastifyInstance): Promise<void> {
 
     return {
       success: true,
-      message: "Session Refreshed",
+      message: 'Session Refreshed',
       at: at,
     };
   });
@@ -117,24 +118,61 @@ export default async function (app: FastifyInstance): Promise<void> {
 
     return {
       success: true,
-      message: "User Logged Out",
+      message: 'Account Logged Out',
     };
   });
 
-  app.put('/me/password', {schema: schemas.postMeOpts, preHandler: [app.authenticate]}, async (req: FastifyRequest, reply) => {
-    const userId: string = req.jwtPayload!.id;
+  app.put('/me/password', {schema: schemas.postMeOpts, preHandler: [app.authenticate]}, async (req: FastifyRequest, reply: FastifyReply) => {
+    const accountId: string = req.jwtPayload!.id;
     const {pw} = req.body as {pw: string};
-    const user: User | null = await utils.userUpdatePassword(app.prisma, userId, await utils.pwHash(pw));
-    if (!user) return reply.code(401).send({message: 'Nonexisting user'});
+    const account: Account | null = await utils.accountUpdatePassword(app.prisma, accountId, await utils.pwHash(pw));
+    if (!account) return reply.code(401).send({message: 'Nonexisting account'});
 
-    return user;
+    return account;
   });
 
   app.post('/me', {schema: schemas.postMeOpts, preHandler: [app.authenticate]}, async (req: FastifyRequest, reply) => {
     const {email} = req.body as {email: string};
-    const user: User | null = await utils.userFindByEmail(app.prisma, email);
-    if (!user) return reply.code(401).send({message: 'Nonexisting user'});
+    const account: Account | null = await utils.accountFindByEmail(app.prisma, email);
+    if (!account) return reply.code(401).send({message: 'Nonexisting account'});
 
-    return user;
+    return account;
+  });
+
+  app.get('/auth/google/login', {}, async (req: FastifyRequest, reply: FastifyReply) => {
+    const state = randomBytes(16).toString('hex');
+    const url = utils.googleBuildAuthUrl(state);
+
+    // stateStore.set(state);
+
+    return reply.redirect(url);
+  });
+
+  app.get('/auth/google/callback', {}, async (req: FastifyRequest, reply: FastifyReply) => {
+    const { code, state } = req.query as any;
+    if (!code || !state) { //|| !stateStore.has(state)) {
+      return reply.status(400).send({ error: 'invalid_state_or_missing_code' });
+    }
+
+    // stateStore.delete(state);
+
+    const payload = await utils.googleGetPayload(code);
+    if (!payload?.sub) {
+      return reply.status(401).send({ error: 'invalid_google_payload' });
+    }
+
+    const at: String = utils.atGenerate(app.jwt, payload);
+
+    return {
+      success: true,
+      message: 'Google Account Logged In',
+      account: {
+        id: `google:${payload!.sub}`,
+        username: payload!.name,
+        email: payload!.email,
+        avatarUrl: payload!.picture,
+      },
+      at: at,
+    };
   });
 };

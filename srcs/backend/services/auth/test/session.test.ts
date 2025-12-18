@@ -27,14 +27,18 @@ describe('Signup => Login => Me => Logout', () => {
     app = await buildServer();
     await app.ready();
     try {
-      await utils.userDeleteByEmail(app.prisma, 'test@example.com')
-    } catch(err) {}
+      await utils.accountDeleteByEmail(app.prisma, 'test@example.com')
+    } catch(err) {
+      console.log(err);
+    }
   })
 
   afterAll(async () => {
     try {
-      await utils.userDeleteByEmail(app.prisma, 'test@example.com')
-    } catch(err) {}
+      await utils.accountDeleteByEmail(app.prisma, 'test@example.com')
+    } catch(err) {
+      console.log(err);
+    }
     await app.close();
   })
 
@@ -77,11 +81,11 @@ describe('Signup => Login => Me => Logout', () => {
     });
     expect(r1.statusCode).toBe(200);
 
-    const newUser = await app.prisma.user.findUnique({where: {email: 'test@example.com'}});
-    expect(newUser).toBeDefined();
-    expect(newUser!.name).toBe("test user");
-    expect(newUser!.email).toBe("test@example.com");
-    expect(await argon2.verify(newUser!.passwordHash!, "hello123")).toBe(true);
+    const newAccount = await app.prisma.account.findUnique({where: {email: 'test@example.com'}});
+    expect(newAccount).toBeDefined();
+    expect(newAccount!.username).toBe("test user");
+    expect(newAccount!.email).toBe("test@example.com");
+    expect(await argon2.verify(newAccount!.passwordHash!, "hello123")).toBe(true);
   })
 
   it('POST /auth/me - missing email', async () => {
@@ -172,7 +176,7 @@ describe('Signup => Login => Me => Logout', () => {
       payload: {email: 'test@example.com'},
     });
     expect(r1.statusCode).toBe(200);
-    expect(r1.json()).toMatchObject({name: 'test user', email: 'test@example.com'});
+    expect(r1.json()).toMatchObject({username: 'test user', email: 'test@example.com'});
   })
 
   it('POST /auth/refresh - missing rt cookie', async () => {

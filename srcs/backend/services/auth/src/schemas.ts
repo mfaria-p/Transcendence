@@ -2,17 +2,19 @@
 
 import type {FastifySchema} from 'fastify'
 
-const user = {
+const account = {
   type: 'object',
   properties: {
     id: {type: 'string'},
     username: {type: 'string'},
     email: {type: 'string'},
+    avatarUrl: {type: 'string'},
   },
+  required: ['id', 'username', 'email'],
 };
 
 export const postMeOpts: FastifySchema = {
-  summary: 'Get user info',
+  summary: 'Get account info',
   description: '',
   body: {
     type: 'object',
@@ -23,8 +25,24 @@ export const postMeOpts: FastifySchema = {
   },
 };
 
+export const postGoogleAuthOpts: FastifySchema = {
+  summary: 'Google remote login',
+  description: '',
+  response: {
+    200: {
+      type: 'object',
+      properties: {
+        success: {type: 'boolean'},
+        message: {type: 'string'},
+        account: account,
+        at: {type: 'string'},
+      },
+    },
+  },
+};
+
 export const postSignupOpts: FastifySchema = {
-  summary: 'Create user',
+  summary: 'Create account',
   description: '',
   body: {
     type: 'object',
@@ -41,7 +59,7 @@ export const postSignupOpts: FastifySchema = {
       properties: {
         success: {type: 'boolean'},
         message: {type: 'string'},
-        user: user,
+        account: account,
         at: {type: 'string'},
       },
     },
@@ -65,7 +83,7 @@ export const postLoginOpts: FastifySchema = {
       properties: {
         success: {type: 'boolean'},
         message: {type: 'string'},
-        user: user,
+        account: account,
         at: {type: 'string'},
       },
     },
