@@ -15,7 +15,7 @@ function handlePrismaError(error: unknown): never {
     switch (error.code) {
       case 'P2002':
         const fields = (error.meta?.target as string[]) || [];
-        const fieldList = fields.join(', ') || 'unkown field';
+        const fieldList = fields.join(', ') || 'unknown field';
         throw new AlreadyExistsError(`${fieldList} already exists`);
       case 'P2003':
       case 'P2014': throw new InvalidRelationError();

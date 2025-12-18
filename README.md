@@ -37,5 +37,3 @@
 - Web: chart
 - Estatistica: jogos
 - Gamification e espectadores
-
-

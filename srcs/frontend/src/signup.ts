@@ -108,7 +108,13 @@ class SignupManager {
           window.location.href = './index.html';
         }, 2000);
       } else {
-        this.showError(response.message || 'Signup failed');
+        const errorMessage = response.message || 'Signup failed';
+        if (errorMessage.toLowerCase().includes('email')) {
+          this.setInputError(this.emailInput, errorMessage);
+        } else if (errorMessage.toLowerCase().includes('username')) {
+          this.setInputError(this.usernameInput, errorMessage);
+        }
+        this.showError(errorMessage);
       }
     } catch (error: any) {
       console.error('Signup error:', error);
@@ -311,10 +317,8 @@ class SignupManager {
       }
 
       if (!res.ok) {
-        const message = res.status === 401 
-        ? (data?.message || 'Signup failed') 
-        : `Signup failed (${res.status})`;
-      return { success: false, message };
+        const message = data?.message || `Signup failed (${res.status})`;
+        return { success: false, message };
       }
 
       return data as SignupResponse;
