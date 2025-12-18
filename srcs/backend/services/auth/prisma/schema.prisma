@@ -29,11 +29,11 @@ enum OAuthProvider {
 
 model OAuthAccount {
   id                String  @id @default(cuid())
-  provider          String
+  provider          OAuthProvider
   providerAccountId String
 
   account           Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
-  accountId         String
+  accountId         String  @unique
 
   @@unique([provider, providerAccountId])
 }

@@ -1,8 +1,8 @@
 // src/utils.ts
 
 import type {FastifyInstance} from 'fastify';
-import type {Account, RefreshToken, OAuthAccount, OAuthProvider} from './generated/prisma/client.js';
-import {Prisma} from './generated/prisma/client.js';
+import type {Account, RefreshToken, OAuthAccount} from './generated/prisma/client.js';
+import {Prisma, OAuthProvider} from './generated/prisma/client.js';
 import createError from '@fastify/error';
 import { OAuth2Client } from 'google-auth-library';
 import * as argon from 'argon2';
@@ -32,7 +32,7 @@ function handlePrismaError(error: unknown): never {
 }
 
 // account
-export async function accountCreate(db: FastifyInstance['prisma'], account: {email: string, passwordHash: string | undefined}): Promise<Account> {
+export async function accountCreate(db: FastifyInstance['prisma'], account: {email: string, passwordHash?: string}): Promise<Account> {
   try {
     return await db.account.create({
       data: {
@@ -101,7 +101,7 @@ export async function oauthAccountCreate(db: FastifyInstance['prisma'], accountI
 
 export async function oauthAccountFindByAccountId(db: FastifyInstance['prisma'], accountId: string): Promise<OAuthAccount | null> {
   try {
-    return await db.account.findUnique({
+    return await db.oAuthAccount.findUnique({
       where: {
         accountId,
       },
@@ -113,10 +113,12 @@ export async function oauthAccountFindByAccountId(db: FastifyInstance['prisma'],
 
 export async function oauthAccountFindByProviderAccountId(db: FastifyInstance['prisma'], oauthAccount: {sub: string, provider: OAuthProvider}): Promise<OAuthAccount | null> {
   try {
-    return await db.account.findUnique({
+    return await db.oAuthAccount.findUnique({
       where: {
-        provider: oauthAccount.provider,
-        providerAccountId: oauthAccount.sub,
+        provider_providerAccountId: {
+          provider: oauthAccount.provider,
+          providerAccountId: oauthAccount.sub,
+        }
       },
     });
   } catch(err) {
