@@ -135,7 +135,7 @@ export default async function (app: FastifyInstance): Promise<void> {
     return account;
   });
 
-  app.get('/auth/google/login', {}, async (req: FastifyRequest, reply: FastifyReply) => {
+  app.get('/google/login', {}, async (req: FastifyRequest, reply: FastifyReply) => {
     const state = randomBytes(16).toString('hex');
     const url = utils.googleBuildAuthUrl(state);
 
@@ -144,7 +144,7 @@ export default async function (app: FastifyInstance): Promise<void> {
     return reply.redirect(url);
   });
 
-  app.get('/auth/google/callback', {}, async (req: FastifyRequest, reply: FastifyReply) => {
+  app.get('/google/callback', {}, async (req: FastifyRequest, reply: FastifyReply) => {
     const { code, state } = req.query as any;
     if (!code || !state) { //|| !stateStore.has(state)) {
       return reply.status(400).send({success: false, message: 'Invalid state or missing code'});
@@ -153,7 +153,7 @@ export default async function (app: FastifyInstance): Promise<void> {
     // stateStore.delete(state);
 
     const payload = await utils.googleGetPayload(code);
-    if (!payload?.sub) {
+    if (!payload?.sub || !payload?.email) {
       return reply.status(401).send({success: false, message: 'Invalid google payload'});
     }
 
@@ -163,8 +163,8 @@ export default async function (app: FastifyInstance): Promise<void> {
       return reply.status(400).send({success: false, message: 'Email already taken'});
     }
     if (!account) {
-      oauthAccount = await utils.oauthAccountCreate(app.prisma, account.id, {sub: payload.sub, provider: OAuthProvider.google});
       account = await utils.accountCreate(app.prisma, {email: payload.email});
+      oauthAccount = await utils.oauthAccountCreate(app.prisma, account.id, {sub: payload.sub, provider: OAuthProvider.google});
     }
 
     const at: String = utils.atGenerate(app.jwt, {sub: account.id});

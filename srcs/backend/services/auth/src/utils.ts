@@ -7,6 +7,8 @@ import createError from '@fastify/error';
 import { OAuth2Client } from 'google-auth-library';
 import * as argon from 'argon2';
 import {randomBytes, createHash} from 'crypto';
+import * as dotenv from 'dotenv';
+dotenv.config();
 
 const AlreadyExistsError = createError('ALREADY_EXISTS', 'Duplicate record', 409);
 const InvalidRelationError = createError('INVALID_RELATION', 'Invalid reference', 400);
@@ -17,7 +19,10 @@ function handlePrismaError(error: unknown): never {
   if (error instanceof Prisma.PrismaClientKnownRequestError) {
     const fields = error.meta?.target ?? [];
     switch (error.code) {
-      case 'P2002': throw new AlreadyExistsError(`${fields[0]} already taken`);
+      case 'P2002':
+        const fields = (error.meta?.target as string[]) || [];
+        const fieldList = fields.join(', ') || 'unknown field';
+        throw new AlreadyExistsError(`${fieldList} already exists`);
       case 'P2003':
       case 'P2014': throw new InvalidRelationError();
       case 'P2001':
@@ -35,10 +40,7 @@ function handlePrismaError(error: unknown): never {
 export async function accountCreate(db: FastifyInstance['prisma'], account: {email: string, passwordHash?: string}): Promise<Account> {
   try {
     return await db.account.create({
-      data: {
-        email: account.email,
-        passwordHash: account.passwordHash,
-      },
+      data: account
     });
   } catch(err) {
     handlePrismaError(err);
@@ -206,11 +208,6 @@ export function atGenerate(jwt: FastifyInstance['jwt'], payload: Object): string
 };
 
 // google remote login
-const CLIENT_ID: string = process.env.GOOGLE_OAUTH_CLIENT_ID;
-const CLIENT_SECRET: string = process.env.GOOGLE_OAUTH_CLIENT_SECRET;
-const REDIRECT_URI: string = process.env.GOOGLE_OAUTH_REDIRECT_URI || 'http://localhost:9000/api/auth/google/callback';
-
-const googleClient = new OAuth2Client(CLIENT_ID);
 
 export function googleBuildAuthUrl(state: string, code_challenge: string | null = null): string  {
   const params = new URLSearchParams({
@@ -234,8 +231,14 @@ interface GooglePayload {
   picture?: string;
 }
 
+const CLIENT_ID: string = process.env.GOOGLE_OAUTH_CLIENT_ID!;
+const CLIENT_SECRET: string = process.env.GOOGLE_OAUTH_CLIENT_SECRET!;
+const REDIRECT_URI: string = process.env.GOOGLE_OAUTH_REDIRECT_URI || 'http://localhost:9000/api/auth/google/callback';
+
+const googleClient = new OAuth2Client(CLIENT_ID);
 
 export async function googleGetPayload(code: string): Promise<GooglePayload | undefined> {
+
   const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
     method: 'POST',
     headers: { 'content-type': 'application/x-www-form-urlencoded' },
@@ -248,7 +251,13 @@ export async function googleGetPayload(code: string): Promise<GooglePayload | un
     })
   });
 
-  const tokenJson = await tokenRes.json();
+  interface TokenResponse {
+    access_token: string;
+    id_token: string;
+    refresh_token?: string;
+    error?: string;
+  }
+  const tokenJson = (await tokenRes.json()) as TokenResponse;
   if (tokenJson.error || !tokenJson.id_token) {
     throw new (createError('TOKEN_EXCHANGE_FAILED', 'google token exchange failed', 500))();
   }
