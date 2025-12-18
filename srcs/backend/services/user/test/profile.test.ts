@@ -43,7 +43,6 @@ describe('Profile', () => {
       },
       payload: {
         username: 'test profile 1',
-        email: 'test1@example.com',
       },
     });
     expect(r1.statusCode).toBe(401);
@@ -59,23 +58,6 @@ describe('Profile', () => {
       },
       payload: {
         // username: 'test profile 1',
-        email: 'test1@example.com',
-      },
-    });
-    expect(r1.statusCode).toBe(400);
-  });
-
-  it('PUT /user/provision - missing email', async() => {
-    const r1 = await app.inject({
-      method: 'PUT',
-      url: '/user/provision',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${at}`,
-      },
-      payload: {
-        username: 'test profile 1',
-        // email: 'test1@example.com',
       },
     });
     expect(r1.statusCode).toBe(400);
@@ -90,8 +72,7 @@ describe('Profile', () => {
         'Authorization': `Bearer ${at}`,
       },
       payload: {
-        username: 'test profile 1',
-        email: 'test0@example.com',
+        username: 'test profile 0',
       },
     });
     expect(r1.statusCode).toBe(200);
@@ -103,10 +84,10 @@ describe('Profile', () => {
       url: '/user/',
     });
     expect(r1.statusCode).toBe(200);
-    expect(r1.json().profiles).toEqual([{id: profileId, email: 'test0@example.com', username: 'test profile 1', avatarUrl: ''}]);
+    expect(r1.json().profiles).toEqual([{id: profileId, username: 'test profile 0', avatarUrl: ''}]);
   });
 
-  it('PUT /user/provision - update email', async() => {
+  it('PUT /user/provision - update username', async() => {
     const r1 = await app.inject({
       method: 'PUT',
       url: '/user/provision',
@@ -116,7 +97,6 @@ describe('Profile', () => {
       },
       payload: {
         username: 'test profile 1',
-        email: 'test1@example.com',
       },
     });
     expect(r1.statusCode).toBe(200);
@@ -128,7 +108,7 @@ describe('Profile', () => {
       url: '/user/',
     });
     expect(r1.statusCode).toBe(200);
-    expect(r1.json().profiles).toEqual([{id: profileId, email: 'test1@example.com', username: 'test profile 1', avatarUrl: ''}]);
+    expect(r1.json().profiles).toEqual([{id: profileId, username: 'test profile 1', avatarUrl: ''}]);
   });
 
   it('GET /user/:profileid', async() => {
@@ -137,7 +117,7 @@ describe('Profile', () => {
       url: `/user/${profileId}`,
     });
     expect(r1.statusCode).toBe(200);
-    expect(r1.json().profile).toMatchObject({id: profileId, email: 'test1@example.com'});
+    expect(r1.json().profile).toMatchObject({id: profileId});
   });
 
   it('GET /user/2', async() => {
@@ -188,7 +168,7 @@ describe('Profile', () => {
       },
     });
     expect(r1.statusCode).toBe(200);
-    expect(r1.json().profile).toMatchObject({id: profileId});
+    expect(r1.json().profile).toMatchObject({id: profileId, username: 'test profile 1'});
   });
 
   it('GET /user/1', async() => {

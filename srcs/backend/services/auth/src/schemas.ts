@@ -6,11 +6,11 @@ const account = {
   type: 'object',
   properties: {
     id: {type: 'string'},
-    username: {type: 'string'},
     email: {type: 'string'},
+    username: {type: 'string'},
     avatarUrl: {type: 'string'},
   },
-  required: ['id', 'username', 'email'],
+  required: ['id', 'email'],
 };
 
 export const postMeOpts: FastifySchema = {
@@ -46,7 +46,7 @@ export const postSignupOpts: FastifySchema = {
   description: '',
   body: {
     type: 'object',
-    required: ['username','email', 'password'],
+    required: ['email', 'password'],
     properties: {
       username: {type: 'string'},
       email: {type: 'string'},

@@ -3,7 +3,7 @@
 // oauth2
 
 import type {FastifyInstance, FastifyRequest, FastifyReply} from 'fastify';
-import type {Account, RefreshToken} from './generated/prisma/client.js';
+import type {Account, RefreshToken, OAuthAccount, OAuthProvider} from './generated/prisma/client.js';
 import {randomBytes} from 'crypto';
 import * as schemas from './schemas.js';
 import * as utils from './utils.js';
@@ -12,16 +12,13 @@ const RT_COOKIE: string = 'refresh_token';
 
 // TODO
 // signed cookies
-// jti for jwt id
-// pepper for refreshToken
+// salt for refreshToken
 // best practice would be not delete refresh right away
-// private public key for jwt
-// remote auth
 export default async function (app: FastifyInstance): Promise<void> {
   app.post('/signup', {schema: schemas.postSignupOpts}, async (req: FastifyRequest, reply: FastifyReply) => {
-    const {username, email, password} = req.body as {username: string, email: string, password: string};
+    const {email, password} = req.body as {email: string, password: string};
 
-    const account = await utils.accountCreate(app.prisma, {username: username, email: email, passwordHash: await utils.pwHash(password)});
+    const account = await utils.accountCreate(app.prisma, {email: email, passwordHash: await utils.pwHash(password)});
 
     // Auto-login after signup
     const at: string = utils.atGenerate(app.jwt, {sub: account.id});
@@ -37,8 +34,7 @@ export default async function (app: FastifyInstance): Promise<void> {
       message: 'Account Created Successfully',
       account: {
         id: account.id,
-        username: username,
-        email: email,
+        email: account.email,
       },
       at: at,
     };
@@ -67,7 +63,6 @@ export default async function (app: FastifyInstance): Promise<void> {
       message: 'Account Logged In',
       account: {
         id: account!.id,
-        username: account!.username,
         email: account!.email,
       },
       at: at,
@@ -126,7 +121,7 @@ export default async function (app: FastifyInstance): Promise<void> {
     const accountId: string = req.jwtPayload!.id;
     const {pw} = req.body as {pw: string};
     const account: Account | null = await utils.accountUpdatePassword(app.prisma, accountId, await utils.pwHash(pw));
-    if (!account) return reply.code(401).send({message: 'Nonexisting account'});
+    if (!account) return reply.code(401).send({success:false, message: 'Nonexisting account'});
 
     return account;
   });
@@ -134,7 +129,7 @@ export default async function (app: FastifyInstance): Promise<void> {
   app.post('/me', {schema: schemas.postMeOpts, preHandler: [app.authenticate]}, async (req: FastifyRequest, reply) => {
     const {email} = req.body as {email: string};
     const account: Account | null = await utils.accountFindByEmail(app.prisma, email);
-    if (!account) return reply.code(401).send({message: 'Nonexisting account'});
+    if (!account) return reply.code(401).send({success: false, message: 'Nonexisting account'});
 
     return account;
   });
@@ -151,26 +146,36 @@ export default async function (app: FastifyInstance): Promise<void> {
   app.get('/auth/google/callback', {}, async (req: FastifyRequest, reply: FastifyReply) => {
     const { code, state } = req.query as any;
     if (!code || !state) { //|| !stateStore.has(state)) {
-      return reply.status(400).send({ error: 'invalid_state_or_missing_code' });
+      return reply.status(400).send({success: false, message: 'Invalid state or missing code'});
     }
 
     // stateStore.delete(state);
 
     const payload = await utils.googleGetPayload(code);
     if (!payload?.sub) {
-      return reply.status(401).send({ error: 'invalid_google_payload' });
+      return reply.status(401).send({success: false, message: 'Invalid google payload'});
     }
 
-    const at: String = utils.atGenerate(app.jwt, payload);
+    let account: Account | null = await utils.accountFindByEmail(app.prisma, payload.email);
+    let oauthAccount: OAuthAccount | null = await utils.oauthAccountFindByProviderAccountId(app.prisma, {sub: payload.sub, provider: OAuthProvider.google});
+    if (account && !oauthAccount) {
+      return reply.status(400).send({success: false, message: 'Email already taken'});
+    }
+    if (!account) {
+      oauthAccount = await utils.oauthAccountCreate(app.prisma, account.id, {sub: payload.sub, provider: OAuthProvider.google});
+      account = await utils.accountCreate(app.prisma, {email: payload.email});
+    }
+
+    const at: String = utils.atGenerate(app.jwt, {sub: account.id});
 
     return {
       success: true,
       message: 'Google Account Logged In',
       account: {
-        id: `google:${payload!.sub}`,
-        username: payload!.name,
-        email: payload!.email,
-        avatarUrl: payload!.picture,
+        id: account.id,
+        email: payload.email,
+        username: payload.name,
+        avatarUrl: payload.picture,
       },
       at: at,
     };

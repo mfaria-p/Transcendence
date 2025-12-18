@@ -20,7 +20,6 @@ enum FriendRequestStatus {
 
 model Profile {
   id            String   @id
-  email         String   @unique
   username      String   @unique
   avatarUrl     String?
   createdAt     DateTime @default(now())

@@ -28,28 +28,14 @@ describe('Signup => Login => Me => Logout', () => {
     await app.ready();
     try {
       await utils.accountDeleteByEmail(app.prisma, 'test@example.com')
-    } catch(err) {
-      console.log(err);
-    }
+    } catch(err) {}
   })
 
   afterAll(async () => {
     try {
       await utils.accountDeleteByEmail(app.prisma, 'test@example.com')
-    } catch(err) {
-      console.log(err);
-    }
+    } catch(err) {}
     await app.close();
-  })
-
-  it('POST /auth/signup - missing username', async() => {
-    const r1 = await app.inject({
-      method: 'POST',
-      url: '/auth/signup',
-      headers: {'content-type': 'application/json'},
-      payload: {email: 'test@example.com', password: 'hello123'},
-    });
-    expect(r1.statusCode).toBe(400);
   })
 
   it('POST /auth/signup - missing email', async() => {
@@ -57,7 +43,7 @@ describe('Signup => Login => Me => Logout', () => {
       method: 'POST',
       url: '/auth/signup',
       headers: {'content-type': 'application/json'},
-      payload: {username: 'test user', password: 'hello123'},
+      payload: {password: 'hello123'},
     });
     expect(r1.statusCode).toBe(400);
   })
@@ -67,7 +53,7 @@ describe('Signup => Login => Me => Logout', () => {
       method: 'POST',
       url: '/auth/signup',
       headers: {'content-type': 'application/json'},
-      payload: {username: 'test user', email: 'test@example.com'}
+      payload: {email: 'test@example.com'}
     });
     expect(r1.statusCode).toBe(400);
   })
@@ -77,13 +63,13 @@ describe('Signup => Login => Me => Logout', () => {
       method: 'POST',
       url: '/auth/signup',
       headers: {'content-type': 'application/json'},
-      payload: {username: 'test user', email: 'test@example.com', password: 'hello123'},
+      payload: {email: 'test@example.com', password: 'hello123'},
     });
+    console.log(r1.json());
     expect(r1.statusCode).toBe(200);
 
     const newAccount = await app.prisma.account.findUnique({where: {email: 'test@example.com'}});
     expect(newAccount).toBeDefined();
-    expect(newAccount!.username).toBe("test user");
     expect(newAccount!.email).toBe("test@example.com");
     expect(await argon2.verify(newAccount!.passwordHash!, "hello123")).toBe(true);
   })
@@ -176,7 +162,7 @@ describe('Signup => Login => Me => Logout', () => {
       payload: {email: 'test@example.com'},
     });
     expect(r1.statusCode).toBe(200);
-    expect(r1.json()).toMatchObject({username: 'test user', email: 'test@example.com'});
+    expect(r1.json()).toMatchObject({email: 'test@example.com'});
   })
 
   it('POST /auth/refresh - missing rt cookie', async () => {

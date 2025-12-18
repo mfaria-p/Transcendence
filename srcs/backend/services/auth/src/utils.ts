@@ -1,7 +1,7 @@
 // src/utils.ts
 
 import type {FastifyInstance} from 'fastify';
-import type {Account, RefreshToken} from './generated/prisma/client.js';
+import type {Account, RefreshToken, OAuthAccount, OAuthProvider} from './generated/prisma/client.js';
 import {Prisma} from './generated/prisma/client.js';
 import createError from '@fastify/error';
 import { OAuth2Client } from 'google-auth-library';
@@ -32,11 +32,10 @@ function handlePrismaError(error: unknown): never {
 }
 
 // account
-export async function accountCreate(db: FastifyInstance['prisma'], account: {username: string, email: string, passwordHash: string}): Promise<Account> {
+export async function accountCreate(db: FastifyInstance['prisma'], account: {email: string, passwordHash: string | undefined}): Promise<Account> {
   try {
     return await db.account.create({
       data: {
-        username: account.username,
         email: account.email,
         passwordHash: account.passwordHash,
       },
@@ -79,6 +78,46 @@ export async function accountUpdatePassword(db: FastifyInstance['prisma'], id: s
       data: {
         passwordHash: pwHash,
       }
+    });
+  } catch(err) {
+    handlePrismaError(err);
+  };
+};
+
+// oauthaccount
+export async function oauthAccountCreate(db: FastifyInstance['prisma'], accountId: string, oauthAccount: {sub: string, provider: OAuthProvider}): Promise<OAuthAccount> {
+  try {
+    return await db.oAuthAccount.create({
+      data: {
+        provider: oauthAccount.provider,
+        providerAccountId: oauthAccount.sub,
+        accountId: accountId,
+      }
+    });
+  } catch(err) {
+    handlePrismaError(err);
+  };
+}
+
+export async function oauthAccountFindByAccountId(db: FastifyInstance['prisma'], accountId: string): Promise<OAuthAccount | null> {
+  try {
+    return await db.account.findUnique({
+      where: {
+        accountId,
+      },
+    });
+  } catch(err) {
+    handlePrismaError(err);
+  };
+};
+
+export async function oauthAccountFindByProviderAccountId(db: FastifyInstance['prisma'], oauthAccount: {sub: string, provider: OAuthProvider}): Promise<OAuthAccount | null> {
+  try {
+    return await db.account.findUnique({
+      where: {
+        provider: oauthAccount.provider,
+        providerAccountId: oauthAccount.sub,
+      },
     });
   } catch(err) {
     handlePrismaError(err);

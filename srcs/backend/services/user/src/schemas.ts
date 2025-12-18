@@ -10,7 +10,7 @@ const profile = {
     email: {type: 'string'},
     avatarUrl: {type: 'string'},
   },
-  required: ['id', 'username', 'email']
+  required: ['id', 'username']
 };
 
 const friendRequest = {
@@ -42,7 +42,7 @@ export const putProfileOpts: FastifySchema = {
   description: '',
   body: {
     type: 'object',
-    required: ['username','email'],
+    required: ['username'],
     properties: {
       username: {type: 'string'},
       email: {type: 'string'},
