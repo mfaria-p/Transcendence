@@ -3,16 +3,6 @@ node_modules/
 example/
 *.db
 dist/
-<<<<<<< HEAD
-<<<<<<< HEAD
-generated/
-=======
 .idea/
 generated/
 .pnpm-store/
->>>>>>> origin
-=======
-.idea/
-generated/
-.pnpm-store/
->>>>>>> frontend
