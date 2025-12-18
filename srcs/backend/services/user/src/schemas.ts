@@ -2,31 +2,23 @@
 
 import type {FastifySchema} from 'fastify'
 
-const user = {
+const profile = {
   type: 'object',
   properties: {
     id: {type: 'string'},
     username: {type: 'string'},
     email: {type: 'string'},
-  },
-};
-
-const profile = {
-  type: 'object',
-  properties: {
-    id: {type: 'string'},
-    name: {type: 'string'},
-    email: {type: 'string'},
     avatarUrl: {type: 'string'},
   },
+  required: ['id', 'username', 'email']
 };
 
 const friendRequest = {
   type: 'object',
   properties: {
     id: {type: 'string'},
-    fromUserId: {type: 'string'},
-    toUserId: {type: 'string'},
+    fromProfileId: {type: 'string'},
+    toProfileId: {type: 'string'},
     status: {type: 'string'},
     message: {type: 'string'},
   },
@@ -36,8 +28,8 @@ const friendship = {
   type: 'object',
   properties: {
     id: {type: 'string'},
-    userAId: {type: 'string'},
-    userBId: {type: 'string'},
+    profileAId: {type: 'string'},
+    profileBId: {type: 'string'},
   },
 };
 
@@ -46,7 +38,7 @@ const friendship = {
 const block = {};
 
 export const putProfileOpts: FastifySchema = {
-  summary: 'Provide User Profile',
+  summary: 'Provide Profile Profile',
   description: '',
   body: {
     type: 'object',
@@ -88,7 +80,7 @@ export const getProfilesOpts: FastifySchema = {
 };
 
 export const getProfileByIdOpts: FastifySchema = {
-  summary: 'Get User Profile By Id',
+  summary: 'Get Profile Profile By Id',
   description: '',
   response: {
     200: {
@@ -121,7 +113,7 @@ export const getRequestsOpts: FastifySchema = {
 };
 
 export const getMeOpts: FastifySchema = {
-  summary: 'Get Logged In User Profile',
+  summary: 'Get Logged In Profile Profile',
   description: '',
   response: {
     200: {
@@ -243,7 +235,7 @@ export const getFriendsOpts: FastifySchema = {
 };
 
 export const postBlockOpts: FastifySchema = {
-  summary: 'Block User',
+  summary: 'Block Profile',
   description: '',
   response: {
     200: {
@@ -258,7 +250,7 @@ export const postBlockOpts: FastifySchema = {
 };
 
 export const deleteBlockOpts: FastifySchema = {
-  summary: 'Unblock User',
+  summary: 'Unblock Profile',
   description: '',
   response: {
     200: {

@@ -21,7 +21,7 @@ enum FriendRequestStatus {
 model Profile {
   id            String   @id
   email         String   @unique
-  name          String   @unique
+  username      String   @unique
   avatarUrl     String?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
@@ -38,32 +38,32 @@ model Profile {
 
 model FriendRequest {
   id         String               @id @default(cuid())
-  fromUserId String
-  toUserId   String
+  fromProfileId String
+  toProfileId   String
   status     FriendRequestStatus  @default(PENDING)
   message    String?
   createdAt  DateTime             @default(now())
   updatedAt  DateTime             @updatedAt
 
-  fromUser   Profile @relation("SentRequests", fields: [fromUserId], references: [id], onDelete: Cascade)
-  toUser     Profile @relation("RecvRequests", fields: [toUserId], references: [id], onDelete: Cascade)
+  fromProfile   Profile @relation("SentRequests", fields: [fromProfileId], references: [id], onDelete: Cascade)
+  toProfile     Profile @relation("RecvRequests", fields: [toProfileId], references: [id], onDelete: Cascade)
 
-  @@unique([fromUserId, toUserId])
-  @@index([toUserId, status])
-  @@index([fromUserId, status])
+  @@unique([fromProfileId, toProfileId])
+  @@index([toProfileId, status])
+  @@index([fromProfileId, status])
 }
 
 model Friendship {
   id        String   @id @default(cuid())
-  userAId   String
-  userBId   String
+  profileAId   String
+  profileBId   String
   createdAt DateTime @default(now())
 
-  // userAId < userBId
-  userA     Profile @relation("FriendshipsA", fields: [userAId], references: [id], onDelete: Cascade)
-  userB     Profile @relation("FriendshipsB", fields: [userBId], references: [id], onDelete: Cascade)
+  // profileAId < profileBId
+  profileA     Profile @relation("FriendshipsA", fields: [profileAId], references: [id], onDelete: Cascade)
+  profileB     Profile @relation("FriendshipsB", fields: [profileBId], references: [id], onDelete: Cascade)
 
-  @@unique([userAId, userBId])
+  @@unique([profileAId, profileBId])
   @@index([createdAt])
 }
 

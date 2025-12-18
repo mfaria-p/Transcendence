@@ -5,21 +5,21 @@ import * as utils from '../src/utils.js'
 
 describe('Profile', () => {
   let app: FastifyInstance;
-  const userId: string = 'profile1';
+  const profileId: string = 'profile1';
   let at: string = '';
 
   beforeAll(async () => {
     app = await buildServer();
-    at = app.jwt.sign({sub: userId}, {expiresIn: '15m'});
+    at = app.jwt.sign({sub: profileId}, {expiresIn: '15m'});
     try {
-      await app.prisma.$executeRaw`DELETE FROM Profile;`;
+      await app.prisma.profile.deleteMany();
     } catch (err) {}
     await app.ready();
   });
 
   afterAll(async () => {
     try {
-      await app.prisma.$executeRaw`DELETE FROM Profile;`;
+      await app.prisma.profile.deleteMany();
     } catch (err) {}
     await app.close();
   });
@@ -42,7 +42,7 @@ describe('Profile', () => {
         // 'Authorization': `Bearer ${at}`,
       },
       payload: {
-        username: 'profile user 1',
+        username: 'test profile 1',
         email: 'test1@example.com',
       },
     });
@@ -58,7 +58,7 @@ describe('Profile', () => {
         'Authorization': `Bearer ${at}`,
       },
       payload: {
-        // username: 'profile user 1',
+        // username: 'test profile 1',
         email: 'test1@example.com',
       },
     });
@@ -74,7 +74,7 @@ describe('Profile', () => {
         'Authorization': `Bearer ${at}`,
       },
       payload: {
-        username: 'profile user 1',
+        username: 'test profile 1',
         // email: 'test1@example.com',
       },
     });
@@ -90,7 +90,7 @@ describe('Profile', () => {
         'Authorization': `Bearer ${at}`,
       },
       payload: {
-        username: 'profile user 1',
+        username: 'test profile 1',
         email: 'test0@example.com',
       },
     });
@@ -103,7 +103,7 @@ describe('Profile', () => {
       url: '/user/',
     });
     expect(r1.statusCode).toBe(200);
-    expect(r1.json().profiles).toEqual([{id: userId, email: 'test0@example.com', name: 'profile user 1', avatarUrl: ''}]);
+    expect(r1.json().profiles).toEqual([{id: profileId, email: 'test0@example.com', username: 'test profile 1', avatarUrl: ''}]);
   });
 
   it('PUT /user/provision - update email', async() => {
@@ -115,7 +115,7 @@ describe('Profile', () => {
         'Authorization': `Bearer ${at}`,
       },
       payload: {
-        username: 'profile user 1',
+        username: 'test profile 1',
         email: 'test1@example.com',
       },
     });
@@ -128,16 +128,16 @@ describe('Profile', () => {
       url: '/user/',
     });
     expect(r1.statusCode).toBe(200);
-    expect(r1.json().profiles).toEqual([{id: userId, email: 'test1@example.com', name: 'profile user 1', avatarUrl: ''}]);
+    expect(r1.json().profiles).toEqual([{id: profileId, email: 'test1@example.com', username: 'test profile 1', avatarUrl: ''}]);
   });
 
-  it('GET /user/:userid', async() => {
+  it('GET /user/:profileid', async() => {
     const r1 = await app.inject({
       method: 'GET',
-      url: `/user/${userId}`,
+      url: `/user/${profileId}`,
     });
     expect(r1.statusCode).toBe(200);
-    expect(r1.json().profile).toMatchObject({id: userId, email: 'test1@example.com'});
+    expect(r1.json().profile).toMatchObject({id: profileId, email: 'test1@example.com'});
   });
 
   it('GET /user/2', async() => {
@@ -165,7 +165,7 @@ describe('Profile', () => {
       },
     });
     expect(r1.statusCode).toBe(200);
-    expect(r1.json().profile).toMatchObject({id: userId});
+    expect(r1.json().profile).toMatchObject({id: profileId});
   });
 
   it('DELETE /user/me - missing access token', async() => {
@@ -188,7 +188,7 @@ describe('Profile', () => {
       },
     });
     expect(r1.statusCode).toBe(200);
-    expect(r1.json().profile).toMatchObject({id: userId});
+    expect(r1.json().profile).toMatchObject({id: profileId});
   });
 
   it('GET /user/1', async() => {
