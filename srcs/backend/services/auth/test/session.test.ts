@@ -27,13 +27,13 @@ describe('Signup => Login => Me => Logout', () => {
     app = await buildServer();
     await app.ready();
     try {
-      await utils.accountDeleteByEmail(app.prisma, 'test@example.com')
+      await app.prisma.account.deleteMany();
     } catch(err) {}
   })
 
   afterAll(async () => {
     try {
-      await utils.accountDeleteByEmail(app.prisma, 'test@example.com')
+      await app.prisma.account.deleteMany();
     } catch(err) {}
     await app.close();
   })
@@ -43,7 +43,17 @@ describe('Signup => Login => Me => Logout', () => {
       method: 'POST',
       url: '/auth/signup',
       headers: {'content-type': 'application/json'},
-      payload: {password: 'hello123'},
+      payload: {username: 'test1', password: 'hello123'},
+    });
+    expect(r1.statusCode).toBe(400);
+  })
+
+  it('POST /auth/signup - missing username', async() => {
+    const r1 = await app.inject({
+      method: 'POST',
+      url: '/auth/signup',
+      headers: {'content-type': 'application/json'},
+      payload: {email: 'test@example.com', password: 'hello123'},
     });
     expect(r1.statusCode).toBe(400);
   })
@@ -53,7 +63,7 @@ describe('Signup => Login => Me => Logout', () => {
       method: 'POST',
       url: '/auth/signup',
       headers: {'content-type': 'application/json'},
-      payload: {email: 'test@example.com'}
+      payload: {username: 'test1', email: 'test@example.com'}
     });
     expect(r1.statusCode).toBe(400);
   })
@@ -63,39 +73,16 @@ describe('Signup => Login => Me => Logout', () => {
       method: 'POST',
       url: '/auth/signup',
       headers: {'content-type': 'application/json'},
-      payload: {email: 'test@example.com', password: 'hello123'},
+      payload: {username: 'test1', email: 'test@example.com', password: 'hello123'},
     });
-    console.log(r1.json());
     expect(r1.statusCode).toBe(200);
 
+    at = r1.json().at;
     const newAccount = await app.prisma.account.findUnique({where: {email: 'test@example.com'}});
     expect(newAccount).toBeDefined();
+    expect(newAccount!.username).toBe("test1");
     expect(newAccount!.email).toBe("test@example.com");
     expect(await argon2.verify(newAccount!.passwordHash!, "hello123")).toBe(true);
-  })
-
-  it('POST /auth/me - missing email', async () => {
-    const r1 = await app.inject({
-      method: 'POST',
-      url: '/auth/me',
-      headers: {
-        Authorization: `Bearer ${at}`,
-      },
-    });
-    expect(r1.statusCode).toBe(400);
-  })
-
-  it('POST /auth/me - before login', async () => {
-    const r1 = await app.inject({
-      method: 'POST',
-      url: '/auth/me',
-      headers: {
-        'content-type': 'application/json',
-        Authorization: `Bearer ${at}`,
-      },
-      payload: {email: 'test@example.com'},
-    });
-    expect(r1.statusCode).toBe(401);
   })
 
   it('POST /auth/login - missing email', async () => {
@@ -113,17 +100,17 @@ describe('Signup => Login => Me => Logout', () => {
       method: 'POST',
       url: '/auth/login',
       headers: {'content-type': 'application/json'},
-      payload: {email: 'test@example.com'},
+      payload: {ident: 'test@example.com'},
     });
     expect(r1.statusCode).toBe(400);
   })
 
-  it('POST /auth/login - nonexisting email', async () => {
+  it('POST /auth/login - nonexisting ident', async () => {
     const r1 = await app.inject({
       method: 'POST',
       url: '/auth/login',
       headers: {'content-type': 'application/json'},
-      payload: {email: 'test2@example.com'},
+      payload: {ident: 'test2@example.com'},
     });
     expect(r1.statusCode).toBe(400);
   })
@@ -133,39 +120,139 @@ describe('Signup => Login => Me => Logout', () => {
       method: 'POST',
       url: '/auth/login',
       headers: {'content-type': 'application/json'},
-      payload: {email: 'test@example.com', password: 'hello1234'},
+      payload: {ident: 'test@example.com', password: 'hello1234'},
     });
     expect(r1.statusCode).toBe(401);
   })
 
-  it('POST /auth/login', async () => {
+  it('POST /auth/login - email', async () => {
     const r1 = await app.inject({
       method: 'POST',
       url: '/auth/login',
       headers: {'content-type': 'application/json'},
-      payload: {email: 'test@example.com', password: 'hello123'},
+      payload: {ident: 'test@example.com', password: 'hello123'},
     });
     expect(r1.statusCode).toBe(200);
     const cookies = extractCookies(r1.headers['set-cookie']);
-    rt1 = cookies.refresh_token!;
+    rt1 = cookies.refresh_token;
     at = r1.json().at;
   })
 
-  it('POST /auth/me - after login', async () => {
+  it('GET /auth/me - missing access token', async () => {
     const r1 = await app.inject({
-      method: 'POST',
+      method: 'GET',
       url: '/auth/me',
       headers: {
-        'content-type': 'application/json',
-        Authorization: `Bearer ${at}`,
+        // 'Authorization': `Bearer ${at}`,
       },
-      payload: {email: 'test@example.com'},
     });
-    expect(r1.statusCode).toBe(200);
-    expect(r1.json()).toMatchObject({email: 'test@example.com'});
+    expect(r1.statusCode).toBe(401);
   })
 
-  it('POST /auth/refresh - missing rt cookie', async () => {
+  it('GET /auth/me - invalid access token', async () => {
+    const r1 = await app.inject({
+      method: 'GET',
+      url: '/auth/me',
+      headers: {
+        'Authorization': 'Bearer banana',
+      },
+    });
+    expect(r1.statusCode).toBe(401);
+  })
+
+  it('GET /auth/me', async () => {
+    const r1 = await app.inject({
+      method: 'GET',
+      url: '/auth/me',
+      headers: {
+        'Authorization': `Bearer ${at}`,
+      },
+    });
+    expect(r1.statusCode).toBe(200);
+    const account = r1.json().account;
+    expect(account).toMatchObject({username: 'test1', email: 'test@example.com'})
+  })
+
+  it('PUT /auth/me - missing access token', async () => {
+    const r1 = await app.inject({
+      method: 'PUT',
+      url: '/auth/me',
+      headers: {
+        // 'Authorization': `Bearer ${at}`,
+        'content-type': 'application/json',
+      },
+      payload: {
+        username: 'test2',
+        email: 'test2@example.com',
+      },
+    });
+    expect(r1.statusCode).toBe(401);
+  })
+
+  it('PUT /auth/me', async () => {
+    const r1 = await app.inject({
+      method: 'PUT',
+      url: '/auth/me',
+      headers: {
+        'Authorization': `Bearer ${at}`,
+        'content-type': 'application/json',
+      },
+      payload: {
+        username: 'test2',
+        email: 'test2@example.com',
+      },
+    });
+    expect(r1.statusCode).toBe(200);
+    const account = r1.json().account;
+    expect(account).toMatchObject({username: 'test2', email: 'test2@example.com'});
+  })
+
+  it('PUT /auth/me/password - missing access token', async () => {
+    const r1 = await app.inject({
+      method: 'PUT',
+      url: '/auth/me/password',
+      headers: {
+        // 'Authorization': `Bearer ${at}`,
+        'content-type': 'application/json',
+      },
+      payload: {
+        password: 'newpass123',
+      },
+    });
+    expect(r1.statusCode).toBe(401);
+  })
+
+  it('PUT /auth/me/password - missing password', async () => {
+    const r1 = await app.inject({
+      method: 'PUT',
+      url: '/auth/me/password',
+      headers: {
+        'Authorization': `Bearer ${at}`,
+        'content-type': 'application/json',
+      },
+      payload: {
+        // password: 'newpass123',
+      },
+    });
+    expect(r1.statusCode).toBe(400);
+  })
+
+  it('PUT /auth/me/password', async () => {
+    const r1 = await app.inject({
+      method: 'PUT',
+      url: '/auth/me/password',
+      headers: {
+        'Authorization': `Bearer ${at}`,
+        'content-type': 'application/json',
+      },
+      payload: {
+        password: 'newpass123',
+      },
+    });
+    expect(r1.statusCode).toBe(200);
+  })
+
+  it('POST /auth/refresh - missing refresh token cookie', async () => {
     const r1 = await app.inject({
       method: 'POST',
       url: '/auth/refresh',
@@ -173,7 +260,7 @@ describe('Signup => Login => Me => Logout', () => {
     expect(r1.statusCode).toBe(401);
   })
 
-  it('POST /auth/refresh - invalid rt cookie', async () => {
+  it('POST /auth/refresh - invalid refresh token cookie', async () => {
     const r1 = await app.inject({
       method: 'POST',
       url: '/auth/refresh',
@@ -193,7 +280,7 @@ describe('Signup => Login => Me => Logout', () => {
     rt2 = cookies.refresh_token!;
   })
 
-  it('POST /auth/logout - missing rt', async () => {
+  it('POST /auth/logout - missing refresh token', async () => {
     const r1 = await app.inject({
       method: 'POST',
       url: '/auth/logout',
@@ -201,7 +288,7 @@ describe('Signup => Login => Me => Logout', () => {
     expect(r1.statusCode).toBe(200);
   })
 
-  it('POST /auth/logout - invalid rt cookie', async () => {
+  it('POST /auth/logout - invalid refresh token cookie', async () => {
     const r1 = await app.inject({
       method: 'POST',
       url: '/auth/logout',
@@ -210,7 +297,7 @@ describe('Signup => Login => Me => Logout', () => {
     expect(r1.statusCode).toBe(401);
   })
 
-  it('POST /auth/logout - old rt', async () => {
+  it('POST /auth/logout - old refresh token', async () => {
     const r1 = await app.inject({
       method: 'POST',
       url: '/auth/logout',
@@ -226,5 +313,38 @@ describe('Signup => Login => Me => Logout', () => {
       cookies: {'refresh_token': rt2},
     });
     expect(r1.statusCode).toBe(200);
+  })
+
+  it('POST /auth/login - username', async () => {
+    const r1 = await app.inject({
+      method: 'POST',
+      url: '/auth/login',
+      headers: {'content-type': 'application/json'},
+      payload: {ident: 'test2', password: 'newpass123'},
+    });
+    expect(r1.statusCode).toBe(200);
+    const account = r1.json().account;
+    expect(account).toMatchObject({username: 'test2', email: 'test2@example.com'})
+  })
+
+  it('DELETE /auth/me', async () => {
+    const r1 = await app.inject({
+      method: 'DELETE',
+      url: '/auth/me',
+      headers: {'Authorization': `Bearer ${at}`},
+    });
+    expect(r1.statusCode).toBe(200);
+    const account = r1.json().account;
+    expect(account).toMatchObject({username: 'test2', email: 'test2@example.com'})
+  })
+
+  it('POST /auth/login - username', async () => {
+    const r1 = await app.inject({
+      method: 'POST',
+      url: '/auth/login',
+      headers: {'content-type': 'application/json'},
+      payload: {ident: 'test2', password: 'newpass123'},
+    });
+    expect(r1.statusCode).toBe(401);
   })
 })

@@ -1,22 +1,16 @@
 // src/routes.ts
 
 import type {FastifyInstance, FastifyRequest, FastifyReply} from 'fastify';
-import type {Profile, FriendRequest, FriendRequestStatus, Friendship, Block} from './generated/prisma/client.js';
+import type {Profile, FriendRequest, FriendRequestStatus, Friendship} from './generated/prisma/client.js';
 import * as schemas from './schemas.js';
 import * as utils from './utils.js';
 
 export default async function (app: FastifyInstance): Promise<void> {
-  // TODO
-  // blocking does nothing
-  
-
-  // should be event driven
-  // requires broker service...
   app.put('/provision', {schema: schemas.putProfileOpts, preHandler: [app.authenticate]}, async (req: FastifyRequest, reply: FastifyReply) => {
     const profileId: string = req.jwtPayload!.id;
-    const {username} = req.body as {username: string};
+    const {avatarUrl} = req.body as {avatarUrl: string};
 
-    const profile: Profile = await utils.profileProvide(app.prisma, {id: profileId, username: username});
+    const profile: Profile = await utils.profileProvide(app.prisma, {id: profileId, ...(avatarUrl && {avatarUrl})});
 
     return {
       success: true,
@@ -41,13 +35,13 @@ export default async function (app: FastifyInstance): Promise<void> {
     const profile = await utils.profileFindByProfileId(app.prisma, profileId);
     if (!profile) return reply.code(404).send({
       sucess: false,
-      message: 'Nonexistent Profile Profile',
+      message: 'Nonexistent Profile',
       profile: null,
     });
 
     return {
       success: true,
-      message: 'Public Profile Profile',
+      message: 'Public Profile',
       profile: profile,
     };
   });
@@ -59,13 +53,13 @@ export default async function (app: FastifyInstance): Promise<void> {
 
     if (!profile) return reply.code(404).send({
       sucess: false,
-      message: 'Nonexistent Profile Profile',
+      message: 'Nonexistent Profile',
       profile: null,
     });
 
     return {
       success: true,
-      message: 'Logged In Profile Profile',
+      message: 'Logged In Profile',
       profile: profile,
     };
   });
@@ -73,11 +67,11 @@ export default async function (app: FastifyInstance): Promise<void> {
   app.delete('/me', {schema: schemas.getMeOpts, preHandler: [app.authenticate]}, async (req: FastifyRequest, reply: FastifyReply) => {
     const profileId: string = req.jwtPayload!.id;
 
-    const profile: Profile = await utils.profileDeleteByProfileId(app.prisma, profileId);
+    const profile: Profile = await utils.profileDeleteById(app.prisma, profileId);
 
     return {
       success: true,
-      message: 'Logged In Profile Profile',
+      message: 'Logged In Profile',
       profile: profile,
     };
   });

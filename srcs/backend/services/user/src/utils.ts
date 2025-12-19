@@ -1,7 +1,7 @@
 // src/utils.ts
 
 import type {FastifyInstance} from 'fastify';
-import type {Profile, FriendRequest, FriendRequestStatus, Friendship, Block} from './generated/prisma/client.js';
+import type {Profile, FriendRequest, FriendRequestStatus, Friendship} from './generated/prisma/client.js';
 import {Prisma} from './generated/prisma/client.js';
 import createError from '@fastify/error';
 
@@ -31,18 +31,16 @@ function handlePrismaError(error: unknown): never {
 }
 
 // profile
-export async function profileProvide(db: FastifyInstance['prisma'], profile: {id: string, username: string, avatarUrl?: string}): Promise<Profile> {
+export async function profileProvide(db: FastifyInstance['prisma'], profile: {id: string, avatarUrl?: string}): Promise<Profile> {
+  console.log('utils', profile?.avatarUrl);
   try {
-    const createData: any = {
-      id:   profile.id,
-      username: profile.username,
+    let createData: any = {
+      id: profile.id,
     };
     
-    const updateData: any = {
-      username: profile.username,
-    };
+    let updateData: any = {};
     
-    if (profile.avatarUrl) {
+    if (profile?.avatarUrl) {
       createData.avatarUrl = profile.avatarUrl;
       updateData.avatarUrl = profile.avatarUrl;
     }
@@ -59,7 +57,7 @@ export async function profileProvide(db: FastifyInstance['prisma'], profile: {id
   };
 };
 
-export async function profileDeleteByProfileId(db: FastifyInstance['prisma'], id: string): Promise<Profile> {
+export async function profileDeleteById(db: FastifyInstance['prisma'], id: string): Promise<Profile> {
   try {
     return await db.profile.delete({
       where: {
@@ -209,48 +207,6 @@ export async function requestDelete(db: FastifyInstance['prisma'], fromProfileId
   try {
     return await db.friendRequest.delete({
       where
-    });
-  } catch(err) {
-    handlePrismaError(err);
-  };
-};
-
-// block
-export async function blockCreate(db: FastifyInstance['prisma'], blockerId: string, blockedId: string, reason: string = ''): Promise<Block> {
-  try {
-    return await db.block.create({
-      data: {
-        blockerId: blockerId,
-        blockedId: blockedId,
-        reason: reason,
-      },
-    });
-  } catch(err) {
-    handlePrismaError(err);
-  };
-};
-
-export async function blockDelete(db: FastifyInstance['prisma'], blockerId: string, blockedId: string): Promise<Block> {
-  try {
-    return await db.block.delete({
-      where: {
-        blockerId_blockedId: {
-          blockerId: blockerId,
-          blockedId: blockedId,
-        }
-      },
-    });
-  } catch(err) {
-    handlePrismaError(err);
-  };
-};
-
-export async function blockFindByBlockerId(db: FastifyInstance['prisma'], blockerId: string): Promise<Block[]> {
-  try {
-    return await db.block.findMany({
-      where: {
-        blockerId: blockerId,
-      },
     });
   } catch(err) {
     handlePrismaError(err);

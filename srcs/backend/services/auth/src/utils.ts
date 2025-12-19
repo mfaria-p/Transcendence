@@ -37,7 +37,7 @@ function handlePrismaError(error: unknown): never {
 }
 
 // account
-export async function accountCreate(db: FastifyInstance['prisma'], account: {email: string, passwordHash?: string}): Promise<Account> {
+export async function accountCreate(db: FastifyInstance['prisma'], account: {username: string, email: string, passwordHash?: string}): Promise<Account> {
   try {
     return await db.account.create({
       data: account
@@ -59,12 +59,53 @@ export async function accountDeleteByEmail(db: FastifyInstance['prisma'], email:
   };
 };
 
+export async function accountFindById(db: FastifyInstance['prisma'], accountId: string): Promise<Account | null> {
+  try {
+    return await db.account.findUnique({
+      where: {
+        id: accountId,
+      },
+    });
+  } catch(err) {
+    handlePrismaError(err);
+  };
+};
+
 export async function accountFindByEmail(db: FastifyInstance['prisma'], email: string): Promise<Account | null> {
   try {
     return await db.account.findUnique({
       where: {
         email,
       },
+    });
+  } catch(err) {
+    handlePrismaError(err);
+  };
+};
+
+export async function accountFindByUsername(db: FastifyInstance['prisma'], username: string): Promise<Account | null> {
+  try {
+    return await db.account.findUnique({
+      where: {
+        username,
+      },
+    });
+  } catch(err) {
+    handlePrismaError(err);
+  };
+};
+
+export async function accountUpdate(db: FastifyInstance['prisma'], id: string, account: {username?: string, email?: string}): Promise<Account | null> {
+  const data = {
+    ...(account.username && {username: account.username}),
+    ...(account.email && {email: account.email}),
+  };
+  try {
+    return await db.account.update({
+      where: {
+        id,
+      },
+      data: data
     });
   } catch(err) {
     handlePrismaError(err);
@@ -100,6 +141,20 @@ export async function oauthAccountCreate(db: FastifyInstance['prisma'], accountI
     handlePrismaError(err);
   };
 }
+
+export async function accountDeleteById(db: FastifyInstance['prisma'], id: string): Promise<Account> {
+  try {
+    return await db.account.delete({
+      where: {
+        id,
+      },
+    });
+  } catch(err) {
+    handlePrismaError(err);
+  };
+};
+
+// OAuthAccount
 
 export async function oauthAccountFindByAccountId(db: FastifyInstance['prisma'], accountId: string): Promise<OAuthAccount | null> {
   try {

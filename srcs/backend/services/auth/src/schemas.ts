@@ -6,22 +6,85 @@ const account = {
   type: 'object',
   properties: {
     id: {type: 'string'},
-    email: {type: 'string'},
     username: {type: 'string'},
+    email: {type: 'string'},
     avatarUrl: {type: 'string'},
   },
-  required: ['id', 'email'],
+  required: ['id', 'username', 'email'],
 };
 
-export const postMeOpts: FastifySchema = {
+export const getMeOpts: FastifySchema = {
   summary: 'Get account info',
+  description: '',
+  response: {
+    200: {
+      type: 'object',
+      properties: {
+        success: {type: 'boolean'},
+        message: {type: 'string'},
+        account: account,
+      }
+    },
+  },
+};
+
+export const putMeOpts: FastifySchema = {
+  summary: 'Update Username and Email',
   description: '',
   body: {
     type: 'object',
-    required: ['email'],
     properties: {
+      username: {type: 'string'},
       email: {type: 'string'},
     }
+  },
+  response: {
+    200: {
+      type: 'object',
+      properties: {
+        success: {type: 'boolean'},
+        message: {type: 'string'},
+        account: account,
+      }
+    },
+  },
+};
+
+export const putMePasswordOpts: FastifySchema = {
+  summary: 'Update Password',
+  description: '',
+  body: {
+    type: 'object',
+    required: ['password'],
+    properties: {
+      username: {type: 'string'},
+      email: {type: 'string'},
+    }
+  },
+  response: {
+    200: {
+      type: 'object',
+      properties: {
+        success: {type: 'boolean'},
+        message: {type: 'string'},
+        account: account,
+      }
+    },
+  },
+};
+
+export const deleteMeOpts: FastifySchema = {
+  summary: 'Delete Account',
+  description: '',
+  response: {
+    200: {
+      type: 'object',
+      properties: {
+        success: {type: 'boolean'},
+        message: {type: 'string'},
+        account: account,
+      }
+    },
   },
 };
 
@@ -46,7 +109,7 @@ export const postSignupOpts: FastifySchema = {
   description: '',
   body: {
     type: 'object',
-    required: ['email', 'password'],
+    required: ['username', 'email', 'password'],
     properties: {
       username: {type: 'string'},
       email: {type: 'string'},
@@ -71,9 +134,9 @@ export const postLoginOpts: FastifySchema = {
   description: '',
   body: {
     type: 'object',
-    required: ['email', 'password'],
+    required: ['ident', 'password'],
     properties: {
-      email: {type: 'string'},
+      ident: {type: 'string'},
       password: {type: 'string'},
     }
   },

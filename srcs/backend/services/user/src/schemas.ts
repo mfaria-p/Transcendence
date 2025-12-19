@@ -6,11 +6,9 @@ const profile = {
   type: 'object',
   properties: {
     id: {type: 'string'},
-    username: {type: 'string'},
-    email: {type: 'string'},
     avatarUrl: {type: 'string'},
   },
-  required: ['id', 'username']
+  required: ['id']
 };
 
 const friendRequest = {
@@ -33,19 +31,12 @@ const friendship = {
   },
 };
 
-// TODO
-// fields according to db table
-const block = {};
-
 export const putProfileOpts: FastifySchema = {
   summary: 'Provide Profile Profile',
   description: '',
   body: {
     type: 'object',
-    required: ['username'],
     properties: {
-      username: {type: 'string'},
-      email: {type: 'string'},
       avatarUrl: {type: 'string'},
     }
   },
@@ -228,54 +219,6 @@ export const getFriendsOpts: FastifySchema = {
         friendships: {
           type: 'array',
           items: friendship,
-        },
-      },
-    },
-  },
-};
-
-export const postBlockOpts: FastifySchema = {
-  summary: 'Block Profile',
-  description: '',
-  response: {
-    200: {
-      type: 'object',
-      properties: {
-        success: {type: 'boolean'},
-        message: {type: 'string'},
-        block: block,
-      },
-    },
-  },
-};
-
-export const deleteBlockOpts: FastifySchema = {
-  summary: 'Unblock Profile',
-  description: '',
-  response: {
-    200: {
-      type: 'object',
-      properties: {
-        success: {type: 'boolean'},
-        message: {type: 'string'},
-        block: block,
-      },
-    },
-  },
-};
-
-export const getBlocksOpts: FastifySchema = {
-  summary: 'Get Block List',
-  description: '',
-  response: {
-    200: {
-      type: 'object',
-      properties: {
-        success: {type: 'boolean'},
-        message: {type: 'string'},
-        block: {
-          type: 'array',
-          items: block,
         },
       },
     },

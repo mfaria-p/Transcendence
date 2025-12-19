@@ -38,29 +38,27 @@ describe('Profile', () => {
       method: 'PUT',
       url: '/user/provision',
       headers: {
-        'Content-Type': 'application/json',
         // 'Authorization': `Bearer ${at}`,
       },
       payload: {
-        username: 'test profile 1',
+        // avatarUrl: 'a',
       },
     });
     expect(r1.statusCode).toBe(401);
   });
 
-  it('PUT /user/provision - missing username', async() => {
+  it('PUT /user/provision - invalid access token', async() => {
     const r1 = await app.inject({
       method: 'PUT',
       url: '/user/provision',
       headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${at}`,
+        'Authorization': 'Bearer banana',
       },
       payload: {
-        // username: 'test profile 1',
+        // avatarUrl: 'a',
       },
     });
-    expect(r1.statusCode).toBe(400);
+    expect(r1.statusCode).toBe(401);
   });
 
   it('PUT /user/provision', async() => {
@@ -68,13 +66,13 @@ describe('Profile', () => {
       method: 'PUT',
       url: '/user/provision',
       headers: {
-        'Content-Type': 'application/json',
         'Authorization': `Bearer ${at}`,
       },
       payload: {
-        username: 'test profile 0',
+        // avatarUrl: 'a',
       },
     });
+    console.log(r1.json());
     expect(r1.statusCode).toBe(200);
   });
 
@@ -84,31 +82,7 @@ describe('Profile', () => {
       url: '/user/',
     });
     expect(r1.statusCode).toBe(200);
-    expect(r1.json().profiles).toEqual([{id: profileId, username: 'test profile 0', avatarUrl: ''}]);
-  });
-
-  it('PUT /user/provision - update username', async() => {
-    const r1 = await app.inject({
-      method: 'PUT',
-      url: '/user/provision',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${at}`,
-      },
-      payload: {
-        username: 'test profile 1',
-      },
-    });
-    expect(r1.statusCode).toBe(200);
-  });
-
-  it('GET /user/', async() => {
-    const r1 = await app.inject({
-      method: 'GET',
-      url: '/user/',
-    });
-    expect(r1.statusCode).toBe(200);
-    expect(r1.json().profiles).toEqual([{id: profileId, username: 'test profile 1', avatarUrl: ''}]);
+    expect(r1.json().profiles).toEqual([{id: profileId, avatarUrl: ''}]);
   });
 
   it('GET /user/:profileid', async() => {
@@ -117,7 +91,31 @@ describe('Profile', () => {
       url: `/user/${profileId}`,
     });
     expect(r1.statusCode).toBe(200);
-    expect(r1.json().profile).toMatchObject({id: profileId});
+    expect(r1.json().profile).toMatchObject({id: profileId, avatarUrl: ''});
+  });
+
+  it('PUT /user/provision - update avatar', async() => {
+    const r1 = await app.inject({
+      method: 'PUT',
+      url: '/user/provision',
+      headers: {
+        'Authorization': `Bearer ${at}`,
+      },
+      payload: {
+        avatarUrl: 'picture',
+      },
+    });
+    console.log(r1.json());
+    expect(r1.statusCode).toBe(200);
+  });
+
+  it('GET /user/:profileid', async() => {
+    const r1 = await app.inject({
+      method: 'GET',
+      url: `/user/${profileId}`,
+    });
+    expect(r1.statusCode).toBe(200);
+    expect(r1.json().profile).toMatchObject({id: profileId, avatarUrl: 'picture'});
   });
 
   it('GET /user/2', async() => {
@@ -168,7 +166,7 @@ describe('Profile', () => {
       },
     });
     expect(r1.statusCode).toBe(200);
-    expect(r1.json().profile).toMatchObject({id: profileId, username: 'test profile 1'});
+    expect(r1.json().profile).toMatchObject({id: profileId});
   });
 
   it('GET /user/1', async() => {
@@ -188,5 +186,32 @@ describe('Profile', () => {
       },
     });
     expect(r1.statusCode).toBe(404);
+  });
+
+  it('PUT /user/provision', async() => {
+    const r1 = await app.inject({
+      method: 'PUT',
+      url: '/user/provision',
+      headers: {
+        'Authorization': `Bearer ${at}`,
+      },
+      payload: {
+        avatarUrl: 'picture2',
+      },
+    });
+    console.log(r1.json());
+    expect(r1.statusCode).toBe(200);
+  });
+
+  it('GET /user/me', async() => {
+    const r1 = await app.inject({
+      method: 'GET',
+      url: '/user/me',
+      headers: {
+        'Authorization': `Bearer ${at}`,
+      },
+    });
+    expect(r1.statusCode).toBe(200);
+    expect(r1.json().profile).toMatchObject({id: profileId, avatarUrl: 'picture2'});
   });
 });

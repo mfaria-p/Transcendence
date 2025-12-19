@@ -13,6 +13,7 @@ datasource db {
 
 model Account {
   id            String    @id @default(cuid())
+  username      String    @unique
   email         String    @unique
   passwordHash  String?
   emailVerified DateTime?
