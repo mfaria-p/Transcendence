@@ -421,11 +421,15 @@ class ProfileManager {
 
   // Password edit methods
   private startEditPassword(): void {
+    const passwordDisplay = document.getElementById('profilePassword');
     const passwordForm = document.getElementById('passwordEditForm');
+    
+    passwordDisplay?.classList.add('hidden');
     passwordForm?.classList.remove('hidden');
   }
 
   private cancelEditPassword(): void {
+    const passwordDisplay = document.getElementById('profilePassword');
     const passwordForm = document.getElementById('passwordEditForm');
     const currentPasswordInput = document.getElementById('currentPasswordInput') as HTMLInputElement;
     const newPasswordInput = document.getElementById('newPasswordInput') as HTMLInputElement;
@@ -435,6 +439,7 @@ class ProfileManager {
     if (newPasswordInput) newPasswordInput.value = '';
     if (confirmNewPasswordInput) confirmNewPasswordInput.value = '';
     
+    passwordDisplay?.classList.remove('hidden');
     passwordForm?.classList.add('hidden');
   }
 

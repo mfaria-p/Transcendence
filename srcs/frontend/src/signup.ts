@@ -106,12 +106,10 @@ class SignupManager {
             
             this.showSuccess('Account created successfully! Redirecting...');
             
-            // Redirect after successful auto-login
             setTimeout(() => {
               window.location.replace('./index.html');
-            }, 1500);
+            }, 2000);
           } else {
-            // Signup succeeded but auto-login failed - show message to login manually
             this.showSuccess('Account created! Please log in to continue.');
             setTimeout(() => {
               window.location.replace('./login.html');
