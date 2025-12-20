@@ -563,7 +563,8 @@ class ProfileManager {
     }
 
     try {
-      const response = await fetch('/api/user/', {
+      // Fetch accounts from auth service
+      const response = await fetch('/api/auth/', {
         headers: {
           'Authorization': `Bearer ${this.accessToken}`,
         },
@@ -571,53 +572,70 @@ class ProfileManager {
 
       if (response.ok) {
         const data = await response.json();
-        const allProfiles = data.profiles || [];
+        const allAccounts = data.accounts || [];
         
-        // Filter profiles by search term (case-insensitive)
-        const filteredProfiles = allProfiles.filter((profile: any) => {
+        // Filter accounts by search term (case-insensitive)
+        const filteredAccounts = allAccounts.filter((account: any) => {
           const searchLower = searchTerm.toLowerCase();
-          return profile.name.toLowerCase().includes(searchLower) || 
-                 profile.email.toLowerCase().includes(searchLower);
+          return account.username?.toLowerCase().includes(searchLower) || 
+                 account.email?.toLowerCase().includes(searchLower);
         });
         
         searchResults.innerHTML = '';
         
-        if (filteredProfiles.length === 0) {
+        if (filteredAccounts.length === 0) {
           searchResults.innerHTML = '<p class="text-gray-400 text-sm p-3 bg-gray-700 rounded-lg">No users found</p>';
           return;
         }
 
-        filteredProfiles.forEach((profile: any) => {
+        // Fetch avatars for filtered accounts
+        for (const account of filteredAccounts) {
           // Don't show current user in search results
-          if (this.currentUser && profile.id === this.currentUser.id) return;
+          if (this.currentUser && account.id === this.currentUser.id) continue;
+          
+          // Try to fetch avatar from user service
+          let avatarUrl = null;
+          try {
+            const profileRes = await fetch(`/api/user/${account.id}`, {
+              headers: {
+                'Authorization': `Bearer ${this.accessToken}`,
+              },
+            });
+            if (profileRes.ok) {
+              const profileData = await profileRes.json();
+              avatarUrl = profileData.profile?.avatarUrl;
+            }
+          } catch (error) {
+            console.log('No avatar for user:', account.id);
+          }
           
           const userDiv = document.createElement('div');
           userDiv.className = 'flex items-center p-3 bg-gray-700 rounded-lg mt-2 hover:bg-gray-600 transition cursor-pointer';
           
           // Show avatar image if exists, otherwise show initial
-          const avatarHtml = profile.avatarUrl 
-            ? `<img src="${profile.avatarUrl}" class="w-10 h-10 rounded-full object-cover mr-3" alt="${profile.name}'s avatar" />`
+          const avatarHtml = avatarUrl
+            ? `<img src="${avatarUrl}" class="w-10 h-10 rounded-full object-cover mr-3" alt="${account.username}'s avatar" />`
             : `<div class="w-10 h-10 rounded-full bg-blue-500 flex items-center justify-center text-white font-bold mr-3">
-                ${profile.name.charAt(0).toUpperCase()}
+                ${account.username.charAt(0).toUpperCase()}
               </div>`;
           
           userDiv.innerHTML = `
             <div class="flex items-center">
               ${avatarHtml}
               <div>
-                <p class="text-white font-semibold">${profile.name}</p>
-                <p class="text-gray-400 text-sm">${profile.email}</p>
+                <p class="text-white font-semibold">${account.username}</p>
+                <p class="text-gray-400 text-sm">${account.email}</p>
               </div>
             </div>
           `;
           
           // Make the whole div clickable to view user profile
           userDiv.addEventListener('click', () => {
-            window.location.href = `./other-profiles.html?id=${profile.id}`;
+            window.location.href = `./other-profiles.html?id=${account.id}`;
           });
           
           searchResults.appendChild(userDiv);
-        });
+        }
       } else {
         this.showMessage('Failed to search users', 'error');
       }
