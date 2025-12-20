@@ -121,6 +121,35 @@ describe('Signup => Login => Me => Logout', () => {
     expect(account).not.toHaveProperty("passwordHash");
   });
 
+  it('GET /auth/search?', async() => {
+    const r1 = await app.inject({
+      method: 'GET',
+      url: '/auth/search?',
+    });
+    expect(r1.statusCode).toBe(400);
+  });
+
+  it('GET /auth/search?prefix=a', async() => {
+    const r1 = await app.inject({
+      method: 'GET',
+      url: '/auth/search?prefix=a',
+    });
+    expect(r1.statusCode).toBe(200);
+    const accounts = r1.json().accounts;
+    expect(accounts).toEqual([]);
+  });
+
+  it('GET /auth/search?prefix=t', async() => {
+    const r1 = await app.inject({
+      method: 'GET',
+      url: '/auth/search?prefix=t',
+    });
+    expect(r1.statusCode).toBe(200);
+    const accounts = r1.json().accounts;
+    expect(accounts).toEqual([{id: accountId, username: 'test1', email: 'test@example.com'}]);
+    expect(accounts.every(o => !("passwordHash" in o))).toBe(true)
+  });
+
   it('POST /auth/login - missing email', async () => {
     const r1 = await app.inject({
       method: 'POST',
@@ -333,11 +362,12 @@ describe('Signup => Login => Me => Logout', () => {
     expect(accounts.every(o => !("passwordHash" in o))).toBe(true)
   });
 
-  it('GET /auth/:accountid', async() => {
+  it('GET /auth/:accountId', async() => {
     const r1 = await app.inject({
       method: 'GET',
       url: `/auth/${accountId}`,
     });
+    console.log(r1.json());
     expect(r1.statusCode).toBe(200);
     const account = r1.json().account;
     expect(account).toMatchObject({id: accountId, username: 'test2', email: 'test2@example.com'});
@@ -420,6 +450,7 @@ describe('Signup => Login => Me => Logout', () => {
     expect(account).toMatchObject({username: "test2", email: "test2@example.com"})
     expect(account).not.toHaveProperty("passwordHash");
   })
+
 
   it('DELETE /auth/me', async () => {
     const r1 = await app.inject({

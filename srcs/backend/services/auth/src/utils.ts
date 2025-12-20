@@ -95,6 +95,31 @@ export async function accountFindByUsername(db: FastifyInstance['prisma'], usern
   };
 };
 
+export async function accountFindByIdentPrefix(db: FastifyInstance['prisma'], prefix: string): Promise<Account[]> {
+  try {
+    return await db.account.findMany({
+      where: {
+        OR: [
+          {
+            username: {
+              startsWith: prefix,
+              // mode: "insensitive",
+            },
+          },
+          {
+            email: {
+              startsWith: prefix,
+              // mode: "insensitive",
+            },
+          },
+        ],
+      },
+    });
+  } catch(err) {
+    handlePrismaError(err);
+  };
+};
+
 export async function accountFindAll(db: FastifyInstance['prisma']): Promise<Account[]> {
   try {
     return await db.account.findMany();
