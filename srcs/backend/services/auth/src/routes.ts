@@ -13,7 +13,6 @@ const RT_COOKIE: string = 'refresh_token';
 
 // TODO
 // signed cookies
-// salt for refreshToken
 // best practice would be not delete refresh right away
 export default async function (app: FastifyInstance): Promise<void> {
   app.post('/signup', {schema: schemas.postSignupOpts}, async (req: FastifyRequest, reply: FastifyReply) => {
@@ -24,11 +23,7 @@ export default async function (app: FastifyInstance): Promise<void> {
     return {
       success: true,
       message: 'Account Created Successfully',
-      account: {
-        id: account.id,
-        username: account.username,
-        email: account.email,
-      },
+      account: account,
     };
   });
 
@@ -55,11 +50,7 @@ export default async function (app: FastifyInstance): Promise<void> {
     return {
       success: true,
       message: 'Account Logged In',
-      account: {
-        id: account!.id,
-        username: account!.username,
-        email: account!.email,
-      },
+      account: account,
       at: at,
     };
   });

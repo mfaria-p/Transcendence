@@ -55,10 +55,10 @@ export const putMePasswordOpts: FastifySchema = {
   description: '',
   body: {
     type: 'object',
-    required: ['password'],
+    required: ['currentPassword','newPassword'],
     properties: {
-      username: {type: 'string'},
-      email: {type: 'string'},
+      currentPassword: {type: 'string'},
+      newPassword: {type: 'string'},
     }
   },
   response: {
