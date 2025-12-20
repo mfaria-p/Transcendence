@@ -10,6 +10,7 @@ const account = {
     email: {type: 'string'},
     avatarUrl: {type: 'string'},
   },
+  additionalProperties: false,
   required: ['id', 'username', 'email'],
 };
 
@@ -23,7 +24,8 @@ export const getMeOpts: FastifySchema = {
         success: {type: 'boolean'},
         message: {type: 'string'},
         account: account,
-      }
+      },
+      additionalProperties: false,
     },
   },
 };
@@ -46,7 +48,8 @@ export const putMeOpts: FastifySchema = {
         success: {type: 'boolean'},
         message: {type: 'string'},
         account: account,
-      }
+      },
+      additionalProperties: false,
     },
   },
 };
@@ -70,7 +73,8 @@ export const putMePasswordOpts: FastifySchema = {
         success: {type: 'boolean'},
         message: {type: 'string'},
         account: account,
-      }
+      },
+      additionalProperties: false,
     },
   },
 };
@@ -85,7 +89,8 @@ export const deleteMeOpts: FastifySchema = {
         success: {type: 'boolean'},
         message: {type: 'string'},
         account: account,
-      }
+      },
+      additionalProperties: false,
     },
   },
 };
@@ -104,6 +109,7 @@ export const getAccountsOpts: FastifySchema = {
           items: account,
         },
       },
+      additionalProperties: false,
     },
   },
 };
@@ -111,6 +117,14 @@ export const getAccountsOpts: FastifySchema = {
 export const getAccountByIdOpts: FastifySchema = {
   summary: 'Get Account By Id',
   description: '',
+  params: {
+    type: "object",
+    properties: {
+      id: { type: "string" },
+    },
+    additionalProperties: false,
+    required: ["id"],
+  },
   response: {
     200: {
       type: 'object',
@@ -119,6 +133,37 @@ export const getAccountByIdOpts: FastifySchema = {
         message: {type: 'string'},
         account: account,
       },
+      additionalProperties: false,
+    },
+  },
+};
+
+
+export const getAccountsByIdentPrefixOpts: FastifySchema = {
+  summary: 'Get Account List',
+  description: '',
+  querystring: {
+    type: "object",
+    properties: {
+      prefix: { type: "string", minLength: 1 },
+      limit: { type: "number", default: 20 },
+      page: { type: "number", default: 1 },
+    },
+    additionalProperties: false,
+    required: ["prefix"],
+  },
+  response: {
+    200: {
+      type: 'object',
+      properties: {
+        success: {type: 'boolean'},
+        message: {type: 'string'},
+        accounts: {
+          type: 'array',
+          items: account,
+        },
+      },
+      additionalProperties: false,
     },
   },
 };
@@ -135,6 +180,7 @@ export const postGoogleAuthOpts: FastifySchema = {
         account: account,
         at: {type: 'string'},
       },
+      additionalProperties: false,
     },
   },
 };
@@ -161,6 +207,7 @@ export const postSignupOpts: FastifySchema = {
         account: account,
         at: {type: 'string'},
       },
+      additionalProperties: false,
     },
   },
 };
@@ -186,6 +233,7 @@ export const postLoginOpts: FastifySchema = {
         account: account,
         at: {type: 'string'},
       },
+      additionalProperties: false,
     },
     401: {
       type: 'object',
@@ -193,6 +241,7 @@ export const postLoginOpts: FastifySchema = {
         success: {type: 'boolean'},
         message: {type: 'string'},
       },
+      additionalProperties: false,
     },
   },
 };
@@ -220,6 +269,7 @@ export const postRefreshOpts: FastifySchema = {
         message: {type: 'string'},
         at: {type: 'string'},
       },
+      additionalProperties: false,
     },
     401: {
       type: 'object',
@@ -227,6 +277,7 @@ export const postRefreshOpts: FastifySchema = {
         success: {type: 'boolean'},
         message: {type: 'string'},
       },
+      additionalProperties: false,
     },
   },
 };
@@ -242,6 +293,7 @@ export const postLogoutOpts: FastifySchema = {
         success: {type: 'boolean'},
         message: {type: 'string'},
       },
+      additionalProperties: false,
     },
     401: {
       type: 'object',
@@ -249,6 +301,7 @@ export const postLogoutOpts: FastifySchema = {
         success: {type: 'boolean'},
         message: {type: 'string'},
       },
+      additionalProperties: false,
     },
   },
 }

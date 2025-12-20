@@ -29,9 +29,7 @@ export default async function (app: FastifyInstance): Promise<void> {
 
   app.post('/login', {schema: schemas.postLoginOpts}, async (req: FastifyRequest, reply: FastifyReply) => {
     const {ident, password} = req.body as {ident: string, password: string};
-    let account: Account | null = await utils.accountFindByEmail(app.prisma, ident);
-    if (!account)
-      account = await utils.accountFindByUsername(app.prisma, ident);
+    let account: Account | null = await utils.accountFindByEmail(app.prisma, ident) || await utils.accountFindByUsername(app.prisma, ident);
     const ok: Boolean = !!account && await utils.pwVerify(account.passwordHash!, password);
 
     if (!ok) return reply.code(401).send({
@@ -167,10 +165,10 @@ export default async function (app: FastifyInstance): Promise<void> {
     };
   });
 
-  app.get('/:accountId', {schema: schemas.getAccountByIdOpts}, async (req: FastifyRequest, reply: FastifyReply) => {
-    const {accountId} = req.params as {accountId: string};
+  app.get('/:id', {schema: schemas.getAccountByIdOpts}, async (req: FastifyRequest, reply: FastifyReply) => {
+    const {id} = req.params as {id: string};
 
-    const account = await utils.accountFindById(app.prisma, accountId);
+    const account = await utils.accountFindById(app.prisma, id);
     if (!account) return reply.code(404).send({
       sucess: false,
       message: 'Nonexistent Account',
@@ -181,6 +179,17 @@ export default async function (app: FastifyInstance): Promise<void> {
       success: true,
       message: 'Public Account',
       account: account,
+    };
+  });
+
+  app.get('/search', {schema: schemas.getAccountsByIdentPrefixOpts}, async (req: FastifyRequest, reply: FastifyReply) => {
+    const {prefix} = req.query as {prefix: string};
+
+    const accounts = await utils.accountFindByIdentPrefix(app.prisma, prefix);
+    return {
+      success: true,
+      message: 'Public Account',
+      accounts: accounts,
     };
   });
 
