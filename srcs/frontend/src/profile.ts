@@ -564,7 +564,7 @@ class ProfileManager {
 
     try {
       // Fetch accounts from auth service
-      const response = await fetch('/api/auth/', {
+      const response = await fetch(`/api/auth/search?prefix=${encodeURIComponent(searchTerm)}`, {
         headers: {
           'Authorization': `Bearer ${this.accessToken}`,
         },
@@ -572,24 +572,17 @@ class ProfileManager {
 
       if (response.ok) {
         const data = await response.json();
-        const allAccounts = data.accounts || [];
-        
-        // Filter accounts by search term (case-insensitive)
-        const filteredAccounts = allAccounts.filter((account: any) => {
-          const searchLower = searchTerm.toLowerCase();
-          return account.username?.toLowerCase().includes(searchLower) || 
-                 account.email?.toLowerCase().includes(searchLower);
-        });
+        const accounts = data.accounts || [];
         
         searchResults.innerHTML = '';
         
-        if (filteredAccounts.length === 0) {
+        if (accounts.length === 0) {
           searchResults.innerHTML = '<p class="text-gray-400 text-sm p-3 bg-gray-700 rounded-lg">No users found</p>';
           return;
         }
 
         // Fetch avatars for filtered accounts
-        for (const account of filteredAccounts) {
+        for (const account of accounts) {
           // Don't show current user in search results
           if (this.currentUser && account.id === this.currentUser.id) continue;
           
