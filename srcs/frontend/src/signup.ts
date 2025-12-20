@@ -8,8 +8,8 @@ interface SignupCredentials {
 interface SignupResponse {
   success: boolean;
   message: string;
-  user?: { id: string; username: string; email: string };
-  at?: string;  // Access token - auto-login after signup
+  account?: { id: string; username: string; email: string };  
+  at?: string;
 }
 
 class SignupManager {
@@ -83,7 +83,7 @@ class SignupManager {
       console.log('Signup response:', response);
       
       if (response.success) {
-        
+        console.log('Signup successful!');
         console.log('Access token from signup:', response.at);
         
         if (response.at) {
@@ -91,13 +91,18 @@ class SignupManager {
           console.log('Stored access_token in localStorage');
           
           // Create user profile in user service
-          await this.provisionProfile(response.at, response.user!.username, response.user!.email);
+          if (response.account) { 
+            await this.provisionProfile(response.at, response.account.username, response.account.email);
+          }
         } else {
           console.warn('No access token in signup response!');
         }
-        
-        if (response.user) {
-          localStorage.setItem('user', JSON.stringify(response.user));
+        if (response.account) {  
+          localStorage.setItem('user', JSON.stringify({
+            id: response.account.id,
+            username: response.account.username,
+            email: response.account.email
+          }));
           console.log('Stored user in localStorage');
         }
 
@@ -283,7 +288,7 @@ class SignupManager {
   return {
     success: true,
     message: 'Account created successfully!',
-    user: {
+    account: {
       id: Date.now().toString(),
       username: credentials.username,
       email: credentials.email
