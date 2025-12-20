@@ -95,6 +95,14 @@ export async function accountFindByUsername(db: FastifyInstance['prisma'], usern
   };
 };
 
+export async function accountFindAll(db: FastifyInstance['prisma']): Promise<Account[]> {
+  try {
+    return await db.account.findMany();
+  } catch(err) {
+    handlePrismaError(err);
+  };
+};
+
 export async function accountUpdate(db: FastifyInstance['prisma'], id: string, account: {username?: string, email?: string}): Promise<Account | null> {
   const data = {
     ...(account.username && {username: account.username}),

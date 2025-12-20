@@ -36,7 +36,8 @@ export const putMeOpts: FastifySchema = {
     properties: {
       username: {type: 'string'},
       email: {type: 'string'},
-    }
+    },
+    additionalProperties: false,
   },
   response: {
     200: {
@@ -55,11 +56,12 @@ export const putMePasswordOpts: FastifySchema = {
   description: '',
   body: {
     type: 'object',
-    required: ['password'],
+    required: ['currentPassword','newPassword'],
     properties: {
-      username: {type: 'string'},
-      email: {type: 'string'},
-    }
+      currentPassword: {type: 'string'},
+      newPassword: {type: 'string'},
+    },
+    additionalProperties: false,
   },
   response: {
     200: {
@@ -84,6 +86,39 @@ export const deleteMeOpts: FastifySchema = {
         message: {type: 'string'},
         account: account,
       }
+    },
+  },
+};
+
+export const getAccountsOpts: FastifySchema = {
+  summary: 'Get Account List',
+  description: '',
+  response: {
+    200: {
+      type: 'object',
+      properties: {
+        success: {type: 'boolean'},
+        message: {type: 'string'},
+        accounts: {
+          type: 'array',
+          items: account,
+        },
+      },
+    },
+  },
+};
+
+export const getAccountByIdOpts: FastifySchema = {
+  summary: 'Get Account By Id',
+  description: '',
+  response: {
+    200: {
+      type: 'object',
+      properties: {
+        success: {type: 'boolean'},
+        message: {type: 'string'},
+        account: account,
+      },
     },
   },
 };
@@ -114,7 +149,8 @@ export const postSignupOpts: FastifySchema = {
       username: {type: 'string'},
       email: {type: 'string'},
       password: {type: 'string'},
-    }
+    },
+    additionalProperties: false,
   },
   response: {
     200: {
@@ -138,7 +174,8 @@ export const postLoginOpts: FastifySchema = {
     properties: {
       ident: {type: 'string'},
       password: {type: 'string'},
-    }
+    },
+    additionalProperties: false,
   },
   response: {
     200: {

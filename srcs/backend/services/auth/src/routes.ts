@@ -13,7 +13,6 @@ const RT_COOKIE: string = 'refresh_token';
 
 // TODO
 // signed cookies
-// salt for refreshToken
 // best practice would be not delete refresh right away
 export default async function (app: FastifyInstance): Promise<void> {
   app.post('/signup', {schema: schemas.postSignupOpts}, async (req: FastifyRequest, reply: FastifyReply) => {
@@ -24,11 +23,7 @@ export default async function (app: FastifyInstance): Promise<void> {
     return {
       success: true,
       message: 'Account Created Successfully',
-      account: {
-        id: account.id,
-        username: account.username,
-        email: account.email,
-      },
+      account: account,
     };
   });
 
@@ -55,11 +50,7 @@ export default async function (app: FastifyInstance): Promise<void> {
     return {
       success: true,
       message: 'Account Logged In',
-      account: {
-        id: account!.id,
-        username: account!.username,
-        email: account!.email,
-      },
+      account: account,
       at: at,
     };
   });
@@ -126,8 +117,13 @@ export default async function (app: FastifyInstance): Promise<void> {
 
   app.put('/me/password', {schema: schemas.putMePasswordOpts, preHandler: [app.authenticate]}, async (req: FastifyRequest, reply: FastifyReply) => {
     const accountId: string = req.jwtPayload!.id;
-    const {password} = req.body as {password: string};
-    const account: Account | null = await utils.accountUpdatePassword(app.prisma, accountId, await utils.pwHash(password));
+    const {currentPassword, newPassword} = req.body as {currentPassword: string, newPassword: string};
+
+    let account : Account | null = await utils.accountFindById(app.prisma, accountId);
+    const ok: Boolean = !!account && await utils.pwVerify(account.passwordHash!, currentPassword);
+    if (!ok) return reply.code(401).send({success: false, message: 'Invalid Credentials'});
+
+    account = await utils.accountUpdatePassword(app.prisma, accountId, await utils.pwHash(newPassword));
     if (!account) return reply.code(401).send({success:false, message: 'Nonexisting account'});
 
     return {
@@ -157,6 +153,33 @@ export default async function (app: FastifyInstance): Promise<void> {
     return {
       success: true,
       message: 'Account deleted',
+      account: account,
+    };
+  });
+
+  app.get('/', {schema: schemas.getAccountsOpts}, async (req: FastifyRequest, reply: FastifyReply) => {
+    const accounts: Account[] = await utils.accountFindAll(app.prisma);
+
+    return {
+      success: true,
+      message: 'Public Accounts List',
+      accounts: accounts,
+    };
+  });
+
+  app.get('/:accountId', {schema: schemas.getAccountByIdOpts}, async (req: FastifyRequest, reply: FastifyReply) => {
+    const {accountId} = req.params as {accountId: string};
+
+    const account = await utils.accountFindById(app.prisma, accountId);
+    if (!account) return reply.code(404).send({
+      sucess: false,
+      message: 'Nonexistent Account',
+      account: null,
+    });
+
+    return {
+      success: true,
+      message: 'Public Account',
       account: account,
     };
   });

@@ -22,6 +22,7 @@ describe('Signup => Login => Me => Logout', () => {
   let rt1: string = '';
   let rt2: string = '';
   let at: string = '';
+  let accountId: string = '';
 
   beforeAll(async () => {
     app = await buildServer();
@@ -37,6 +38,15 @@ describe('Signup => Login => Me => Logout', () => {
     } catch(err) {}
     await app.close();
   })
+
+  it('GET /auth/', async() => {
+    const r1 = await app.inject({
+      method: 'GET',
+      url: '/auth/',
+    });
+    expect(r1.statusCode).toBe(200);
+    expect(r1.json().accounts).toEqual([]);
+  });
 
   it('POST /auth/signup - missing email', async() => {
     const r1 = await app.inject({
@@ -76,14 +86,40 @@ describe('Signup => Login => Me => Logout', () => {
       payload: {username: 'test1', email: 'test@example.com', password: 'hello123'},
     });
     expect(r1.statusCode).toBe(200);
+    const res = r1.json();
+    at = res.at;
+    const account = res.account;
+    accountId = account.id;
 
-    at = r1.json().at;
+    expect(account).toMatchObject({username: "test1", email: "test@example.com"})
+    expect(account).not.toHaveProperty("passwordHash");
+
     const newAccount = await app.prisma.account.findUnique({where: {email: 'test@example.com'}});
     expect(newAccount).toBeDefined();
-    expect(newAccount!.username).toBe("test1");
-    expect(newAccount!.email).toBe("test@example.com");
     expect(await argon2.verify(newAccount!.passwordHash!, "hello123")).toBe(true);
   })
+
+  it('GET /auth/', async() => {
+    const r1 = await app.inject({
+      method: 'GET',
+      url: '/auth/',
+    });
+    expect(r1.statusCode).toBe(200);
+    const accounts = r1.json().accounts;
+    expect(accounts).toEqual([{id: accountId, username: 'test1', email: 'test@example.com'}]);
+    expect(accounts.every(o => !("passwordHash" in o))).toBe(true)
+  });
+
+  it('GET /auth/:accountid', async() => {
+    const r1 = await app.inject({
+      method: 'GET',
+      url: `/auth/${accountId}`,
+    });
+    expect(r1.statusCode).toBe(200);
+    const account = r1.json().account;
+    expect(account).toMatchObject({id: accountId, username: 'test1', email: 'test@example.com'});
+    expect(account).not.toHaveProperty("passwordHash");
+  });
 
   it('POST /auth/login - missing email', async () => {
     const r1 = await app.inject({
@@ -136,6 +172,10 @@ describe('Signup => Login => Me => Logout', () => {
     const cookies = extractCookies(r1.headers['set-cookie']);
     rt1 = cookies.refresh_token;
     at = r1.json().at;
+
+    const account = r1.json().account;
+    expect(account).toMatchObject({username: "test1", email: "test@example.com"})
+    expect(account).not.toHaveProperty("passwordHash");
   })
 
   it('GET /auth/me - missing access token', async () => {
@@ -170,7 +210,8 @@ describe('Signup => Login => Me => Logout', () => {
     });
     expect(r1.statusCode).toBe(200);
     const account = r1.json().account;
-    expect(account).toMatchObject({username: 'test1', email: 'test@example.com'})
+    expect(account).toMatchObject({username: "test1", email: "test@example.com"})
+    expect(account).not.toHaveProperty("passwordHash");
   })
 
   it('PUT /auth/me - missing access token', async () => {
@@ -204,7 +245,8 @@ describe('Signup => Login => Me => Logout', () => {
     });
     expect(r1.statusCode).toBe(200);
     const account = r1.json().account;
-    expect(account).toMatchObject({username: 'test2', email: 'test2@example.com'});
+    expect(account).toMatchObject({username: "test2", email: "test2@example.com"})
+    expect(account).not.toHaveProperty("passwordHash");
   })
 
   it('PUT /auth/me/password - missing access token', async () => {
@@ -216,13 +258,14 @@ describe('Signup => Login => Me => Logout', () => {
         'content-type': 'application/json',
       },
       payload: {
-        password: 'newpass123',
+        currentPassword: 'hello123',
+        newPassword: 'newpass123',
       },
     });
     expect(r1.statusCode).toBe(401);
   })
 
-  it('PUT /auth/me/password - missing password', async () => {
+  it('PUT /auth/me/password - missing currentPassword', async () => {
     const r1 = await app.inject({
       method: 'PUT',
       url: '/auth/me/password',
@@ -231,7 +274,24 @@ describe('Signup => Login => Me => Logout', () => {
         'content-type': 'application/json',
       },
       payload: {
-        // password: 'newpass123',
+        // currentPassword: 'hello123',
+        newPassword: 'newpass123',
+      },
+    });
+    expect(r1.statusCode).toBe(400);
+  })
+
+  it('PUT /auth/me/password - missing newPassword', async () => {
+    const r1 = await app.inject({
+      method: 'PUT',
+      url: '/auth/me/password',
+      headers: {
+        'Authorization': `Bearer ${at}`,
+        'content-type': 'application/json',
+      },
+      payload: {
+        currentPassword: 'hello123',
+        // newPassword: 'newpass123',
       },
     });
     expect(r1.statusCode).toBe(400);
@@ -246,11 +306,43 @@ describe('Signup => Login => Me => Logout', () => {
         'content-type': 'application/json',
       },
       payload: {
-        password: 'newpass123',
+        currentPassword: 'hello123',
+        newPassword: 'newpass123',
       },
     });
     expect(r1.statusCode).toBe(200);
+
+    const account = r1.json().account;
+    expect(account).toMatchObject({username: "test2", email: "test2@example.com"})
+    expect(account).not.toHaveProperty("passwordHash");
+
+    const newAccount = await app.prisma.account.findUnique({where: {email: 'test2@example.com'}});
+    expect(newAccount).toBeDefined();
+    expect(await argon2.verify(newAccount!.passwordHash!, "hello123")).toBe(false);
+    expect(await argon2.verify(newAccount!.passwordHash!, "newpass123")).toBe(true);
   })
+
+  it('GET /auth/', async() => {
+    const r1 = await app.inject({
+      method: 'GET',
+      url: '/auth/',
+    });
+    expect(r1.statusCode).toBe(200);
+    const accounts = r1.json().accounts;
+    expect(accounts).toEqual([{id: accountId, username: 'test2', email: 'test2@example.com'}]);
+    expect(accounts.every(o => !("passwordHash" in o))).toBe(true)
+  });
+
+  it('GET /auth/:accountid', async() => {
+    const r1 = await app.inject({
+      method: 'GET',
+      url: `/auth/${accountId}`,
+    });
+    expect(r1.statusCode).toBe(200);
+    const account = r1.json().account;
+    expect(account).toMatchObject({id: accountId, username: 'test2', email: 'test2@example.com'});
+    expect(account).not.toHaveProperty("passwordHash");
+  });
 
   it('POST /auth/refresh - missing refresh token cookie', async () => {
     const r1 = await app.inject({
@@ -323,8 +415,10 @@ describe('Signup => Login => Me => Logout', () => {
       payload: {ident: 'test2', password: 'newpass123'},
     });
     expect(r1.statusCode).toBe(200);
+
     const account = r1.json().account;
-    expect(account).toMatchObject({username: 'test2', email: 'test2@example.com'})
+    expect(account).toMatchObject({username: "test2", email: "test2@example.com"})
+    expect(account).not.toHaveProperty("passwordHash");
   })
 
   it('DELETE /auth/me', async () => {
@@ -346,5 +440,8 @@ describe('Signup => Login => Me => Logout', () => {
       payload: {ident: 'test2', password: 'newpass123'},
     });
     expect(r1.statusCode).toBe(401);
+
+    const account = await app.prisma.account.findUnique({where: {email: 'test2@example.com'}});
+    expect(account).toBe(null);
   })
 })
