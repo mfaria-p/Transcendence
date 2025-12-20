@@ -38,7 +38,8 @@ export const putProfileOpts: FastifySchema = {
     type: 'object',
     properties: {
       avatarUrl: {type: 'string'},
-    }
+    },
+    additionalProperties: false,
   },
   response: {
     200: {
@@ -132,7 +133,8 @@ export const postFriendRequestOpts: FastifySchema = {
     type: 'object',
     properties: {
       message: {type: 'string'},
-    }
+    },
+    additionalProperties: false,
   },
   response: {
     200: {

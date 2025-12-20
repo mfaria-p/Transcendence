@@ -36,7 +36,8 @@ export const putMeOpts: FastifySchema = {
     properties: {
       username: {type: 'string'},
       email: {type: 'string'},
-    }
+    },
+    additionalProperties: false,
   },
   response: {
     200: {
@@ -59,7 +60,8 @@ export const putMePasswordOpts: FastifySchema = {
     properties: {
       currentPassword: {type: 'string'},
       newPassword: {type: 'string'},
-    }
+    },
+    additionalProperties: false,
   },
   response: {
     200: {
@@ -114,7 +116,8 @@ export const postSignupOpts: FastifySchema = {
       username: {type: 'string'},
       email: {type: 'string'},
       password: {type: 'string'},
-    }
+    },
+    additionalProperties: false,
   },
   response: {
     200: {
@@ -138,7 +141,8 @@ export const postLoginOpts: FastifySchema = {
     properties: {
       ident: {type: 'string'},
       password: {type: 'string'},
-    }
+    },
+    additionalProperties: false,
   },
   response: {
     200: {
