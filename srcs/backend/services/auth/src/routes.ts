@@ -126,8 +126,13 @@ export default async function (app: FastifyInstance): Promise<void> {
 
   app.put('/me/password', {schema: schemas.putMePasswordOpts, preHandler: [app.authenticate]}, async (req: FastifyRequest, reply: FastifyReply) => {
     const accountId: string = req.jwtPayload!.id;
-    const {password} = req.body as {password: string};
-    const account: Account | null = await utils.accountUpdatePassword(app.prisma, accountId, await utils.pwHash(password));
+    const {currentPassword, newPassword} = req.body as {currentPassword: string, newPassword: string};
+
+    let account : Account | null = await utils.accountFindById(app.prisma, accountId);
+    const ok: Boolean = !!account && await utils.pwVerify(account.passwordHash!, currentPassword);
+    if (!ok) return reply.code(401).send({success: false, message: 'Invalid Credentials'});
+
+    account = await utils.accountUpdatePassword(app.prisma, accountId, await utils.pwHash(newPassword));
     if (!account) return reply.code(401).send({success:false, message: 'Nonexisting account'});
 
     return {
