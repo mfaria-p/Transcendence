@@ -6,8 +6,6 @@ interface User {
 
 interface Profile {
   id: string;
-  name: string;
-  email: string;
   avatarUrl?: string;
 }
 
@@ -95,26 +93,25 @@ class ProfileManager {
   }
 
   private displayProfile(): void {
-    if (!this.currentProfile) return;
+    if (!this.currentUser) return;
 
     const usernameEl = document.getElementById('profileUsername');
     const emailEl = document.getElementById('profileEmail');
     const avatarEl = document.getElementById('avatarPlaceholder');
     const avatarImg = document.getElementById('avatarImage') as HTMLImageElement;
 
-    if (usernameEl) usernameEl.textContent = this.currentProfile.name;
-    if (emailEl) emailEl.textContent = this.currentProfile.email;
+    if (usernameEl) usernameEl.textContent = this.currentUser.username;
+    if (emailEl) emailEl.textContent = this.currentUser.email;
     
     // Display avatar image if URL exists, otherwise show initials
-    if (this.currentProfile.avatarUrl && avatarImg) {
+    if (this.currentProfile?.avatarUrl && avatarImg) {
       avatarImg.src = this.currentProfile.avatarUrl;
       avatarImg.classList.remove('hidden');
       avatarEl?.classList.add('hidden');
     } else if (avatarEl) {
       avatarImg?.classList.add('hidden');
       avatarEl.classList.remove('hidden');
-      const displayName = this.currentProfile.name || this.currentUser?.username || '?';
-      avatarEl.textContent = displayName.charAt(0).toUpperCase();
+      avatarEl.textContent = this.currentUser.username.charAt(0).toUpperCase();
     }
   }
 
@@ -224,12 +221,6 @@ class ProfileManager {
       return;
     }
 
-    console.log('Saving avatar with data:', {
-      username: this.currentProfile?.name || this.currentUser?.username || '',
-      email: this.currentProfile?.email || this.currentUser?.email || '',
-      avatarUrl: url,
-    });
-
     try {
       const response = await fetch('/api/user/provision', {
         method: 'PUT',
@@ -238,13 +229,9 @@ class ProfileManager {
           'Authorization': `Bearer ${this.accessToken}`,
         },
         body: JSON.stringify({
-          username: this.currentProfile?.name || this.currentUser?.username || '',
-          email: this.currentProfile?.email || this.currentUser?.email || '',
           avatarUrl: url,
         }),
       });
-
-      console.log('Response status:', response.status);
       
       if (response.ok) {
         const data = await response.json();
@@ -256,11 +243,11 @@ class ProfileManager {
       } else {
         const data = await response.json();
         console.error('Error response:', data);
-        this.showMessage(data.message || 'Failed to update avatar', 'error');
+        this.showMessage(data.message || 'Failed to update profile picture', 'error');
       }
     } catch (error) {
       console.error('Save avatar error:', error);
-      this.showMessage('Failed to update avatar', 'error');
+      this.showMessage('Failed to update profile picture', 'error');
     }
   }
 
@@ -287,8 +274,8 @@ class ProfileManager {
     const usernameForm = document.getElementById('usernameEditForm');
     const usernameInput = document.getElementById('usernameInput') as HTMLInputElement;
     
-    if (usernameInput && this.currentProfile) {
-      usernameInput.value = this.currentProfile.name;
+    if (usernameInput && this.currentUser) {
+      usernameInput.value = this.currentUser.username;
     }
     
     usernameDisplay?.classList.add('hidden');
@@ -323,7 +310,7 @@ class ProfileManager {
     }
 
     try {
-      const response = await fetch('/api/user/provision', {
+      const response = await fetch('/api/auth/me', {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -331,20 +318,29 @@ class ProfileManager {
         },
         body: JSON.stringify({
           username: newUsername,
-          email: this.currentProfile?.email || this.currentUser?.email || '',
-          avatarUrl: this.currentProfile?.avatarUrl,
+          email: this.currentUser?.email,
         }),
       });
 
       if (response.ok) {
         const data = await response.json();
-        this.currentProfile = data.profile;
+        
+        if (this.currentUser) {
+          this.currentUser.username = data.account.username;
+          localStorage.setItem('user', JSON.stringify(this.currentUser));
+        }
+        
         this.displayProfile();
         this.cancelEditUsername();
         this.showMessage('Username updated successfully!', 'success');
+        
+        this.setupAuthContainer();
       } else {
         const data = await response.json();
-        this.showMessage(data.message || 'Failed to update username', 'error');
+        const message = response.status === 409 
+          ? 'Username already taken. Please choose another one.' 
+          : (data.message || 'Failed to update username');
+        this.showMessage(message, 'error');
       }
     } catch (error) {
       console.error('Save username error:', error);
@@ -358,8 +354,8 @@ class ProfileManager {
     const emailForm = document.getElementById('emailEditForm');
     const emailInput = document.getElementById('emailInput') as HTMLInputElement;
     
-    if (emailInput && this.currentProfile) {
-      emailInput.value = this.currentProfile.email;
+    if (emailInput && this.currentUser) {
+      emailInput.value = this.currentUser.email;
     }
     
     emailDisplay?.classList.add('hidden');
@@ -390,28 +386,36 @@ class ProfileManager {
     }
 
     try {
-      const response = await fetch('/api/user/provision', {
+      const response = await fetch('/api/auth/me', {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${this.accessToken}`,
         },
         body: JSON.stringify({
-          username: this.currentProfile?.name || this.currentUser?.username || '',
+          username: this.currentUser?.username,
           email: newEmail,
-          avatarUrl: this.currentProfile?.avatarUrl,
         }),
       });
 
+     
       if (response.ok) {
         const data = await response.json();
-        this.currentProfile = data.profile;
+
+        if (this.currentUser) {
+          this.currentUser.email = data.account.email;
+          localStorage.setItem('user', JSON.stringify(this.currentUser));
+        }
+
         this.displayProfile();
         this.cancelEditEmail();
         this.showMessage('Email updated successfully!', 'success');
       } else {
         const data = await response.json();
-        this.showMessage(data.message || 'Failed to update email', 'error');
+        const message = response.status === 409 
+          ? 'Email already in use. Please use another one.' 
+          : (data.message || 'Failed to update email');
+        this.showMessage(message, 'error');
       }
     } catch (error) {
       console.error('Save email error:', error);
@@ -526,7 +530,7 @@ class ProfileManager {
           'Authorization': `Bearer ${this.accessToken}`,
         },
         body: JSON.stringify({
-          currentPassword: currentPassword,
+          currentPassword: currentPassword, //doesnt exist in the method
           password: newPassword,
         }),
       });
