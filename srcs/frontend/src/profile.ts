@@ -519,15 +519,15 @@ class ProfileManager {
     }
 
     try {
-      const response = await fetch('/api/auth/change-password', { //does not exist yet
-        method: 'POST',
+      const response = await fetch('/api/auth/me/password', {
+        method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${this.accessToken}`,
         },
         body: JSON.stringify({
           currentPassword: currentPassword,
-          newPassword: newPassword,
+          password: newPassword,
         }),
       });
 
