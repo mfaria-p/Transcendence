@@ -157,6 +157,33 @@ export default async function (app: FastifyInstance): Promise<void> {
     };
   });
 
+  app.get('/', {schema: schemas.getAccountsOpts}, async (req: FastifyRequest, reply: FastifyReply) => {
+    const accounts: Account[] = await utils.accountFindAll(app.prisma);
+
+    return {
+      success: true,
+      message: 'Public Accounts List',
+      accounts: accounts,
+    };
+  });
+
+  app.get('/:accountId', {schema: schemas.getAccountByIdOpts}, async (req: FastifyRequest, reply: FastifyReply) => {
+    const {accountId} = req.params as {accountId: string};
+
+    const account = await utils.accountFindById(app.prisma, accountId);
+    if (!account) return reply.code(404).send({
+      sucess: false,
+      message: 'Nonexistent Account',
+      account: null,
+    });
+
+    return {
+      success: true,
+      message: 'Public Account',
+      account: account,
+    };
+  });
+
   app.get('/google/login', {}, async (req: FastifyRequest, reply: FastifyReply) => {
     const state = randomBytes(16).toString('hex');
     const url = utils.googleBuildAuthUrl(state);

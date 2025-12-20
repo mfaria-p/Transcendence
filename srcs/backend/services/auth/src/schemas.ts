@@ -90,6 +90,39 @@ export const deleteMeOpts: FastifySchema = {
   },
 };
 
+export const getAccountsOpts: FastifySchema = {
+  summary: 'Get Account List',
+  description: '',
+  response: {
+    200: {
+      type: 'object',
+      properties: {
+        success: {type: 'boolean'},
+        message: {type: 'string'},
+        accounts: {
+          type: 'array',
+          items: account,
+        },
+      },
+    },
+  },
+};
+
+export const getAccountByIdOpts: FastifySchema = {
+  summary: 'Get Account By Id',
+  description: '',
+  response: {
+    200: {
+      type: 'object',
+      properties: {
+        success: {type: 'boolean'},
+        message: {type: 'string'},
+        account: account,
+      },
+    },
+  },
+};
+
 export const postGoogleAuthOpts: FastifySchema = {
   summary: 'Google remote login',
   description: '',

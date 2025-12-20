@@ -46,7 +46,6 @@ export default async function (app: FastifyInstance): Promise<void> {
     };
   });
 
-  // useless for now
   app.get('/me', {schema: schemas.getMeOpts, preHandler: [app.authenticate]}, async (req: FastifyRequest, reply: FastifyReply) => {
     const profileId: string = req.jwtPayload!.id;
     const profile: Profile | null = await utils.profileFindByProfileId(app.prisma, profileId);
