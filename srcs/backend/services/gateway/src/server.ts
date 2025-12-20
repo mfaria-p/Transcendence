@@ -47,12 +47,12 @@ async function build(): Promise<FastifyInstance> {
 
   // ---------- USER (rotas protegidas por JWT) ----------
   app.all('/api/user/*', async (req: FastifyRequest, reply: FastifyReply) => {
-    try {
-      // proteger tudo o que é /api/user/**
-      await (app as any).authenticate(req, reply);
-    } catch {
-      return reply.code(401).send({ error: 'Unauthorized' });
-    }
+    // try {
+    //   // proteger tudo o que é /api/user/**
+    //   await (app as any).authenticate(req, reply);
+    // } catch {
+    //   return reply.code(401).send({ error: 'Unauthorized' });
+    // }
 
     const path = req.url.replace(/^\/api\/user/, '/user');
     return reply.from(`${USERS_URL}${path}`);
