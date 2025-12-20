@@ -156,7 +156,7 @@ export default async function (app: FastifyInstance): Promise<void> {
     };
   });
 
-  app.get('/friend/:profileId', {schema: schemas.getFriendsOpts}, async (req: FastifyRequest, reply: FastifyReply) => {
+  app.get('/friend/:profileId', {schema: schemas.getFriendsOfProfileByIdOpts}, async (req: FastifyRequest, reply: FastifyReply) => {
     const {profileId} = req.params as {profileId: string};
 
     const friendships: Friendship[] = await utils.friendFindById(app.prisma, profileId);

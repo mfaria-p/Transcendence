@@ -32,7 +32,6 @@ function handlePrismaError(error: unknown): never {
 
 // profile
 export async function profileProvide(db: FastifyInstance['prisma'], profile: {id: string, avatarUrl?: string}): Promise<Profile> {
-  console.log('utils', profile?.avatarUrl);
   try {
     let createData: any = {
       id: profile.id,

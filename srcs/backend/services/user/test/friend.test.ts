@@ -26,8 +26,6 @@ describe('Friendship', () => {
         'Authorization': `Bearer ${at1}`,
       },
       payload: {
-        username: 'test profile 1',
-        email: 'test1@example.com',
       },
     });
 
@@ -40,8 +38,6 @@ describe('Friendship', () => {
         'Authorization': `Bearer ${at2}`,
       },
       payload: {
-        username: 'test profile 2',
-        email: 'test2@example.com',
       },
     });
 
@@ -57,7 +53,7 @@ describe('Friendship', () => {
       },
     });
 
-    await app.inject({
+    const res = await app.inject({
       method: 'POST',
       url: `/user/friend-request/${profileAId}/accept`,
       headers: {
