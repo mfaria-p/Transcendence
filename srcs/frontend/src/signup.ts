@@ -8,8 +8,8 @@ interface SignupCredentials {
 interface SignupResponse {
   success: boolean;
   message: string;
-  user?: { id: string; username: string; email: string };
-  at?: string;  // Access token - auto-login after signup
+  account?: { id: string; username: string; email: string };  
+  at?: string;
 }
 
 class SignupManager {
@@ -83,30 +83,45 @@ class SignupManager {
       console.log('Signup response:', response);
       
       if (response.success) {
+        console.log('Signup successful! Now logging in automatically...');
         
-        console.log('Access token from signup:', response.at);
-        
-        if (response.at) {
-          localStorage.setItem('access_token', response.at);
-          console.log('Stored access_token in localStorage');
+        try {
+          const loginResponse = await this.loginAfterSignup(credentials.username, credentials.password);
           
-          // Create user profile in user service
-          await this.provisionProfile(response.at, response.user!.username, response.user!.email);
-        } else {
-          console.warn('No access token in signup response!');
+          if (loginResponse.success && loginResponse.at) {
+            localStorage.setItem('access_token', loginResponse.at);
+            console.log('Stored access_token from login:', loginResponse.at);
+            
+            if (loginResponse.account) {
+              localStorage.setItem('user', JSON.stringify({
+                id: loginResponse.account.id,
+                username: loginResponse.account.username,
+                email: loginResponse.account.email
+              }));
+              console.log('Stored user from login');
+              
+              // Provision profile in user service
+              await this.provisionProfile(loginResponse.at, loginResponse.account.username, loginResponse.account.email);
+            }
+            
+            this.showSuccess('Account created successfully! Redirecting...');
+            
+            setTimeout(() => {
+              window.location.replace('./index.html');
+            }, 2000);
+          } else {
+            this.showSuccess('Account created! Please log in to continue.');
+            setTimeout(() => {
+              window.location.replace('./login.html');
+            }, 2000);
+          }
+        } catch (loginError: any) {
+          console.error('Auto-login error:', loginError);
+          this.showSuccess('Account created! Please log in to continue.');
+          setTimeout(() => {
+            window.location.replace('./login.html');
+          }, 2000);
         }
-        
-        if (response.user) {
-          localStorage.setItem('user', JSON.stringify(response.user));
-          console.log('Stored user in localStorage');
-        }
-
-        this.showSuccess(response.message || 'Account created successfully!');
-
-        // Redirect to game after 2 seconds
-        setTimeout(() => {
-          window.location.href = './index.html';
-        }, 2000);
       } else {
         const errorMessage = response.message || 'Signup failed';
         if (errorMessage.toLowerCase().includes('email')) {
@@ -283,7 +298,7 @@ class SignupManager {
   return {
     success: true,
     message: 'Account created successfully!',
-    user: {
+    account: {
       id: Date.now().toString(),
       username: credentials.username,
       email: credentials.email
@@ -322,6 +337,50 @@ class SignupManager {
       }
 
       return data as SignupResponse;
+    } catch (err: any) {
+      if (err.name === 'AbortError') {
+        throw new Error('Request timed out. Please try again.');
+      }
+      throw new Error(err?.message || 'Network error');
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  }
+
+  private async loginAfterSignup(username: string, password: string): Promise<any> {
+    const url = '/api/auth/login';
+    const controller = new AbortController();
+    const timeoutMs = 10_000;
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+    try {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify({
+          ident: username,
+          password: password
+        }),
+        signal: controller.signal,
+      });
+      
+      let data: any = null;
+      try {
+        data = await res.json();
+      } catch {
+        const text = await res.text();
+        data = { message: text || 'Unknown error' };
+      }
+
+      if (!res.ok) {
+        const message = data?.message || `Login failed (${res.status})`;
+        return { success: false, message };
+      }
+
+      return data;
     } catch (err: any) {
       if (err.name === 'AbortError') {
         throw new Error('Request timed out. Please try again.');

@@ -6,8 +6,6 @@ interface User {
 
 interface Profile {
   id: string;
-  name: string;
-  email: string;
   avatarUrl?: string;
 }
 
@@ -95,26 +93,25 @@ class ProfileManager {
   }
 
   private displayProfile(): void {
-    if (!this.currentProfile) return;
+    if (!this.currentUser) return;
 
     const usernameEl = document.getElementById('profileUsername');
     const emailEl = document.getElementById('profileEmail');
     const avatarEl = document.getElementById('avatarPlaceholder');
     const avatarImg = document.getElementById('avatarImage') as HTMLImageElement;
 
-    if (usernameEl) usernameEl.textContent = this.currentProfile.name;
-    if (emailEl) emailEl.textContent = this.currentProfile.email;
+    if (usernameEl) usernameEl.textContent = this.currentUser.username;
+    if (emailEl) emailEl.textContent = this.currentUser.email;
     
     // Display avatar image if URL exists, otherwise show initials
-    if (this.currentProfile.avatarUrl && avatarImg) {
+    if (this.currentProfile?.avatarUrl && avatarImg) {
       avatarImg.src = this.currentProfile.avatarUrl;
       avatarImg.classList.remove('hidden');
       avatarEl?.classList.add('hidden');
     } else if (avatarEl) {
       avatarImg?.classList.add('hidden');
       avatarEl.classList.remove('hidden');
-      const displayName = this.currentProfile.name || this.currentUser?.username || '?';
-      avatarEl.textContent = displayName.charAt(0).toUpperCase();
+      avatarEl.textContent = this.currentUser.username.charAt(0).toUpperCase();
     }
   }
 
@@ -224,12 +221,6 @@ class ProfileManager {
       return;
     }
 
-    console.log('Saving avatar with data:', {
-      username: this.currentProfile?.name || this.currentUser?.username || '',
-      email: this.currentProfile?.email || this.currentUser?.email || '',
-      avatarUrl: url,
-    });
-
     try {
       const response = await fetch('/api/user/provision', {
         method: 'PUT',
@@ -238,13 +229,9 @@ class ProfileManager {
           'Authorization': `Bearer ${this.accessToken}`,
         },
         body: JSON.stringify({
-          username: this.currentProfile?.name || this.currentUser?.username || '',
-          email: this.currentProfile?.email || this.currentUser?.email || '',
           avatarUrl: url,
         }),
       });
-
-      console.log('Response status:', response.status);
       
       if (response.ok) {
         const data = await response.json();
@@ -256,11 +243,11 @@ class ProfileManager {
       } else {
         const data = await response.json();
         console.error('Error response:', data);
-        this.showMessage(data.message || 'Failed to update avatar', 'error');
+        this.showMessage(data.message || 'Failed to update profile picture', 'error');
       }
     } catch (error) {
       console.error('Save avatar error:', error);
-      this.showMessage('Failed to update avatar', 'error');
+      this.showMessage('Failed to update profile picture', 'error');
     }
   }
 
@@ -287,8 +274,8 @@ class ProfileManager {
     const usernameForm = document.getElementById('usernameEditForm');
     const usernameInput = document.getElementById('usernameInput') as HTMLInputElement;
     
-    if (usernameInput && this.currentProfile) {
-      usernameInput.value = this.currentProfile.name;
+    if (usernameInput && this.currentUser) {
+      usernameInput.value = this.currentUser.username;
     }
     
     usernameDisplay?.classList.add('hidden');
@@ -323,7 +310,7 @@ class ProfileManager {
     }
 
     try {
-      const response = await fetch('/api/user/provision', {
+      const response = await fetch('/api/auth/me', {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -331,20 +318,29 @@ class ProfileManager {
         },
         body: JSON.stringify({
           username: newUsername,
-          email: this.currentProfile?.email || this.currentUser?.email || '',
-          avatarUrl: this.currentProfile?.avatarUrl,
+          email: this.currentUser?.email,
         }),
       });
 
       if (response.ok) {
         const data = await response.json();
-        this.currentProfile = data.profile;
+        
+        if (this.currentUser) {
+          this.currentUser.username = data.account.username;
+          localStorage.setItem('user', JSON.stringify(this.currentUser));
+        }
+        
         this.displayProfile();
         this.cancelEditUsername();
         this.showMessage('Username updated successfully!', 'success');
+        
+        this.setupAuthContainer();
       } else {
         const data = await response.json();
-        this.showMessage(data.message || 'Failed to update username', 'error');
+        const message = response.status === 409 
+          ? 'Username already taken. Please choose another one.' 
+          : (data.message || 'Failed to update username');
+        this.showMessage(message, 'error');
       }
     } catch (error) {
       console.error('Save username error:', error);
@@ -358,8 +354,8 @@ class ProfileManager {
     const emailForm = document.getElementById('emailEditForm');
     const emailInput = document.getElementById('emailInput') as HTMLInputElement;
     
-    if (emailInput && this.currentProfile) {
-      emailInput.value = this.currentProfile.email;
+    if (emailInput && this.currentUser) {
+      emailInput.value = this.currentUser.email;
     }
     
     emailDisplay?.classList.add('hidden');
@@ -390,28 +386,36 @@ class ProfileManager {
     }
 
     try {
-      const response = await fetch('/api/user/provision', {
+      const response = await fetch('/api/auth/me', {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${this.accessToken}`,
         },
         body: JSON.stringify({
-          username: this.currentProfile?.name || this.currentUser?.username || '',
+          username: this.currentUser?.username,
           email: newEmail,
-          avatarUrl: this.currentProfile?.avatarUrl,
         }),
       });
 
+     
       if (response.ok) {
         const data = await response.json();
-        this.currentProfile = data.profile;
+
+        if (this.currentUser) {
+          this.currentUser.email = data.account.email;
+          localStorage.setItem('user', JSON.stringify(this.currentUser));
+        }
+
         this.displayProfile();
         this.cancelEditEmail();
         this.showMessage('Email updated successfully!', 'success');
       } else {
         const data = await response.json();
-        this.showMessage(data.message || 'Failed to update email', 'error');
+        const message = response.status === 409 
+          ? 'Email already in use. Please use another one.' 
+          : (data.message || 'Failed to update email');
+        this.showMessage(message, 'error');
       }
     } catch (error) {
       console.error('Save email error:', error);
@@ -421,11 +425,15 @@ class ProfileManager {
 
   // Password edit methods
   private startEditPassword(): void {
+    const passwordDisplay = document.getElementById('profilePassword');
     const passwordForm = document.getElementById('passwordEditForm');
+    
+    passwordDisplay?.classList.add('hidden');
     passwordForm?.classList.remove('hidden');
   }
 
   private cancelEditPassword(): void {
+    const passwordDisplay = document.getElementById('profilePassword');
     const passwordForm = document.getElementById('passwordEditForm');
     const currentPasswordInput = document.getElementById('currentPasswordInput') as HTMLInputElement;
     const newPasswordInput = document.getElementById('newPasswordInput') as HTMLInputElement;
@@ -435,6 +443,7 @@ class ProfileManager {
     if (newPasswordInput) newPasswordInput.value = '';
     if (confirmNewPasswordInput) confirmNewPasswordInput.value = '';
     
+    passwordDisplay?.classList.remove('hidden');
     passwordForm?.classList.add('hidden');
   }
 
@@ -514,15 +523,15 @@ class ProfileManager {
     }
 
     try {
-      const response = await fetch('/api/auth/change-password', { //does not exist yet
-        method: 'POST',
+      const response = await fetch('/api/auth/me/password', {
+        method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${this.accessToken}`,
         },
         body: JSON.stringify({
-          currentPassword: currentPassword,
-          newPassword: newPassword,
+          currentPassword: currentPassword, //doesnt exist in the method
+          password: newPassword,
         }),
       });
 
@@ -554,7 +563,8 @@ class ProfileManager {
     }
 
     try {
-      const response = await fetch('/api/user/', {
+      // Fetch accounts from auth service
+      const response = await fetch(`/api/auth/search?prefix=${encodeURIComponent(searchTerm)}`, {
         headers: {
           'Authorization': `Bearer ${this.accessToken}`,
         },
@@ -562,53 +572,63 @@ class ProfileManager {
 
       if (response.ok) {
         const data = await response.json();
-        const allProfiles = data.profiles || [];
-        
-        // Filter profiles by search term (case-insensitive)
-        const filteredProfiles = allProfiles.filter((profile: any) => {
-          const searchLower = searchTerm.toLowerCase();
-          return profile.name.toLowerCase().includes(searchLower) || 
-                 profile.email.toLowerCase().includes(searchLower);
-        });
+        const accounts = data.accounts || [];
         
         searchResults.innerHTML = '';
         
-        if (filteredProfiles.length === 0) {
+        if (accounts.length === 0) {
           searchResults.innerHTML = '<p class="text-gray-400 text-sm p-3 bg-gray-700 rounded-lg">No users found</p>';
           return;
         }
 
-        filteredProfiles.forEach((profile: any) => {
+        // Fetch avatars for filtered accounts
+        for (const account of accounts) {
           // Don't show current user in search results
-          if (this.currentUser && profile.id === this.currentUser.id) return;
+          if (this.currentUser && account.id === this.currentUser.id) continue;
+          
+          // Try to fetch avatar from user service
+          let avatarUrl = null;
+          try {
+            const profileRes = await fetch(`/api/user/${account.id}`, {
+              headers: {
+                'Authorization': `Bearer ${this.accessToken}`,
+              },
+            });
+            if (profileRes.ok) {
+              const profileData = await profileRes.json();
+              avatarUrl = profileData.profile?.avatarUrl;
+            }
+          } catch (error) {
+            console.log('No avatar for user:', account.id);
+          }
           
           const userDiv = document.createElement('div');
           userDiv.className = 'flex items-center p-3 bg-gray-700 rounded-lg mt-2 hover:bg-gray-600 transition cursor-pointer';
           
           // Show avatar image if exists, otherwise show initial
-          const avatarHtml = profile.avatarUrl 
-            ? `<img src="${profile.avatarUrl}" class="w-10 h-10 rounded-full object-cover mr-3" alt="${profile.name}'s avatar" />`
+          const avatarHtml = avatarUrl
+            ? `<img src="${avatarUrl}" class="w-10 h-10 rounded-full object-cover mr-3" alt="${account.username}'s avatar" />`
             : `<div class="w-10 h-10 rounded-full bg-blue-500 flex items-center justify-center text-white font-bold mr-3">
-                ${profile.name.charAt(0).toUpperCase()}
+                ${account.username.charAt(0).toUpperCase()}
               </div>`;
           
           userDiv.innerHTML = `
             <div class="flex items-center">
               ${avatarHtml}
               <div>
-                <p class="text-white font-semibold">${profile.name}</p>
-                <p class="text-gray-400 text-sm">${profile.email}</p>
+                <p class="text-white font-semibold">${account.username}</p>
+                <p class="text-gray-400 text-sm">${account.email}</p>
               </div>
             </div>
           `;
           
           // Make the whole div clickable to view user profile
           userDiv.addEventListener('click', () => {
-            window.location.href = `./other-profiles.html?id=${profile.id}`;
+            window.location.href = `./other-profiles.html?id=${account.id}`;
           });
           
           searchResults.appendChild(userDiv);
-        });
+        }
       } else {
         this.showMessage('Failed to search users', 'error');
       }
