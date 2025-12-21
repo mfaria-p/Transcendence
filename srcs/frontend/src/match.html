@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link href="./output.css" rel="stylesheet">
+	<title>PHONG - Match</title>
+</head>
+
+<body class="bg-gray-900 text-white min-h-screen flex flex-col">
+	<nav class="bg-gray-800 border-b border-gray-700 relative">
+		<div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+			<div class="flex justify-between h-16 items-center">
+				<div class="flex items-center gap-3 text-gray-300">
+					<a href="./index.html" class="hover:text-white">Free play</a>
+					<span class="text-gray-500">|</span>
+					<a href="./tournaments.html" class="hover:text-white">Tournaments</a>
+				</div>
+			</div>
+		</div>
+	</nav>
+	<div id="authContainer" style="position: fixed; top: 1rem; right: 1rem; display: flex; gap: 0.5rem; z-index: 50;">
+	</div>
+
+	<main class="flex-1 px-4 py-8">
+		<div class="max-w-5xl mx-auto space-y-6">
+			<header class="bg-gray-800 border border-gray-700 rounded-xl p-6 shadow-xl">
+				<div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+					<div>
+						<p class="text-sm uppercase tracking-wide text-gray-400">Tournament room</p>
+						<h1 class="text-3xl font-bold text-green-400">Match</h1>
+						<p class="text-gray-300">Room ID: <code id="roomIdText" class="text-green-300"></code></p>
+					</div>
+					<div class="flex gap-2">
+						<a href="./tournaments.html"
+							class="bg-gray-700 hover:bg-gray-600 text-white px-4 py-2 rounded-lg transition">Back to tournaments</a>
+					</div>
+				</div>
+				<p id="statusText" class="mt-3 text-gray-300">Preparing match...</p>
+				<div class="mt-4 grid gap-4 md:grid-cols-3">
+					<div class="bg-gray-900 border border-gray-700 rounded-lg p-4">
+						<p class="text-xs uppercase tracking-wide text-gray-500">Left player</p>
+						<p id="leftPlayerLabel" class="text-lg font-semibold text-gray-200">Waiting...</p>
+						<p id="leftPlayerScore" class="text-3xl font-mono text-green-400">0</p>
+					</div>
+					<div class="bg-gray-900 border border-gray-700 rounded-lg p-4">
+						<p class="text-xs uppercase tracking-wide text-gray-500">Your side</p>
+						<p id="sideHint" class="text-lg font-semibold text-gray-200">Waiting for assignment...</p>
+						<p id="controlHint" class="text-sm text-gray-400">Controls: W/S or ↑/↓</p>
+					</div>
+					<div class="bg-gray-900 border border-gray-700 rounded-lg p-4">
+						<p class="text-xs uppercase tracking-wide text-gray-500">Right player</p>
+						<p id="rightPlayerLabel" class="text-lg font-semibold text-gray-200">Waiting...</p>
+						<p id="rightPlayerScore" class="text-3xl font-mono text-green-400">0</p>
+					</div>
+				</div>
+			</header>
+
+			<section class="bg-gray-800 border border-gray-700 rounded-xl p-4 shadow-xl">
+				<div class="bg-black p-4 rounded-lg shadow-2xl">
+					<canvas id="gameCanvas" width="800" height="450"
+						class="border border-white w-full max-w-4xl mx-auto block"></canvas>
+				</div>
+				<p class="mt-4 text-sm text-gray-400 text-center">Controls: use W/S or arrows. The game starts automatically once both are connected.</p>
+			</section>
+		</div>
+	</main>
+
+	<div id="messageContainer" class="fixed bottom-4 right-4 max-w-md z-50 space-y-2"></div>
+
+	<script type="module" src="./match.js"></script>
+	<script type="module" src="./pong.js"></script>
+</body>
+
+</html>

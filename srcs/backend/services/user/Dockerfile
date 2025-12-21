@@ -16,9 +16,8 @@ COPY packages/lib-auth ./packages/lib-auth
 COPY packages/lib-docs ./packages/lib-docs
 COPY services/user ./services/user
 
-# Prisma client + engine
+# Prisma client (engines ficam em node_modules/.prisma)
 RUN pnpm --filter "@svc/user" exec prisma generate --schema /app/services/user/prisma/schema.prisma
-RUN mv ./services/user/src/generated/prisma/libquery_engine-linux-musl-openssl-*.so.node ./services/user/prisma
 
 # Build TS + deploy
 RUN pnpm -r --filter "@svc/user..." run build
@@ -34,6 +33,7 @@ COPY --from=build /out .
 ENV DATABASE_URL="file:./user.db"
 ENV PRISMA_CLI_VERSION=6.17.0
 
+RUN npx prisma@${PRISMA_CLI_VERSION} generate --schema ./prisma/schema.prisma
 RUN npx prisma@${PRISMA_CLI_VERSION} migrate deploy --schema ./prisma/schema.prisma
 
 CMD ["node","dist/server.js"]

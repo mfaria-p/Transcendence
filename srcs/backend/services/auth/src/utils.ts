@@ -1,8 +1,10 @@
 // src/utils.ts
 
 import type {FastifyInstance} from 'fastify';
-import type {User, RefreshToken} from './generated/prisma/client.js';
-import {Prisma} from './generated/prisma/client.js';
+import type {User, RefreshToken} from '@prisma/client';
+import pkg from '@prisma/client';
+
+const {Prisma} = pkg;
 import createError from '@fastify/error';
 import * as argon from 'argon2';
 import {randomBytes, createHash} from 'crypto';
@@ -128,7 +130,7 @@ export async function rtDeleteByHash(db: FastifyInstance['prisma'], rtHash: stri
   };
 };
 
-export async function rtDeleteByUserEmail(db: FastifyInstance['prisma'], email: string): Promise<Prisma.BatchPayload> {
+export async function rtDeleteByUserEmail(db: FastifyInstance['prisma'], email: string): Promise<import('@prisma/client').Prisma.BatchPayload> {
   try {
     return await db.refreshToken.deleteMany({
       where: {

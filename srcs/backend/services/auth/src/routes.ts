@@ -3,7 +3,7 @@
 // oauth2
 
 import type {FastifyInstance, FastifyRequest, FastifyReply} from 'fastify';
-import type {User, RefreshToken} from './generated/prisma/client.js';
+import type {User, RefreshToken} from '@prisma/client';
 import * as schemas from './schemas.js';
 import * as utils from './utils.js';
 

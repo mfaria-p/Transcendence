@@ -67,6 +67,11 @@ const MAX_SCORE_DEFAULT = 5;
 const rooms = new Map<string, GameRoom>();
 const userToRoom = new Map<string, string>();
 
+function normalizeId(value: unknown): string | null {
+  if (value === null || value === undefined) return null;
+  return String(value);
+}
+
 function createInitialState(): GameState {
   const width = 800;
   const height = 450;
@@ -321,17 +326,20 @@ function finishGame(room: GameRoom, forfeitLoserId?: string): void {
 }
 
 function ensureRoomForJoin(userId: string, msg: GameMessage): GameRoom | null {
+  const uid = normalizeId(userId);
+  if (!uid) return null;
+
   const requestedRoomId =
     typeof (msg as any).roomId === 'string'
       ? ((msg as any).roomId as string)
       : undefined;
 
   // Se já estiver numa sala, devolvemos essa
-  const existingRoomId = userToRoom.get(userId);
+  const existingRoomId = userToRoom.get(uid);
   if (existingRoomId) {
     const r = rooms.get(existingRoomId);
     if (r) return r;
-    userToRoom.delete(userId);
+    userToRoom.delete(uid);
   }
 
   // Caso venha com roomId, tentamos ver se é match de torneio
@@ -340,7 +348,9 @@ function ensureRoomForJoin(userId: string, msg: GameMessage): GameRoom | null {
     if (matchInfo) {
       const { tournament, match } = matchInfo;
       // check se o jogador pertence ao match
-      if (match.player1Id !== userId && match.player2Id !== userId) {
+      const p1 = normalizeId(match.player1Id);
+      const p2 = normalizeId(match.player2Id);
+      if (p1 !== uid && p2 !== uid) {
         // não é jogador legítimo deste match
         return null;
       }
@@ -407,17 +417,20 @@ function ensureRoomForJoin(userId: string, msg: GameMessage): GameRoom | null {
 }
 
 function setPlayerInRoom(room: GameRoom, userId: string): Side | null {
-  if (room.left && room.left.userId === userId) return 'left';
-  if (room.right && room.right.userId === userId) return 'right';
+  const uid = normalizeId(userId);
+  if (!uid) return null;
+
+  if (room.left && room.left.userId === uid) return 'left';
+  if (room.right && room.right.userId === uid) return 'right';
 
   if (!room.left) {
-    room.left = { userId, side: 'left', input: 'none' };
-    userToRoom.set(userId, room.id);
+    room.left = { userId: uid, side: 'left', input: 'none' };
+    userToRoom.set(uid, room.id);
     return 'left';
   }
-  if (!room.right && room.left.userId !== userId) {
-    room.right = { userId, side: 'right', input: 'none' };
-    userToRoom.set(userId, room.id);
+  if (!room.right && room.left.userId !== uid) {
+    room.right = { userId: uid, side: 'right', input: 'none' };
+    userToRoom.set(uid, room.id);
     return 'right';
   }
   return null;
@@ -456,7 +469,9 @@ function handleJoin(userId: string, socket: WebSocket, msg: GameMessage): void {
 }
 
 function handleInput(userId: string, msg: GameMessage): void {
-  const roomId = userToRoom.get(userId);
+  const uid = normalizeId(userId);
+  if (!uid) return;
+  const roomId = userToRoom.get(uid);
   if (!roomId) return;
   const room = rooms.get(roomId);
   if (!room) return;
@@ -467,23 +482,25 @@ function handleInput(userId: string, msg: GameMessage): void {
     dir = direction;
   }
 
-  if (room.left && room.left.userId === userId) {
+  if (room.left && room.left.userId === uid) {
     room.left.input = dir;
-  } else if (room.right && room.right.userId === userId) {
+  } else if (room.right && room.right.userId === uid) {
     room.right.input = dir;
   }
 }
 
 function handleLeave(userId: string): void {
-  const roomId = userToRoom.get(userId);
+  const uid = normalizeId(userId);
+  if (!uid) return;
+  const roomId = userToRoom.get(uid);
   if (!roomId) return;
   const room = rooms.get(roomId);
   if (!room) {
-    userToRoom.delete(userId);
+    userToRoom.delete(uid);
     return;
   }
 
-  finishGame(room, userId);
+  finishGame(room, uid);
 }
 
 export function handleDisconnect(userId: string): void {

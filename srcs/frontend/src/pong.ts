@@ -221,11 +221,12 @@ class PongGame {
 }
 
 
-document.addEventListener("DOMContentLoaded", () => {
-  // This code only runs once the HTML is fully loaded
-  const canvas = document.getElementById('gameCanvas') as HTMLCanvasElement;
+document.addEventListener('DOMContentLoaded', () => {
+  const canvas = document.getElementById('gameCanvas') as HTMLCanvasElement | null;
+  if (!canvas) return;
 
-  if (canvas) {
-    new PongGame(canvas); // start the game
+  // Only auto-start the local freeplay game when the canvas explicitly opts in.
+  if (canvas.dataset.mode === 'freeplay') {
+    new PongGame(canvas);
   }
 });

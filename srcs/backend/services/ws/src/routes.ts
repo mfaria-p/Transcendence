@@ -32,6 +32,11 @@ type ServerMessage =
   | { type: 'pong'; ts?: number }
   | { type: 'error'; message: string };
 
+function normalizeId(value: unknown): string | null {
+  if (value === null || value === undefined) return null;
+  return String(value);
+}
+
 function safeSend(socket: WebSocket, msg: ServerMessage): void {
   if (socket.readyState === socket.OPEN) {
     socket.send(JSON.stringify(msg));
@@ -74,22 +79,24 @@ export default async function routes(app: FastifyInstance): Promise<void> {
   });
 
   app.get('/presence/me', { preHandler: [app.authenticate] }, async (req) => {
-    const userId: string = req.jwtPayload!.id;
+    const userId = normalizeId(req.jwtPayload!.id);
+    const online = userId ? isOnline(userId) : false;
     return {
       success: true,
       userId,
-      online: isOnline(userId),
+      online,
     };
   });
 
   app.get<{
     Params: { userId: string };
   }>('/presence/:userId', async (req) => {
-    const { userId } = req.params;
+    const userId = normalizeId(req.params.userId);
+    const online = userId ? isOnline(userId) : false;
     return {
       success: true,
       userId,
-      online: isOnline(userId),
+      online,
     };
   });
 
@@ -192,8 +199,9 @@ export default async function routes(app: FastifyInstance): Promise<void> {
   app.get(
     '/ws',
     { websocket: true },
-    async (connection, req: FastifyRequest) => {
-      const socket = (connection as any).socket as WebSocket;
+    async (connection: unknown, req: FastifyRequest) => {
+      const maybeStream = connection as { socket?: WebSocket };
+      const socket: WebSocket = maybeStream.socket ?? (connection as WebSocket);
 
       // 1) Autenticação por JWT
       const rawToken = extractToken(req);
@@ -210,18 +218,23 @@ export default async function routes(app: FastifyInstance): Promise<void> {
         return;
       }
 
-      const userId = payload.sub;
-      const { firstConnection } = addConnection(userId, socket);
+      const userId = normalizeId(payload.sub);
+      if (!userId) {
+        safeSend(socket, { type: 'error', message: 'Invalid user id in token' });
+        return socket.close();
+      }
+      const uid = userId;
+      const { firstConnection } = addConnection(uid, socket);
 
       // 2) Mensagem inicial
       safeSend(socket, {
         type: 'hello',
-        userId,
+        userId: uid,
         onlineUsers: getOnlineUsers(),
       });
 
       if (firstConnection) {
-        broadcastPresenceChange(userId, 'online');
+        broadcastPresenceChange(uid, 'online');
       }
 
       // 3) Handlers
@@ -256,14 +269,14 @@ export default async function routes(app: FastifyInstance): Promise<void> {
           case 'subscribe_presence':
             safeSend(socket, {
               type: 'hello',
-              userId,
+              userId: uid,
               onlineUsers: getOnlineUsers(),
             });
             return;
 
           default:
             if (msg.type.startsWith('game:')) {
-              handleGameMessage(userId, socket, msg as any);
+              handleGameMessage(uid, socket, msg as any);
               return;
             }
             safeSend(socket, {
@@ -274,11 +287,11 @@ export default async function routes(app: FastifyInstance): Promise<void> {
       });
 
       socket.on('close', () => {
-        const { lastConnection } = removeConnection(userId, socket);
+        const { lastConnection } = removeConnection(uid, socket);
         if (lastConnection) {
-          broadcastPresenceChange(userId, 'offline');
+          broadcastPresenceChange(uid, 'offline');
         }
-        handleDisconnect(userId);
+        handleDisconnect(uid);
       });
 
       socket.on('error', (err) => {

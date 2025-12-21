@@ -60,7 +60,9 @@ class UserProfileViewer {
     if (!authContainer || !this.currentUser) return;
 
     authContainer.innerHTML = `
-      <a href="./index.html" class="text-gray-300 hover:text-white transition">Game</a>
+      <a href="./index.html" class="text-gray-300 hover:text-white transition">Jogo</a>
+      <span class="text-gray-400">|</span>
+      <a href="./tournaments.html" class="text-gray-300 hover:text-white transition">Torneios</a>
       <span class="text-gray-400">|</span>
       <span class="text-gray-300">Welcome, <a href="./profile.html" class="text-green-400 hover:text-green-300 font-bold underline transition duration-200">${this.currentUser.username}</a></span>
       <button id="logoutButton" class="bg-red-600 hover:bg-red-700 text-white text-sm py-1.5 px-4 rounded transition duration-200">

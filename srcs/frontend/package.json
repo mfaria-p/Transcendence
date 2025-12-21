@@ -18,6 +18,7 @@
   "description": "",
   "devDependencies": {
     "@tailwindcss/cli": "^4.1.13",
+    "chokidar-cli": "^3.0.0",
     "live-server": "^1.2.2",
     "tailwindcss": "^4.1.13",
     "typescript": "^5.9.2"

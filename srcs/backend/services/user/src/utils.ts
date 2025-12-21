@@ -1,8 +1,10 @@
 // src/utils.ts
 
 import type {FastifyInstance} from 'fastify';
-import type {Profile, FriendRequest, FriendRequestStatus, Friendship, Block} from './generated/prisma/client.js';
-import {Prisma} from './generated/prisma/client.js';
+import type {Profile, FriendRequest, FriendRequestStatus, Friendship, Block} from '@prisma/client';
+import pkg from '@prisma/client';
+
+const {Prisma} = pkg;
 import createError from '@fastify/error';
 
 const AlreadyExistsError = createError('ALREADY_EXISTS', 'Record already exists', 409);
