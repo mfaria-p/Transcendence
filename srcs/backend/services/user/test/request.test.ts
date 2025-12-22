@@ -106,10 +106,10 @@ describe('Friend Request', () => {
     expect(r1.statusCode).toBe(409);
   });
 
-  it('GET /user/friend-request - list A friend requests', async() => {
+  it('GET /user/friend-request/received - list A friend requests received', async() => {
     const r1 = await app.inject({
       method: 'GET',
-      url: '/user/friend-request',
+      url: '/user/friend-request/received',
       headers: {
         'Authorization': `Bearer ${at1}`,
       },
@@ -118,10 +118,10 @@ describe('Friend Request', () => {
     expect(r1.json().requests).toEqual([]);
   });
 
-  it('GET /user/friend-request - list B friend requests', async() => {
+  it('GET /user/friend-request/received - list B friend requests received', async() => {
     const r1 = await app.inject({
       method: 'GET',
-      url: '/user/friend-request',
+      url: '/user/friend-request/received',
       headers: {
         'Authorization': `Bearer ${at2}`,
       },
@@ -135,6 +135,37 @@ describe('Friend Request', () => {
         message: 'hello'}
       )
     ]);
+  });
+
+  it('GET /user/friend-request/sent - list A friend requests sent', async() => {
+    const r1 = await app.inject({
+      method: 'GET',
+      url: '/user/friend-request/sent',
+      headers: {
+        'Authorization': `Bearer ${at1}`,
+      },
+    });
+    expect(r1.statusCode).toBe(200);
+    expect(r1.json().requests).toEqual([
+      expect.objectContaining({
+        fromProfileId: profileAId,
+        toProfileId: profileBId,
+        status: 'PENDING',
+        message: 'hello'}
+      )
+    ]);
+  });
+
+  it('GET /user/friend-request/sent - list B friend requests sent', async() => {
+    const r1 = await app.inject({
+      method: 'GET',
+      url: '/user/friend-request/sent',
+      headers: {
+        'Authorization': `Bearer ${at2}`,
+      },
+    });
+    expect(r1.statusCode).toBe(200);
+    expect(r1.json().requests).toEqual([]);
   });
 
   it('POST /user/friend-request/:fromProfileId/decline - A decline nonexistent', async() => {

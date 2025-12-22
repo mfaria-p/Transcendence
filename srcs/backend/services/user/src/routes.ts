@@ -90,14 +90,26 @@ export default async function (app: FastifyInstance): Promise<void> {
     };
   });
 
-  app.get('/friend-request', {schema: schemas.getRequestsOpts, preHandler: [app.authenticate]}, async (req: FastifyRequest, reply: FastifyReply) => {
+  app.get('/friend-request/received', {schema: schemas.getRequestsOpts, preHandler: [app.authenticate]}, async (req: FastifyRequest, reply: FastifyReply) => {
     const profileId: string = req.jwtPayload!.id;
 
     const requests: FriendRequest[] = await utils.requestFindByToProfileId(app.prisma, profileId, 'PENDING');
     
     return {
       success: true,
-      message: 'Pending Friend Requests',
+      message: 'Pending Received Friend Requests',
+      requests: requests,
+    };
+  });
+
+  app.get('/friend-request/sent', {schema: schemas.getRequestsOpts, preHandler: [app.authenticate]}, async (req: FastifyRequest, reply: FastifyReply) => {
+    const profileId: string = req.jwtPayload!.id;
+
+    const requests: FriendRequest[] = await utils.requestFindByFromProfileId(app.prisma, profileId, 'PENDING');
+    
+    return {
+      success: true,
+      message: 'Pending Sent Friend Requests',
       requests: requests,
     };
   });

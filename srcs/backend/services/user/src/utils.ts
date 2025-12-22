@@ -187,7 +187,19 @@ export async function requestFindByToProfileId(db: FastifyInstance['prisma'], pr
   if (status) where.status = status;
   try {
     return await db.friendRequest.findMany({
-      where
+      where,
+    });
+  } catch(err) {
+    handlePrismaError(err);
+  };
+};
+
+export async function requestFindByFromProfileId(db: FastifyInstance['prisma'], profileId: string, status?: string): Promise<FriendRequest[]> {
+  const where: any = {fromProfileId: profileId};
+  if (status) where.status = status;
+  try {
+    return await db.friendRequest.findMany({
+      where,
     });
   } catch(err) {
     handlePrismaError(err);
