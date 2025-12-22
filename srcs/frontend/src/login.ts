@@ -5,8 +5,6 @@ interface LoginResponse {
   user?: { id: string; username: string; email: string };
 }
 
-// ...existing code...
-
 document.addEventListener('DOMContentLoaded', () => {
   const loginForm = document.getElementById('loginForm') as HTMLFormElement;
   const identInput = document.getElementById('ident') as HTMLInputElement;
@@ -70,7 +68,6 @@ document.addEventListener('DOMContentLoaded', () => {
         if (data.at) {
           localStorage.setItem('access_token', data.at);
           
-          // Provision profile in user service (in case it doesn't exist)
           if (data.account) {
             provisionProfile(data.at).catch(err => {
               console.warn('Profile provision failed:', err);
@@ -138,7 +135,7 @@ async function provisionProfile(accessToken: string): Promise<void> {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${accessToken}`,
       },
-      body: JSON.stringify({}), // Empty body - ID comes from JWT
+      body: JSON.stringify({}), // Empty body, ID comes from JWT
     });
 
     if (response.ok) {

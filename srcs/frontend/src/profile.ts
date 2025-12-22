@@ -32,7 +32,7 @@ class ProfileManager {
       this.currentUser = JSON.parse(userStr);
       this.setupAuthContainer();
       
-      // Load profile from backend (required)
+      // Load profile from backend
       await this.loadProfile();
       
       this.setupEventListeners();
@@ -81,7 +81,6 @@ class ProfileManager {
         this.displayProfile();
         console.log('Profile loaded from backend:', this.currentProfile);
       } else if (response.status === 404) {
-        // Profile doesn't exist - this shouldn't happen if provision works
         throw new Error('Profile not found. Please log out and log in again.');
       } else {
         throw new Error(`Failed to load profile: ${response.status}`);
