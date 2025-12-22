@@ -1,3 +1,5 @@
+import { connectPresenceSocket, disconnectPresenceSocket } from './presence-ws.js';
+
 interface User {
   id: string;
   username: string;
@@ -19,6 +21,7 @@ document.addEventListener('DOMContentLoaded', () => {
   console.log('Auth check - accessToken:', accessToken);
   
   if (userStr && accessToken) {
+    connectPresenceSocket();
     try {
       const user: User = JSON.parse(userStr);
       console.log('User logged in:', user);
@@ -65,6 +68,7 @@ function showLoggedOutState(container: HTMLElement): void {
 }
 
 async function handleLogout(): Promise<void> {
+  disconnectPresenceSocket();
   try {
     // Call backend logout endpoint
     await fetch('/api/auth/logout', {

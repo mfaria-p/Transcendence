@@ -1,3 +1,5 @@
+import { connectPresenceSocket, disconnectPresenceSocket } from './presence-ws.js';
+
 interface User {
   id: string;
   username: string;
@@ -46,6 +48,8 @@ class UserProfileViewer {
     try {
       this.currentUser = JSON.parse(userStr);
       this.setupAuthContainer();
+
+      connectPresenceSocket();
       
       // Get user ID from URL parameters
       const urlParams = new URLSearchParams(window.location.search);
@@ -436,6 +440,8 @@ class UserProfileViewer {
   }
 
   private async handleLogout(): Promise<void> {
+    disconnectPresenceSocket();
+
     try {
       await fetch('/api/auth/logout', {
         method: 'POST',

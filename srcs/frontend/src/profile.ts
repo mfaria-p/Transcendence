@@ -1,3 +1,5 @@
+import { connectPresenceSocket, disconnectPresenceSocket } from './presence-ws.js';
+
 interface User {
   id: string;
   username: string;
@@ -31,6 +33,8 @@ class ProfileManager {
     try {
       this.currentUser = JSON.parse(userStr);
       this.setupAuthContainer();
+
+      connectPresenceSocket();
       
       // Load profile from backend
       await this.loadProfile();
@@ -927,6 +931,8 @@ class ProfileManager {
   }
 
   private async handleLogout(): Promise<void> {
+     disconnectPresenceSocket();
+     
     try {
       await fetch('/api/auth/logout', {
         method: 'POST',
