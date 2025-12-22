@@ -264,6 +264,7 @@ export const deleteFriendOpts: FastifySchema = {
       properties: {
         success: {type: 'boolean'},
         message: {type: 'string'},
+        request: friendRequest,
         friendship: friendship,
       },
       additionalProperties: false,

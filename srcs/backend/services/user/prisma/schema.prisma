@@ -32,13 +32,13 @@ model Profile {
 }
 
 model FriendRequest {
-  id         String               @id @default(cuid())
+  id            String               @id @default(cuid())
   fromProfileId String
   toProfileId   String
-  status     FriendRequestStatus  @default(PENDING)
-  message    String?
-  createdAt  DateTime             @default(now())
-  updatedAt  DateTime             @updatedAt
+  status        FriendRequestStatus  @default(PENDING)
+  message       String?
+  createdAt     DateTime             @default(now())
+  updatedAt     DateTime             @updatedAt
 
   fromProfile   Profile @relation("SentRequests", fields: [fromProfileId], references: [id], onDelete: Cascade)
   toProfile     Profile @relation("RecvRequests", fields: [toProfileId], references: [id], onDelete: Cascade)
@@ -49,10 +49,10 @@ model FriendRequest {
 }
 
 model Friendship {
-  id        String   @id @default(cuid())
-  profileAId   String
-  profileBId   String
-  createdAt DateTime @default(now())
+  id          String   @id @default(cuid())
+  profileAId  String
+  profileBId  String
+  createdAt   DateTime @default(now())
 
   // profileAId < profileBId
   profileA     Profile @relation("FriendshipsA", fields: [profileAId], references: [id], onDelete: Cascade)
