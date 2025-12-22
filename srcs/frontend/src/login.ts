@@ -72,7 +72,9 @@ document.addEventListener('DOMContentLoaded', () => {
           
           // Provision profile in user service (in case it doesn't exist)
           if (data.account) {
-            await provisionProfile(data.at, data.account.username, data.account.email);
+            provisionProfile(data.at).catch(err => {
+              console.warn('Profile provision failed:', err);
+            });
           }
         }
 
@@ -127,7 +129,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 });
 
-async function provisionProfile(accessToken: string, username: string, email: string): Promise<void> {
+async function provisionProfile(accessToken: string): Promise<void> {
   try {
     console.log('Provisioning profile in user service...');
     const response = await fetch('/api/user/provision', {
@@ -136,19 +138,17 @@ async function provisionProfile(accessToken: string, username: string, email: st
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${accessToken}`,
       },
-      body: JSON.stringify({
-        username: username,
-        email: email,
-      }),
+      body: JSON.stringify({}), // Empty body - ID comes from JWT
     });
 
     if (response.ok) {
       console.log('Profile provisioned successfully');
     } else {
-      console.warn('Failed to provision profile:', response.status);
+      const errorText = await response.text();
+      console.warn('Failed to provision profile:', response.status, errorText);
     }
   } catch (error) {
     console.error('Profile provision error:', error);
-    // Don't fail login if profile creation fails
+    throw error;
   }
 }

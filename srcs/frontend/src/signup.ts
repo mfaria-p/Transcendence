@@ -100,8 +100,10 @@ class SignupManager {
               }));
               console.log('Stored user from login');
               
-              // Provision profile in user service
-              await this.provisionProfile(loginResponse.at, loginResponse.account.username, loginResponse.account.email);
+              const provisionSuccess = await this.provisionProfile(loginResponse.at);
+              if (!provisionSuccess) {
+                console.warn('Profile provision failed, but continuing with signup');
+              }
             }
             
             this.showSuccess('Account created successfully! Redirecting...');
@@ -274,38 +276,6 @@ class SignupManager {
     }
   }
 
-  private async simulateSignup(credentials: { username: string; email: string; password: string }): Promise<SignupResponse> {
-  // Simulate network delay
-  await new Promise(resolve => setTimeout(resolve, 1500));
-  
-  // Simulate existing user check
-  if (credentials.username.toLowerCase() === 'admin' || credentials.username.toLowerCase() === 'test') {
-    return {
-      success: false,
-      message: 'Username already taken. Please choose another one.'
-    };
-  }
-
-  // Simulate invalid email check
-  if (credentials.email.includes('invalid')) {
-    return {
-      success: false,
-      message: 'Email address is not valid.'
-    };
-  }
-  
-  // Simulate successful signup
-  return {
-    success: true,
-    message: 'Account created successfully!',
-    account: {
-      id: Date.now().toString(),
-      username: credentials.username,
-      email: credentials.email
-    }
-  };
-}
-
   private async signupWithBackend(payload: { username: string; email: string; password: string }): Promise<SignupResponse> {
     const url = '/api/auth/signup';
     const controller = new AbortController();
@@ -391,7 +361,7 @@ class SignupManager {
     }
   }
 
-  private async provisionProfile(accessToken: string, username: string, email: string): Promise<void> {
+  private async provisionProfile(accessToken: string): Promise<boolean> {
     try {
       console.log('Provisioning profile in user service...');
       const response = await fetch('/api/user/provision', {
@@ -400,20 +370,20 @@ class SignupManager {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${accessToken}`,
         },
-        body: JSON.stringify({
-          username: username,
-          email: email,
-        }),
+        body: JSON.stringify({}), // Empty body - ID comes from JWT
       });
 
       if (response.ok) {
         console.log('Profile provisioned successfully');
+        return true;
       } else {
-        console.warn('Failed to provision profile:', response.status);
+        const errorText = await response.text();
+        console.error('Failed to provision profile:', response.status, errorText);
+        return false;
       }
     } catch (error) {
       console.error('Profile provision error:', error);
-      // Don't fail signup if profile creation fails
+      return false;
     }
   }
 
