@@ -642,7 +642,7 @@ class ProfileManager {
     if (!friendRequestsList) return;
 
     try {
-      const response = await fetch('/api/user/friend-request', {
+      const response = await fetch('/api/user/friend-request/received', {
         headers: {
           'Authorization': `Bearer ${this.accessToken}`,
         },
@@ -661,66 +661,84 @@ class ProfileManager {
           return;
         }
 
-        // Fetch user profiles using fromUserId
+        // Fetch user profiles for each request
         for (const request of requests) {
           console.log('Processing request:', request);
           
-          // Always fetch the user profile using fromUserId
+          const fromProfileId = request.fromProfileId;
+          
           try {
-            const userResponse = await fetch(`/api/user/${request.fromUserId}`, {
+            // Fetch account info from auth service
+            const authResponse = await fetch(`/api/auth/${fromProfileId}`, {
               headers: {
                 'Authorization': `Bearer ${this.accessToken}`,
               },
             });
             
-            if (userResponse.ok) {
-              const userData = await userResponse.json();
-              request.fromUser = userData.profile;
+            let username = 'Unknown User';
+            let email = '';
+            
+            if (authResponse.ok) {
+              const authData = await authResponse.json();
+              username = authData.account.username;
+              email = authData.account.email;
             }
-          } catch (error) {
-            console.error('Failed to fetch user profile:', error);
-            // Set a default fromUser if fetch fails
-            request.fromUser = {
-              name: 'Unknown User',
-              email: '',
-              avatarUrl: null
-            };
-          }
-          
-          const requestDiv = document.createElement('div');
-          requestDiv.className = 'flex items-center justify-between p-4 bg-gray-700 rounded-lg mb-2';
-          
-          const avatarHtml = request.fromUser.avatarUrl 
-            ? `<img src="${request.fromUser.avatarUrl}" class="w-12 h-12 rounded-full object-cover mr-4" alt="${request.fromUser.name}'s avatar" />`
-            : `<div class="w-12 h-12 rounded-full bg-purple-500 flex items-center justify-center text-white font-bold mr-4">
-                ${request.fromUser.name.charAt(0).toUpperCase()}
-              </div>`;
-          
-          requestDiv.innerHTML = `
-            <div class="flex items-center">
-              ${avatarHtml}
-              <div>
-                <p class="text-white font-semibold">${request.fromUser.name}</p>
-                <p class="text-gray-400 text-sm">${request.fromUser.email}</p>
+            
+            // Fetch profile from user service for avatar
+            let avatarUrl: string | null = null;
+            try {
+              const profileResponse = await fetch(`/api/user/${fromProfileId}`, {
+                headers: {
+                  'Authorization': `Bearer ${this.accessToken}`,
+                },
+              });
+              
+              if (profileResponse.ok) {
+                const profileData = await profileResponse.json();
+                avatarUrl = profileData.profile?.avatarUrl || null;
+              }
+            } catch (error) {
+              console.log('No avatar for user:', fromProfileId);
+            }
+            
+            // Create request card
+            const requestDiv = document.createElement('div');
+            requestDiv.className = 'flex items-center justify-between p-4 bg-gray-700 rounded-lg mb-2';
+            
+            const avatarHtml = avatarUrl
+              ? `<img src="${avatarUrl}" class="w-12 h-12 rounded-full object-cover mr-4" alt="${username}'s avatar" />`
+              : `<div class="w-12 h-12 rounded-full bg-purple-500 flex items-center justify-center text-white font-bold mr-4">
+                  ${username.charAt(0).toUpperCase()}
+                </div>`;
+            
+            requestDiv.innerHTML = `
+              <div class="flex items-center">
+                ${avatarHtml}
+                <div>
+                  <p class="text-white font-semibold">${username}</p>
+                  <p class="text-gray-400 text-sm">${email}</p>
+                </div>
               </div>
-            </div>
-            <div class="flex gap-2">
-              <button class="accept-btn px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition" data-user-id="${request.fromUserId}">
-                Accept
-              </button>
-              <button class="decline-btn px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition" data-user-id="${request.fromUserId}">
-                Decline
-              </button>
-            </div>
-          `;
-          
-          const acceptBtn = requestDiv.querySelector('.accept-btn');
-          const declineBtn = requestDiv.querySelector('.decline-btn');
-          
-          acceptBtn?.addEventListener('click', () => this.acceptFriendRequest(request.fromUserId));
-          declineBtn?.addEventListener('click', () => this.declineFriendRequest(request.fromUserId));
-          
-          friendRequestsList.appendChild(requestDiv);
+              <div class="flex gap-2">
+                <button class="accept-btn px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition" data-profile-id="${fromProfileId}">
+                  Accept
+                </button>
+                <button class="decline-btn px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition" data-profile-id="${fromProfileId}">
+                  Decline
+                </button>
+              </div>
+            `;
+
+            const acceptBtn = requestDiv.querySelector('.accept-btn');
+            const declineBtn = requestDiv.querySelector('.decline-btn');
+            
+            acceptBtn?.addEventListener('click', () => this.acceptFriendRequest(fromProfileId));
+            declineBtn?.addEventListener('click', () => this.declineFriendRequest(fromProfileId));
+            
+            friendRequestsList.appendChild(requestDiv);
+          } catch (error) {
+            console.error('Failed to fetch user info for friend request:', error);
+          }
         }
       } else {
         this.showMessage('Failed to load friend requests', 'error');
@@ -731,9 +749,9 @@ class ProfileManager {
     }
   }
 
-  private async acceptFriendRequest(fromUserId: string): Promise<void> {
+  private async acceptFriendRequest(fromProfileId: string): Promise<void> {
     try {
-      const response = await fetch(`/api/user/friend-request/${fromUserId}/accept`, {
+      const response = await fetch(`/api/user/friend-request/${fromProfileId}/accept`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${this.accessToken}`,
@@ -743,6 +761,7 @@ class ProfileManager {
       if (response.ok) {
         this.showMessage('Friend request accepted!', 'success');
         await this.loadFriendRequests();
+        await this.loadFriends(); // Refresh friends list
       } else {
         const data = await response.json();
         this.showMessage(data.message || 'Failed to accept friend request', 'error');
@@ -753,9 +772,9 @@ class ProfileManager {
     }
   }
 
-  private async declineFriendRequest(fromUserId: string): Promise<void> {
+  private async declineFriendRequest(fromProfileId: string): Promise<void> {
     try {
-      const response = await fetch(`/api/user/friend-request/${fromUserId}/decline`, {
+      const response = await fetch(`/api/user/friend-request/${fromProfileId}/decline`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${this.accessToken}`,
@@ -799,56 +818,77 @@ class ProfileManager {
 
         // Fetch friend profiles
         for (const friendship of friendships) {
-          // Determine which user is the friend (not current user)
-          const friendId = friendship.userAId === this.currentUser?.id 
-            ? friendship.userBId 
-            : friendship.userAId;
+          // Determine which profile is the friend (not current user)
+          const friendId = friendship.profileAId === this.currentUser?.id 
+            ? friendship.profileBId 
+            : friendship.profileAId;
           
           try {
-            const userResponse = await fetch(`/api/user/${friendId}`, {
+            // Fetch account from auth service
+            const authResponse = await fetch(`/api/auth/${friendId}`, {
               headers: {
                 'Authorization': `Bearer ${this.accessToken}`,
               },
             });
             
-            if (userResponse.ok) {
-              const userData = await userResponse.json();
-              const friend = userData.profile;
-              
-              const friendDiv = document.createElement('div');
-              friendDiv.className = 'flex items-center justify-between p-4 bg-gray-700 rounded-lg';
-              
-              const avatarHtml = friend.avatarUrl 
-                ? `<img src="${friend.avatarUrl}" class="w-12 h-12 rounded-full object-cover mr-4" alt="${friend.name}'s avatar" />`
-                : `<div class="w-12 h-12 rounded-full bg-blue-500 flex items-center justify-center text-white font-bold mr-4">
-                    ${friend.name.charAt(0).toUpperCase()}
-                  </div>`;
-              
-              friendDiv.innerHTML = `
-                <div class="flex items-center cursor-pointer flex-1" data-friend-id="${friendId}">
-                  ${avatarHtml}
-                  <div>
-                    <p class="text-white font-semibold">${friend.name}</p>
-                    <p class="text-gray-400 text-sm">${friend.email}</p>
-                  </div>
-                </div>
-                <button class="remove-friend-btn px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition" data-friend-id="${friendId}">
-                  Remove
-                </button>
-              `;
-              
-              // Make profile clickable
-              const profileClick = friendDiv.querySelector('[data-friend-id]');
-              profileClick?.addEventListener('click', () => {
-                window.location.href = `./other-profiles.html?id=${friendId}`;
+            if (!authResponse.ok) continue;
+            
+            const authData = await authResponse.json();
+            const account = authData.account;
+            
+            // Fetch profile from user service for avatar
+            let avatarUrl: string | null = null;
+            try {
+              const profileResponse = await fetch(`/api/user/${friendId}`, {
+                headers: {
+                  'Authorization': `Bearer ${this.accessToken}`,
+                },
               });
               
-              // Add remove button handler
-              const removeBtn = friendDiv.querySelector('.remove-friend-btn');
-              removeBtn?.addEventListener('click', () => this.removeFriend(friendId));
-              
-              friendsList.appendChild(friendDiv);
+              if (profileResponse.ok) {
+                const profileData = await profileResponse.json();
+                avatarUrl = profileData.profile?.avatarUrl || null;
+              }
+            } catch (error) {
+              console.log('No avatar for friend:', friendId);
             }
+            
+            const friendDiv = document.createElement('div');
+            friendDiv.className = 'flex items-center justify-between p-4 bg-gray-700 rounded-lg';
+            
+            const avatarHtml = avatarUrl
+              ? `<img src="${avatarUrl}" class="w-12 h-12 rounded-full object-cover mr-4" alt="${account.username}'s avatar" />`
+              : `<div class="w-12 h-12 rounded-full bg-blue-500 flex items-center justify-center text-white font-bold mr-4">
+                  ${account.username.charAt(0).toUpperCase()}
+                </div>`;
+            
+            friendDiv.innerHTML = `
+              <div class="flex items-center cursor-pointer flex-1" data-friend-id="${friendId}">
+                ${avatarHtml}
+                <div>
+                  <p class="text-white font-semibold">${account.username}</p>
+                  <p class="text-gray-400 text-sm">${account.email}</p>
+                </div>
+              </div>
+              <button class="remove-friend-btn px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition" data-friend-id="${friendId}">
+                Remove
+              </button>
+            `;
+            
+            // Make profile clickable
+            const profileClick = friendDiv.querySelector('[data-friend-id]');
+            profileClick?.addEventListener('click', () => {
+              window.location.href = `./other-profiles.html?id=${friendId}`;
+            });
+            
+            // Add remove button handler
+            const removeBtn = friendDiv.querySelector('.remove-friend-btn');
+            removeBtn?.addEventListener('click', (e) => {
+              e.stopPropagation(); // Prevent profile click
+              this.removeFriend(friendId);
+            });
+            
+            friendsList.appendChild(friendDiv);
           } catch (error) {
             console.error('Failed to fetch friend profile:', error);
           }

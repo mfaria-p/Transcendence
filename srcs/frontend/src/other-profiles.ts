@@ -4,16 +4,27 @@ interface User {
   email: string;
 }
 
+interface Account {
+  id: string;
+  username: string;
+  email: string;
+}
+
 interface Profile {
   id: string;
-  name: string;
+  avatarUrl?: string;
+}
+
+interface ViewedUser {
+  id: string;
+  username: string;
   email: string;
   avatarUrl?: string;
 }
 
 class UserProfileViewer {
   private currentUser: User | null = null;
-  private viewedProfile: Profile | null = null;
+  private viewedUser: ViewedUser | null = null;
   private accessToken: string | null = null;
   private userId: string | null = null;
   private friendshipStatus: 'none' | 'friend' | 'pending_sent' | 'pending_received' = 'none';
@@ -73,31 +84,53 @@ class UserProfileViewer {
 
   private async loadUserProfile(userId: string): Promise<void> {
     try {
-      const response = await fetch(`/api/user/${userId}`, {
+      // Fetch account info from auth service (username and email)
+      const authResponse = await fetch(`/api/auth/${userId}`, {
         headers: {
           'Authorization': `Bearer ${this.accessToken}`,
         },
       });
 
-      if (response.ok) {
-        const data = await response.json();
-        this.viewedProfile = data.profile;
-
-        if (!this.viewedProfile) {
+      if (!authResponse.ok) {
+        if (authResponse.status === 404) {
           this.showMessage('User not found', 'error');
           setTimeout(() => window.location.href = './profile.html', 2000);
           return;
         }
-
-        this.displayProfile();
-        await this.checkFriendshipStatus();
-        this.displayFriendActions();
-      } else if (response.status === 404) {
-        this.showMessage('User not found', 'error');
-        setTimeout(() => window.location.href = './profile.html', 2000);
-      } else {
-        throw new Error('Failed to load user profile');
+        throw new Error('Failed to load user account');
       }
+
+      const authData = await authResponse.json();
+      const account: Account = authData.account;
+
+      // Fetch profile from user service (for avatarUrl)
+      let avatarUrl: string | undefined = undefined;
+      try {
+        const profileResponse = await fetch(`/api/user/${userId}`, {
+          headers: {
+            'Authorization': `Bearer ${this.accessToken}`,
+          },
+        });
+        
+        if (profileResponse.ok) {
+          const profileData = await profileResponse.json();
+          avatarUrl = profileData.profile?.avatarUrl;
+        }
+      } catch (error) {
+        console.log('No profile found for user, using defaults');
+      }
+
+      // Combine data from auth and user services
+      this.viewedUser = {
+        id: account.id,
+        username: account.username,
+        email: account.email,
+        avatarUrl: avatarUrl,
+      };
+
+      this.displayProfile();
+      await this.checkFriendshipStatus();
+      this.displayFriendActions();
     } catch (error) {
       console.error('Load user profile error:', error);
       this.showMessage('Failed to load user profile', 'error');
@@ -106,25 +139,25 @@ class UserProfileViewer {
   }
 
   private displayProfile(): void {
-    if (!this.viewedProfile) return;
+    if (!this.viewedUser) return;
 
     const usernameEl = document.getElementById('userUsername');
     const emailEl = document.getElementById('userEmail');
     const avatarEl = document.getElementById('userAvatarPlaceholder');
     const avatarImg = document.getElementById('userAvatarImage') as HTMLImageElement;
 
-    if (usernameEl) usernameEl.textContent = this.viewedProfile.name;
-    if (emailEl) emailEl.textContent = this.viewedProfile.email;
+    if (usernameEl) usernameEl.textContent = this.viewedUser.username;
+    if (emailEl) emailEl.textContent = this.viewedUser.email;
     
     // Display avatar image if URL exists, otherwise show initials
-    if (this.viewedProfile.avatarUrl && avatarImg) {
-      avatarImg.src = this.viewedProfile.avatarUrl;
+    if (this.viewedUser.avatarUrl && avatarImg) {
+      avatarImg.src = this.viewedUser.avatarUrl;
       avatarImg.classList.remove('hidden');
       avatarEl?.classList.add('hidden');
     } else if (avatarEl) {
       avatarImg?.classList.add('hidden');
       avatarEl.classList.remove('hidden');
-      avatarEl.textContent = this.viewedProfile.name.charAt(0).toUpperCase();
+      avatarEl.textContent = this.viewedUser.username.charAt(0).toUpperCase();
     }
   }
 
@@ -160,7 +193,7 @@ class UserProfileViewer {
         const data = await friendsResponse.json();
         const friendships = data.friendships || [];
         const isFriend = friendships.some((friendship: any) => {
-          return friendship.userAId === this.userId || friendship.userBId === this.userId;
+          return friendship.profileAId === this.userId || friendship.profileBId === this.userId;
         });
 
         if (isFriend) {
@@ -169,30 +202,46 @@ class UserProfileViewer {
         }
       }
 
-      // Check pending requests
-      const requestsResponse = await fetch('/api/user/friend-request', {
+      // Check pending requests received (from this user to us)
+      const receivedRequestsResponse = await fetch('/api/user/friend-request/received', {
         headers: {
           'Authorization': `Bearer ${this.accessToken}`,
         },
       });
 
-      if (requestsResponse.ok) {
-        const data = await requestsResponse.json();
+      if (receivedRequestsResponse.ok) {
+        const data = await receivedRequestsResponse.json();
         const requests = data.requests || [];
         
-        // Check if we have a pending request to this user
-        const hasSentRequest = requests.some((req: any) => req.toUserId === this.userId);
+        // Check if we received a request from this user
+        const receivedRequest = requests.find((req: any) => 
+          req.fromProfileId === this.userId && req.status === 'PENDING'
+        );
         
-        if (hasSentRequest) {
-          this.friendshipStatus = 'pending_sent';
+        if (receivedRequest) {
+          this.friendshipStatus = 'pending_received';
           return;
         }
+      }
 
-        // Check if this user sent us a request
-        const hasReceivedRequest = requests.some((req: any) => req.fromUserId === this.userId);
+      // Check if we sent a request to this user
+      const sentRequestsResponse = await fetch('/api/user/friend-request/sent', {
+        headers: {
+          'Authorization': `Bearer ${this.accessToken}`,
+        },
+      });
+
+      if (sentRequestsResponse.ok) {
+        const data = await sentRequestsResponse.json();
+        const sentRequests = data.requests || [];
         
-        if (hasReceivedRequest) {
-          this.friendshipStatus = 'pending_received';
+        // Check if we sent a request to this user
+        const sentRequest = sentRequests.find((req: any) => 
+          req.toProfileId === this.userId && req.status === 'PENDING'
+        );
+        
+        if (sentRequest) {
+          this.friendshipStatus = 'pending_sent';
           return;
         }
       }
@@ -220,8 +269,14 @@ class UserProfileViewer {
 
       case 'pending_sent':
         friendActions.innerHTML = `
-          <p class="text-yellow-400">Friend request pending...</p>
+          <div class="flex flex-col items-center gap-3">
+            <p class="text-yellow-400 font-semibold">Friend request sent</p>
+            <button id="cancelRequestBtn" class="px-6 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition">
+              Cancel Request
+            </button>
+          </div>
         `;
+        document.getElementById('cancelRequestBtn')?.addEventListener('click', () => this.cancelFriendRequest());
         break;
 
       case 'pending_received':
@@ -275,6 +330,31 @@ class UserProfileViewer {
     } catch (error) {
       console.error('Send friend request error:', error);
       this.showMessage('Failed to send friend request', 'error');
+    }
+  }
+
+  private async cancelFriendRequest(): Promise<void> {
+    if (!this.userId) return;
+
+    try {
+      const response = await fetch(`/api/user/friend-request/${this.userId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${this.accessToken}`,
+        },
+      });
+
+      if (response.ok) {
+        this.showMessage('Friend request cancelled', 'success');
+        this.friendshipStatus = 'none';
+        this.displayFriendActions();
+      } else {
+        const data = await response.json();
+        this.showMessage(data.message || 'Failed to cancel friend request', 'error');
+      }
+    } catch (error) {
+      console.error('Cancel friend request error:', error);
+      this.showMessage('Failed to cancel friend request', 'error');
     }
   }
 
