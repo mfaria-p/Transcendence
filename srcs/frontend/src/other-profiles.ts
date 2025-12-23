@@ -48,8 +48,8 @@ class UserProfileViewer {
 
     try {
       this.currentUser = JSON.parse(userStr);
+      await this.verifySession();
       this.setupAuthContainer();
-
       connectPresenceSocket();
       
       // Get user ID from URL parameters
@@ -66,9 +66,63 @@ class UserProfileViewer {
       await this.loadUserProfile(this.userId);
     } catch (error) {
       console.error('Init error:', error);
-      this.showMessage('Failed to load user profile', 'error');
-      setTimeout(() => window.location.href = './profile.html', 2000);
+      this.showMessage('Session expired. Redirecting to login...', 'error');
+      setTimeout(() => {
+        this.clearSessionAndRedirect();
+      }, 2000);
     }
+  }
+
+  private async verifySession(): Promise<void> {
+    try {
+      const response = await fetch('/api/auth/me', {
+        headers: {
+          'Authorization': `Bearer ${this.accessToken}`,
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error('Session expired');
+      }
+    } catch (error) {
+      console.error('Session verification failed:', error);
+      throw error;
+    }
+  }
+
+  private clearSessionAndRedirect(): void {
+    disconnectPresenceSocket();
+    localStorage.removeItem('access_token');
+    localStorage.removeItem('user');
+    window.location.href = './login.html';
+  }
+
+  private async handleApiCall<T>(
+    url: string,
+    options: RequestInit = {}
+  ): Promise<T> {
+    const response = await fetch(url, {
+      ...options,
+      headers: {
+        ...options.headers,
+        'Authorization': `Bearer ${this.accessToken}`,
+      },
+    });
+
+    // Handle 401 Unauthorized - token expired
+    if (response.status === 401) {
+      this.showMessage('Session expired. Please log in again.', 'error');
+      setTimeout(() => {
+        this.clearSessionAndRedirect();
+      }, 1500);
+      throw new Error('Session expired');
+    }
+
+    if (!response.ok && response.status !== 404) {
+      throw new Error(`API call failed: ${response.status}`);
+    }
+
+    return response;
   }
 
   private setupAuthContainer(): void {
@@ -90,11 +144,7 @@ class UserProfileViewer {
   private async loadUserProfile(userId: string): Promise<void> {
     try {
       // Fetch account info from auth service (username and email)
-      const authResponse = await fetch(`/api/auth/${userId}`, {
-        headers: {
-          'Authorization': `Bearer ${this.accessToken}`,
-        },
-      });
+      const authResponse = await this.handleApiCall<Response>(`/api/auth/${userId}`);
 
       if (!authResponse.ok) {
         if (authResponse.status === 404) {
@@ -111,11 +161,7 @@ class UserProfileViewer {
       // Fetch profile from user service (for avatarUrl)
       let avatarUrl: string | undefined = undefined;
       try {
-        const profileResponse = await fetch(`/api/user/${userId}`, {
-          headers: {
-            'Authorization': `Bearer ${this.accessToken}`,
-          },
-        });
+        const profileResponse = await this.handleApiCall<Response>(`/api/user/${userId}`);
         
         if (profileResponse.ok) {
           const profileData = await profileResponse.json();
@@ -127,11 +173,7 @@ class UserProfileViewer {
 
       // Fetch online status from realtime service
       try {
-        const presenceResponse = await fetch(`/api/realtime/presence/${userId}`, {
-          headers: {
-            'Authorization': `Bearer ${this.accessToken}`,
-          },
-        });
+        const presenceResponse = await this.handleApiCall<Response>(`/api/realtime/presence/${userId}`);
         
         if (presenceResponse.ok) {
           const presenceData = await presenceResponse.json();
@@ -156,6 +198,10 @@ class UserProfileViewer {
       this.displayFriendActions();
     } catch (error) {
       console.error('Load user profile error:', error);
+      if (error instanceof Error && error.message === 'Session expired') {
+        return;
+      }
+      
       this.showMessage('Failed to load user profile', 'error');
       setTimeout(() => window.location.href = './profile.html', 2000);
     }
@@ -237,11 +283,7 @@ class UserProfileViewer {
 
     try {
       // Check if already friends
-      const friendsResponse = await fetch('/api/user/friend', {
-        headers: {
-          'Authorization': `Bearer ${this.accessToken}`,
-        },
-      });
+      const friendsResponse = await this.handleApiCall<Response>('/api/user/friend');
 
       if (friendsResponse.ok) {
         const data = await friendsResponse.json();
@@ -257,11 +299,7 @@ class UserProfileViewer {
       }
 
       // Check pending requests received (from this user to us)
-      const receivedRequestsResponse = await fetch('/api/user/friend-request/received', {
-        headers: {
-          'Authorization': `Bearer ${this.accessToken}`,
-        },
-      });
+      const receivedRequestsResponse = await this.handleApiCall<Response>('/api/user/friend-request/received');
 
       if (receivedRequestsResponse.ok) {
         const data = await receivedRequestsResponse.json();
@@ -279,11 +317,7 @@ class UserProfileViewer {
       }
 
       // Check if we sent a request to this user
-      const sentRequestsResponse = await fetch('/api/user/friend-request/sent', {
-        headers: {
-          'Authorization': `Bearer ${this.accessToken}`,
-        },
-      });
+      const sentRequestsResponse = await this.handleApiCall<Response>('/api/user/friend-request/sent');
 
       if (sentRequestsResponse.ok) {
         const data = await sentRequestsResponse.json();
@@ -364,13 +398,11 @@ class UserProfileViewer {
     if (!this.userId) return;
 
     try {
-      const response = await fetch(`/api/user/friend-request/${this.userId}`, {
+      const response = await this.handleApiCall<Response>(`/api/user/friend-request/${this.userId}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${this.accessToken}`,
         },
-        body: JSON.stringify({}),
       });
 
       if (response.ok) {
@@ -391,11 +423,8 @@ class UserProfileViewer {
     if (!this.userId) return;
 
     try {
-      const response = await fetch(`/api/user/friend-request/${this.userId}`, {
+      const response = await this.handleApiCall<Response>(`/api/user/friend-request/${this.userId}`, {
         method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${this.accessToken}`,
-        },
       });
 
       if (response.ok) {
@@ -416,11 +445,8 @@ class UserProfileViewer {
     if (!this.userId) return;
 
     try {
-      const response = await fetch(`/api/user/friend-request/${this.userId}/accept`, {
+      const response = await this.handleApiCall<Response>(`/api/user/friend-request/${this.userId}/accept`, {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${this.accessToken}`,
-        },
       });
 
       if (response.ok) {
@@ -441,11 +467,8 @@ class UserProfileViewer {
     if (!this.userId) return;
 
     try {
-      const response = await fetch(`/api/user/friend-request/${this.userId}/decline`, {
+      const response = await this.handleApiCall<Response>(`/api/user/friend-request/${this.userId}/decline`, {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${this.accessToken}`,
-        },
       });
 
       if (response.ok) {
@@ -468,13 +491,9 @@ class UserProfileViewer {
     if (!confirm('Are you sure you want to remove this friend?')) return;
 
     try {
-      const response = await fetch(`/api/user/friend/${this.userId}`, {
+      const response = await this.handleApiCall<Response>(`/api/user/friend/${this.userId}`, {
         method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${this.accessToken}`,
-        },
       });
-
       if (response.ok) {
         this.showMessage('Friend removed', 'success');
         this.friendshipStatus = 'none';

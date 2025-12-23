@@ -21,7 +21,6 @@ class ProfileManager {
   }
 
   private async init(): Promise<void> {
-    // Check authentication
     const userStr = localStorage.getItem('user');
     this.accessToken = localStorage.getItem('access_token');
 
@@ -32,27 +31,69 @@ class ProfileManager {
 
     try {
       this.currentUser = JSON.parse(userStr);
+      await this.verifySession();
       this.setupAuthContainer();
-
       connectPresenceSocket();
       
-      // Load profile from backend
       await this.loadProfile();
-      
       this.setupEventListeners();
       this.loadFriendRequests();
       this.loadFriends();
     } catch (error) {
       console.error('Init error:', error);
-      this.showMessage('Session expired or profile not found. Redirecting to login...', 'error');
+      this.showMessage('Session expired. Redirecting to login...', 'error');
       
-      // Clear local storage and redirect to login after 2 seconds
       setTimeout(() => {
-        localStorage.removeItem('access_token');
-        localStorage.removeItem('user');
-        window.location.href = './login.html';
+        this.clearSessionAndRedirect();
       }, 2000);
     }
+  }
+
+  private async verifySession(): Promise<void> {
+    try {
+      const response = await fetch('/api/auth/me', {
+        headers: {
+          'Authorization': `Bearer ${this.accessToken}`,
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error('Session expired');
+      }
+    } catch (error) {
+      console.error('Session verification failed:', error);
+      throw error;
+    }
+  }
+
+  private clearSessionAndRedirect(): void {
+    disconnectPresenceSocket();
+    localStorage.removeItem('access_token');
+    localStorage.removeItem('user');
+    window.location.href = './login.html';
+  }
+
+  private async handleApiCall(
+    url: string,
+    options: RequestInit = {}
+  ): Promise<Response> {
+    const response = await fetch(url, {
+      ...options,
+      headers: {
+        ...options.headers,
+        'Authorization': `Bearer ${this.accessToken}`,
+      },
+    });
+
+    if (response.status === 401) {
+      this.showMessage('Session expired. Please log in again.', 'error');
+      setTimeout(() => {
+        this.clearSessionAndRedirect();
+      }, 1500);
+      throw new Error('Session expired');
+    }
+
+    return response;
   }
 
   private setupAuthContainer(): void {
@@ -73,25 +114,23 @@ class ProfileManager {
 
   private async loadProfile(): Promise<void> {
     try {
-      const response = await fetch('/api/user/me', {
-        headers: {
-          'Authorization': `Bearer ${this.accessToken}`,
-        },
-      });
+      const response = await this.handleApiCall('/api/user/me');
 
       if (response.ok) {
         const data = await response.json();
         this.currentProfile = data.profile;
         this.displayProfile();
-        console.log('Profile loaded from backend:', this.currentProfile);
       } else if (response.status === 404) {
-        throw new Error('Profile not found. Please log out and log in again.');
+        throw new Error('Profile not found');
       } else {
         throw new Error(`Failed to load profile: ${response.status}`);
       }
     } catch (error) {
+      if (error instanceof Error && error.message === 'Session expired') {
+        return;
+      }
       console.error('Load profile error:', error);
-      throw error; // Propagate error to init()
+      throw error;
     }
   }
 
@@ -106,7 +145,6 @@ class ProfileManager {
     if (usernameEl) usernameEl.textContent = this.currentUser.username;
     if (emailEl) emailEl.textContent = this.currentUser.email;
     
-    // Display avatar image if URL exists, otherwise show initials
     if (this.currentProfile?.avatarUrl && avatarImg) {
       avatarImg.src = this.currentProfile.avatarUrl;
       avatarImg.classList.remove('hidden');
@@ -119,7 +157,6 @@ class ProfileManager {
   }
 
   private setupEventListeners(): void {
-    // Avatar change button
     document.getElementById('changePhotoBtn')?.addEventListener('click', () => this.openAvatarModal());
     document.getElementById('cancelAvatarBtn')?.addEventListener('click', () => this.closeAvatarModal());
     document.getElementById('avatarForm')?.addEventListener('submit', (e) => {
@@ -127,43 +164,30 @@ class ProfileManager {
       this.saveAvatar();
     });
 
-    // Preview avatar as user types
-    const avatarUrlInput = document.getElementById('avatarUrlInput') as HTMLInputElement;
-    avatarUrlInput?.addEventListener('input', () => {
-      const url = avatarUrlInput.value.trim();
+    document.getElementById('avatarUrlInput')?.addEventListener('input', (e) => {
+      const input = e.target as HTMLInputElement;
+      const url = input.value.trim();
       if (url) {
         this.previewAvatar(url);
-      } else {
-        document.getElementById('avatarPreview')?.classList.add('hidden');
       }
     });
 
-    // Username edit buttons
     document.getElementById('editUsernameBtn')?.addEventListener('click', () => this.startEditUsername());
-    document.getElementById('saveUsernameBtn')?.addEventListener('click', () => this.saveUsername());
     document.getElementById('cancelUsernameBtn')?.addEventListener('click', () => this.cancelEditUsername());
+    document.getElementById('saveUsernameBtn')?.addEventListener('click', () => this.saveUsername());
 
-    // Email edit buttons
     document.getElementById('editEmailBtn')?.addEventListener('click', () => this.startEditEmail());
-    document.getElementById('saveEmailBtn')?.addEventListener('click', () => this.saveEmail());
     document.getElementById('cancelEmailBtn')?.addEventListener('click', () => this.cancelEditEmail());
+    document.getElementById('saveEmailBtn')?.addEventListener('click', () => this.saveEmail());
 
-    // Password edit buttons
     document.getElementById('editPasswordBtn')?.addEventListener('click', () => this.startEditPassword());
-    document.getElementById('savePasswordBtn')?.addEventListener('click', () => this.savePassword());
     document.getElementById('cancelPasswordBtn')?.addEventListener('click', () => this.cancelEditPassword());
-    
-    // Real-time password validation
-    const newPasswordInput = document.getElementById('newPasswordInput') as HTMLInputElement;
-    newPasswordInput?.addEventListener('input', () => this.updatePasswordRequirements());
+    document.getElementById('savePasswordBtn')?.addEventListener('click', () => this.savePassword());
 
-    // Real-time user search
-    const searchInput = document.getElementById('searchUserInput') as HTMLInputElement;
-    let searchTimeout: number;
-    searchInput?.addEventListener('input', () => {
-      clearTimeout(searchTimeout);
-      searchTimeout = window.setTimeout(() => this.searchUsers(), 300);
-    });
+    document.getElementById('newPasswordInput')?.addEventListener('input', () => this.updatePasswordRequirements());
+
+    const searchInput = document.getElementById('searchUserInput');
+    searchInput?.addEventListener('input', () => this.searchUsers());
   }
 
   private openAvatarModal(): void {
@@ -225,11 +249,10 @@ class ProfileManager {
     }
 
     try {
-      const response = await fetch('/api/user/provision', {
+      const response = await this.handleApiCall('/api/user/provision', {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${this.accessToken}`,
         },
         body: JSON.stringify({
           avatarUrl: url,
@@ -238,19 +261,19 @@ class ProfileManager {
       
       if (response.ok) {
         const data = await response.json();
-        console.log('Response data:', data);
         this.currentProfile = data.profile;
         this.displayProfile();
         this.closeAvatarModal();
         this.showMessage('Profile picture updated!', 'success');
       } else {
         const data = await response.json();
-        console.error('Error response:', data);
         this.showMessage(data.message || 'Failed to update profile picture', 'error');
       }
     } catch (error) {
-      console.error('Save avatar error:', error);
-      this.showMessage('Failed to update profile picture', 'error');
+      if (error instanceof Error && error.message !== 'Session expired') {
+        console.error('Save avatar error:', error);
+        this.showMessage('Failed to update profile picture', 'error');
+      }
     }
   }
 
@@ -313,11 +336,10 @@ class ProfileManager {
     }
 
     try {
-      const response = await fetch('/api/auth/me', {
+      const response = await this.handleApiCall('/api/auth/me', {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${this.accessToken}`,
         },
         body: JSON.stringify({
           username: newUsername,
@@ -336,18 +358,19 @@ class ProfileManager {
         this.displayProfile();
         this.cancelEditUsername();
         this.showMessage('Username updated successfully!', 'success');
-        
         this.setupAuthContainer();
       } else {
         const data = await response.json();
         const message = response.status === 409 
-          ? 'Username already taken. Please choose another one.' 
+          ? 'Username already taken' 
           : (data.message || 'Failed to update username');
         this.showMessage(message, 'error');
       }
     } catch (error) {
-      console.error('Save username error:', error);
-      this.showMessage('Failed to update username', 'error');
+      if (error instanceof Error && error.message !== 'Session expired') {
+        console.error('Save username error:', error);
+        this.showMessage('Failed to update username', 'error');
+      }
     }
   }
 
@@ -389,11 +412,10 @@ class ProfileManager {
     }
 
     try {
-      const response = await fetch('/api/auth/me', {
+      const response = await this.handleApiCall('/api/auth/me', {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${this.accessToken}`,
         },
         body: JSON.stringify({
           username: this.currentUser?.username,
@@ -401,7 +423,6 @@ class ProfileManager {
         }),
       });
 
-     
       if (response.ok) {
         const data = await response.json();
 
@@ -416,13 +437,15 @@ class ProfileManager {
       } else {
         const data = await response.json();
         const message = response.status === 409 
-          ? 'Email already in use. Please use another one.' 
+          ? 'Email already in use' 
           : (data.message || 'Failed to update email');
         this.showMessage(message, 'error');
       }
     } catch (error) {
-      console.error('Save email error:', error);
-      this.showMessage('Failed to update email', 'error');
+      if (error instanceof Error && error.message !== 'Session expired') {
+        console.error('Save email error:', error);
+        this.showMessage('Failed to update email', 'error');
+      }
     }
   }
 
@@ -526,14 +549,13 @@ class ProfileManager {
     }
 
     try {
-      const response = await fetch('/api/auth/me/password', {
+      const response = await this.handleApiCall('/api/auth/me/password', {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${this.accessToken}`,
         },
         body: JSON.stringify({
-          currentPassword: currentPassword, //doesnt exist in the method
+          currentPassword: currentPassword,
           password: newPassword,
         }),
       });
@@ -546,8 +568,10 @@ class ProfileManager {
         this.showMessage(data.message || 'Failed to update password', 'error');
       }
     } catch (error) {
-      console.error('Save password error:', error);
-      this.showMessage('Failed to update password', 'error');
+      if (error instanceof Error && error.message !== 'Session expired') {
+        console.error('Save password error:', error);
+        this.showMessage('Failed to update password', 'error');
+      }
     }
   }
 
@@ -566,12 +590,7 @@ class ProfileManager {
     }
 
     try {
-      // Fetch accounts from auth service
-      const response = await fetch(`/api/auth/search?prefix=${encodeURIComponent(searchTerm)}`, {
-        headers: {
-          'Authorization': `Bearer ${this.accessToken}`,
-        },
-      });
+      const response = await this.handleApiCall(`/api/auth/search?prefix=${encodeURIComponent(searchTerm)}`);
 
       if (response.ok) {
         const data = await response.json();
@@ -592,11 +611,7 @@ class ProfileManager {
           // Try to fetch avatar from user service
           let avatarUrl = null;
           try {
-            const profileRes = await fetch(`/api/user/${account.id}`, {
-              headers: {
-                'Authorization': `Bearer ${this.accessToken}`,
-              },
-            });
+            const profileRes = await this.handleApiCall(`/api/user/${account.id}`);
             if (profileRes.ok) {
               const profileData = await profileRes.json();
               avatarUrl = profileData.profile?.avatarUrl;
@@ -636,8 +651,10 @@ class ProfileManager {
         this.showMessage('Failed to search users', 'error');
       }
     } catch (error) {
-      console.error('Search users error:', error);
-      this.showMessage('Failed to search users', 'error');
+      if (error instanceof Error && error.message !== 'Session expired') {
+        console.error('Search users error:', error);
+        this.showMessage('Failed to search users', 'error');
+      }
     }
   }
 
@@ -646,11 +663,7 @@ class ProfileManager {
     if (!friendRequestsList) return;
 
     try {
-      const response = await fetch('/api/user/friend-request/received', {
-        headers: {
-          'Authorization': `Bearer ${this.accessToken}`,
-        },
-      });
+      const response = await this.handleApiCall('/api/user/friend-request/received');
 
       if (response.ok) {
         const data = await response.json();
@@ -667,17 +680,10 @@ class ProfileManager {
 
         // Fetch user profiles for each request
         for (const request of requests) {
-          console.log('Processing request:', request);
-          
           const fromProfileId = request.fromProfileId;
           
           try {
-            // Fetch account info from auth service
-            const authResponse = await fetch(`/api/auth/${fromProfileId}`, {
-              headers: {
-                'Authorization': `Bearer ${this.accessToken}`,
-              },
-            });
+            const authResponse = await this.handleApiCall(`/api/auth/${fromProfileId}`);
             
             let username = 'Unknown User';
             let email = '';
@@ -691,11 +697,7 @@ class ProfileManager {
             // Fetch profile from user service for avatar
             let avatarUrl: string | null = null;
             try {
-              const profileResponse = await fetch(`/api/user/${fromProfileId}`, {
-                headers: {
-                  'Authorization': `Bearer ${this.accessToken}`,
-                },
-              });
+              const profileResponse = await this.handleApiCall(`/api/user/${fromProfileId}`);
               
               if (profileResponse.ok) {
                 const profileData = await profileResponse.json();
@@ -732,7 +734,7 @@ class ProfileManager {
                 </button>
               </div>
             `;
-
+            
             const acceptBtn = requestDiv.querySelector('.accept-btn');
             const declineBtn = requestDiv.querySelector('.decline-btn');
             
@@ -741,48 +743,46 @@ class ProfileManager {
             
             friendRequestsList.appendChild(requestDiv);
           } catch (error) {
-            console.error('Failed to fetch user info for friend request:', error);
+            console.error('Failed to fetch user info:', error);
           }
         }
       } else {
         this.showMessage('Failed to load friend requests', 'error');
       }
     } catch (error) {
-      console.error('Load friend requests error:', error);
-      this.showMessage('Failed to load friend requests', 'error');
+      if (error instanceof Error && error.message !== 'Session expired') {
+        console.error('Load friend requests error:', error);
+        this.showMessage('Failed to load friend requests', 'error');
+      }
     }
   }
 
   private async acceptFriendRequest(fromProfileId: string): Promise<void> {
     try {
-      const response = await fetch(`/api/user/friend-request/${fromProfileId}/accept`, {
+      const response = await this.handleApiCall(`/api/user/friend-request/${fromProfileId}/accept`, {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${this.accessToken}`,
-        },
       });
 
       if (response.ok) {
         this.showMessage('Friend request accepted!', 'success');
         await this.loadFriendRequests();
-        await this.loadFriends(); // Refresh friends list
+        await this.loadFriends();
       } else {
         const data = await response.json();
         this.showMessage(data.message || 'Failed to accept friend request', 'error');
       }
     } catch (error) {
-      console.error('Accept friend request error:', error);
-      this.showMessage('Failed to accept friend request', 'error');
+      if (error instanceof Error && error.message !== 'Session expired') {
+        console.error('Accept friend request error:', error);
+        this.showMessage('Failed to accept friend request', 'error');
+      }
     }
   }
 
   private async declineFriendRequest(fromProfileId: string): Promise<void> {
     try {
-      const response = await fetch(`/api/user/friend-request/${fromProfileId}/decline`, {
+      const response = await this.handleApiCall(`/api/user/friend-request/${fromProfileId}/decline`, {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${this.accessToken}`,
-        },
       });
 
       if (response.ok) {
@@ -793,8 +793,10 @@ class ProfileManager {
         this.showMessage(data.message || 'Failed to decline friend request', 'error');
       }
     } catch (error) {
-      console.error('Decline friend request error:', error);
-      this.showMessage('Failed to decline friend request', 'error');
+      if (error instanceof Error && error.message !== 'Session expired') {
+        console.error('Decline friend request error:', error);
+        this.showMessage('Failed to decline friend request', 'error');
+      }
     }
   }
 
@@ -803,11 +805,7 @@ class ProfileManager {
     if (!friendsList) return;
 
     try {
-      const response = await fetch('/api/user/friend', {
-        headers: {
-          'Authorization': `Bearer ${this.accessToken}`,
-        },
-      });
+      const response = await this.handleApiCall('/api/user/friend');
 
       if (response.ok) {
         const data = await response.json();
@@ -828,12 +826,7 @@ class ProfileManager {
             : friendship.profileAId;
           
           try {
-            // Fetch account from auth service
-            const authResponse = await fetch(`/api/auth/${friendId}`, {
-              headers: {
-                'Authorization': `Bearer ${this.accessToken}`,
-              },
-            });
+            const authResponse = await this.handleApiCall(`/api/auth/${friendId}`);
             
             if (!authResponse.ok) continue;
             
@@ -843,11 +836,7 @@ class ProfileManager {
             // Fetch profile from user service for avatar
             let avatarUrl: string | null = null;
             try {
-              const profileResponse = await fetch(`/api/user/${friendId}`, {
-                headers: {
-                  'Authorization': `Bearer ${this.accessToken}`,
-                },
-              });
+              const profileResponse = await this.handleApiCall(`/api/user/${friendId}`);
               
               if (profileResponse.ok) {
                 const profileData = await profileResponse.json();
@@ -901,8 +890,10 @@ class ProfileManager {
         this.showMessage('Failed to load friends', 'error');
       }
     } catch (error) {
-      console.error('Load friends error:', error);
-      this.showMessage('Failed to load friends', 'error');
+      if (error instanceof Error && error.message !== 'Session expired') {
+        console.error('Load friends error:', error);
+        this.showMessage('Failed to load friends', 'error');
+      }
     }
   }
 
@@ -910,11 +901,8 @@ class ProfileManager {
     if (!confirm('Are you sure you want to remove this friend?')) return;
 
     try {
-      const response = await fetch(`/api/user/friend/${friendId}`, {
+      const response = await this.handleApiCall(`/api/user/friend/${friendId}`, {
         method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${this.accessToken}`,
-        },
       });
 
       if (response.ok) {
@@ -925,14 +913,16 @@ class ProfileManager {
         this.showMessage(data.message || 'Failed to remove friend', 'error');
       }
     } catch (error) {
-      console.error('Remove friend error:', error);
-      this.showMessage('Failed to remove friend', 'error');
+      if (error instanceof Error && error.message !== 'Session expired') {
+        console.error('Remove friend error:', error);
+        this.showMessage('Failed to remove friend', 'error');
+      }
     }
   }
 
   private async handleLogout(): Promise<void> {
-     disconnectPresenceSocket();
-     
+    disconnectPresenceSocket();
+    
     try {
       await fetch('/api/auth/logout', {
         method: 'POST',
