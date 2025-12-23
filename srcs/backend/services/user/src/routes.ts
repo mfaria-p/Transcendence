@@ -159,11 +159,18 @@ export default async function (app: FastifyInstance): Promise<void> {
     const profileId: string = req.jwtPayload!.id;
     const {friendProfileId} = req.params as {friendProfileId: string};
 
-    const friendship: Friendship = await utils.friendDelete(app.prisma, profileId, friendProfileId);
+    try {
+      await utils.requestDelete(app.prisma, profileId, friendProfileId);
+    } catch (err) {}
+    try {
+      await utils.requestDelete(app.prisma, friendProfileId, profileId, 'ACCEPTED');
+    } catch (err) {}
+    const friendship = await utils.friendDelete(app.prisma, profileId, friendProfileId);
 
     return {
       success: true,
       message: 'Unfriended',
+      // request: request,
       friendship: friendship,
     };
   });

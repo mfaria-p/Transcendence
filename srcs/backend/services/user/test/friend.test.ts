@@ -53,7 +53,7 @@ describe('Friendship', () => {
       },
     });
 
-    const res = await app.inject({
+    await app.inject({
       method: 'POST',
       url: `/user/friend-request/${profileAId}/accept`,
       headers: {
@@ -159,5 +159,31 @@ describe('Friendship', () => {
       },
     });
     expect(r1.statusCode).toBe(404);
+  });
+
+  it('POST /user/friend-request/:profileId - A Resend friend request to B', async () => {
+    const r1 = await app.inject({
+      method: 'POST',
+      url: `/user/friend-request/${profileBId}`,
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${at1}`,
+      },
+      payload: {
+        message: 'hello',
+      },
+    });
+    expect(r1.statusCode).toBe(200);
+  });
+
+  it('POST /user/friend-request/:profileId - B accept A friend request', async () => {
+    const r1 = await app.inject({
+      method: 'POST',
+      url: `/user/friend-request/${profileAId}/accept`,
+      headers: {
+        'Authorization': `Bearer ${at2}`,
+      },
+    });
+    expect(r1.statusCode).toBe(200);
   });
 });
