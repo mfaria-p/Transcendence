@@ -148,7 +148,10 @@ class TournamentsPage {
 
       const isOwner = tournament.ownerId === this.currentUser?.id;
       const isParticipant = tournament.players.includes(this.currentUser?.id ?? '');
-      const canJoin = tournament.status === 'waiting' && tournament.players.length < tournament.maxPlayers;
+      const hasOpenSlot = tournament.players.length < tournament.maxPlayers;
+      const canJoin =
+        (tournament.status === 'waiting' && hasOpenSlot) ||
+        (tournament.status === 'running' && tournament.maxPlayers === 2 && hasOpenSlot);
       const canStart = isOwner && tournament.status === 'waiting' && tournament.players.length >= 2;
       const activeMatch = this.getCurrentMatchForUser(tournament);
 
@@ -277,7 +280,8 @@ class TournamentsPage {
     return `<ul class="space-y-3">${items.join('')}</ul>`;
   }
 
-  private formatPlayer(userId: string): string {
+  private formatPlayer(userId: string | null): string {
+    if (!userId) return 'TBD';
     if (this.currentUser && userId === this.currentUser.id) {
       return `${this.currentUser.username} (you)`;
     }
@@ -355,13 +359,24 @@ class TournamentsPage {
         body: JSON.stringify(payload),
       });
 
+      const data = await response.json().catch(() => null);
       if (!response.ok) {
-        const data = await response.json().catch(() => null);
         throw new Error(data?.error ?? 'Failed to create tournament');
       }
 
+      const createdTournament: Tournament | null = data?.tournament ?? null;
+
       nameInput?.value && (nameInput.value = '');
       this.showMessage('Tournament created successfully!', 'success');
+
+      if (createdTournament?.id && createdTournament.maxPlayers === 2) {
+        const started = await this.startTournament(createdTournament.id, null, {
+          redirectAfterStart: true,
+          skipMessage: true,
+        });
+        if (started) return;
+      }
+
       await this.loadTournaments();
     } catch (error) {
       console.error('createTournament error:', error);
@@ -385,12 +400,19 @@ class TournamentsPage {
         },
       });
 
+      const data = await response.json().catch(() => null);
       if (!response.ok) {
-        const data = await response.json().catch(() => null);
         throw new Error(data?.error ?? 'Unable to join the tournament');
       }
 
+      const joinedTournament: Tournament | null = data?.tournament ?? null;
+
       this.showMessage('Registration confirmed!', 'success');
+
+      if (joinedTournament && joinedTournament.status === 'running' && joinedTournament.maxPlayers === 2) {
+        await this.redirectToMatch(joinedTournament);
+      }
+
       await this.loadTournaments();
     } catch (error) {
       console.error('joinTournament error:', error);
@@ -403,8 +425,12 @@ class TournamentsPage {
     }
   }
 
-  private async startTournament(tournamentId: string, button?: HTMLButtonElement): Promise<void> {
-    if (!this.accessToken) return;
+  private async startTournament(
+    tournamentId: string,
+    button?: HTMLButtonElement | null,
+    options?: { redirectAfterStart?: boolean; skipMessage?: boolean },
+  ): Promise<Tournament | null> {
+    if (!this.accessToken) return null;
 
     if (button) {
       button.disabled = true;
@@ -419,21 +445,57 @@ class TournamentsPage {
         },
       });
 
+      const data = await response.json().catch(() => null);
       if (!response.ok) {
-        const data = await response.json().catch(() => null);
         throw new Error(data?.error ?? 'Unable to start the tournament');
       }
 
-      this.showMessage('Tournament started!', 'success');
+      const tournament: Tournament | null = data?.tournament ?? null;
+
+      if (!options?.skipMessage) {
+        this.showMessage('Tournament started!', 'success');
+      }
+
+      if (options?.redirectAfterStart && tournament) {
+        await this.redirectToMatch(tournament);
+      }
+
       await this.loadTournaments();
+      return tournament;
     } catch (error) {
       console.error('startTournament error:', error);
       this.showMessage((error as Error).message ?? 'Error starting tournament.', 'error');
+      return null;
     } finally {
       if (button) {
         button.disabled = false;
         button.classList.remove('opacity-50', 'cursor-not-allowed');
       }
+    }
+  }
+
+  private async fetchTournament(tournamentId: string): Promise<Tournament | null> {
+    if (!this.accessToken) return null;
+
+    try {
+      const res = await fetch(`/api/realtime/tournaments/${tournamentId}`, {
+        headers: { 'Authorization': `Bearer ${this.accessToken}` },
+      });
+      if (!res.ok) return null;
+      const data = await res.json().catch(() => null);
+      return (data?.tournament as Tournament) ?? null;
+    } catch (err) {
+      console.warn('fetchTournament failed', err);
+      return null;
+    }
+  }
+
+  private async redirectToMatch(tournament: Tournament | string): Promise<void> {
+    const resolved = typeof tournament === 'string' ? await this.fetchTournament(tournament) : tournament;
+    if (!resolved) return;
+    const match = this.getCurrentMatchForUser(resolved);
+    if (match) {
+      window.location.href = `./match.html?roomId=${match.roomId}`;
     }
   }
 

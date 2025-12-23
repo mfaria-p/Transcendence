@@ -47,6 +47,7 @@ interface GameRoom {
   status: GameStatus;
   left?: PlayerState;
   right?: PlayerState;
+  ready: { left: boolean; right: boolean };
   state: GameState;
   scores: { left: number; right: number };
   maxScore: number;
@@ -55,6 +56,17 @@ interface GameRoom {
   isTournament: boolean;
   tournamentId?: string;
   matchId?: string;
+}
+
+function sendReadyUpdate(room: GameRoom): void {
+  const payload = {
+    type: 'game:ready:ack' as const,
+    roomId: room.id,
+    ready: { ...room.ready },
+  };
+
+  if (room.left) sendToUser(room.left.userId, payload);
+  if (room.right) sendToUser(room.right.userId, payload);
 }
 
 const TICK_RATE = 60; // 60 updates por segundo
@@ -115,6 +127,16 @@ function sendToUser(userId: string, payload: unknown): void {
   });
 }
 
+function debugToUser(userId: string, event: string, data?: Record<string, unknown>): void {
+  sendToUser(userId, {
+    type: 'debug',
+    scope: 'game',
+    event,
+    ...(data ? { data } : {}),
+    ts: Date.now(),
+  });
+}
+
 function broadcastRoomState(room: GameRoom): void {
   const base = {
     type: 'game:state' as const,
@@ -126,6 +148,7 @@ function broadcastRoomState(room: GameRoom): void {
       left: room.left?.userId ?? null,
       right: room.right?.userId ?? null,
     },
+    ready: { ...room.ready },
     isTournament: room.isTournament,
     tournamentId: room.tournamentId ?? null,
     matchId: room.matchId ?? null,
@@ -142,9 +165,17 @@ function broadcastRoomState(room: GameRoom): void {
 function startLoopIfReady(room: GameRoom): void {
   if (room.status === 'playing') return;
   if (!room.left || !room.right) return;
+  // exigimos readiness apenas em torneios
+  if (room.isTournament && (!room.ready.left || !room.ready.right)) return;
 
   room.status = 'playing';
+  // reset flags para não interferir em futuros reusos
+  room.ready.left = false;
+  room.ready.right = false;
   resetBall(room, Math.random() < 0.5 ? 'left' : 'right');
+
+  // envia já o estado em playing (sem esperar pelo primeiro tick)
+  broadcastRoomState(room);
 
   room.loop = setInterval(() => {
     stepRoom(room);
@@ -338,7 +369,10 @@ function ensureRoomForJoin(userId: string, msg: GameMessage): GameRoom | null {
   const existingRoomId = userToRoom.get(uid);
   if (existingRoomId) {
     const r = rooms.get(existingRoomId);
-    if (r) return r;
+    if (r) {
+      if (!r.ready) r.ready = { left: false, right: false };
+      return r;
+    }
     userToRoom.delete(uid);
   }
 
@@ -362,6 +396,7 @@ function ensureRoomForJoin(userId: string, msg: GameMessage): GameRoom | null {
           status: 'waiting',
           state: createInitialState(),
           scores: { left: 0, right: 0 },
+          ready: { left: false, right: false },
           maxScore: MAX_SCORE_DEFAULT,
           isTournament: true,
           tournamentId: tournament.id,
@@ -369,6 +404,7 @@ function ensureRoomForJoin(userId: string, msg: GameMessage): GameRoom | null {
         };
         rooms.set(room.id, room);
       }
+      if (!room.ready) room.ready = { left: false, right: false };
       return room;
     }
 
@@ -380,11 +416,13 @@ function ensureRoomForJoin(userId: string, msg: GameMessage): GameRoom | null {
         status: 'waiting',
         state: createInitialState(),
         scores: { left: 0, right: 0 },
+        ready: { left: false, right: false },
         maxScore: MAX_SCORE_DEFAULT,
         isTournament: false,
       };
       rooms.set(room.id, room);
     }
+    if (!room.ready) room.ready = { left: false, right: false };
     return room;
   }
 
@@ -409,6 +447,7 @@ function ensureRoomForJoin(userId: string, msg: GameMessage): GameRoom | null {
     status: 'waiting',
     state: createInitialState(),
     scores: { left: 0, right: 0 },
+    ready: { left: false, right: false },
     maxScore: MAX_SCORE_DEFAULT,
     isTournament: false,
   };
@@ -425,11 +464,13 @@ function setPlayerInRoom(room: GameRoom, userId: string): Side | null {
 
   if (!room.left) {
     room.left = { userId: uid, side: 'left', input: 'none' };
+    room.ready.left = false;
     userToRoom.set(uid, room.id);
     return 'left';
   }
   if (!room.right && room.left.userId !== uid) {
     room.right = { userId: uid, side: 'right', input: 'none' };
+    room.ready.right = false;
     userToRoom.set(uid, room.id);
     return 'right';
   }
@@ -464,6 +505,78 @@ function handleJoin(userId: string, socket: WebSocket, msg: GameMessage): void {
   }
 
   // enviar snapshot inicial
+  debugToUser(String(userId), 'join', {
+    roomId: room.id,
+    isTournament: room.isTournament,
+    left: room.left?.userId ?? null,
+    right: room.right?.userId ?? null,
+  });
+  broadcastRoomState(room);
+  // Envia um ACK explícito de join para já fixar o lado no cliente e espelhar o estado atual
+  sendToUser(String(userId), {
+    type: 'game:joined',
+    roomId: room.id,
+    yourSide: side,
+    ready: { ...room.ready },
+    players: {
+      left: room.left?.userId ?? null,
+      right: room.right?.userId ?? null,
+    },
+    status: room.status,
+  });
+  startLoopIfReady(room);
+}
+
+function handleReady(userId: string): void {
+  const uid = normalizeId(userId);
+  if (!uid) return;
+  const roomId = userToRoom.get(uid);
+  if (!roomId) return;
+  const room = rooms.get(roomId);
+  if (!room || room.status !== 'waiting') return;
+
+  if (room.left && room.left.userId === uid) {
+    room.ready.left = true;
+  } else if (room.right && room.right.userId === uid) {
+    room.ready.right = true;
+  }
+
+  sendReadyUpdate(room);
+
+  debugToUser(uid, 'ready', {
+    roomId: room.id,
+    readyLeft: room.ready.left,
+    readyRight: room.ready.right,
+  });
+
+  broadcastRoomState(room);
+  startLoopIfReady(room);
+}
+
+function handleStart(userId: string): void {
+  const uid = normalizeId(userId);
+  if (!uid) return;
+  const roomId = userToRoom.get(uid);
+  if (!roomId) return;
+  const room = rooms.get(roomId);
+  if (!room || room.status !== 'waiting') return;
+  if (!room.left || !room.right) {
+    sendToUser(uid, {
+      type: 'game:error',
+      message: 'Both players must be in the room to start.',
+    });
+    return;
+  }
+
+  debugToUser(uid, 'start', {
+    roomId: room.id,
+    left: room.left?.userId ?? null,
+    right: room.right?.userId ?? null,
+  });
+
+  // força ambos como prontos e inicia
+  room.ready.left = true;
+  room.ready.right = true;
   broadcastRoomState(room);
   startLoopIfReady(room);
 }
@@ -520,6 +633,12 @@ export function handleGameMessage(
       break;
     case 'game:input':
       handleInput(userId, msg);
+      break;
+    case 'game:ready':
+      handleReady(userId);
+      break;
+    case 'game:start':
+      handleStart(userId);
       break;
     case 'game:leave':
       handleLeave(userId);

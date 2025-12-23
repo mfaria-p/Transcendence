@@ -80,19 +80,48 @@ export function joinTournament(tournamentId: string, userId: string): Tournament
   if (!t) {
     throw new Error('Tournament not found');
   }
-  if (t.status !== 'waiting') {
-    throw new Error('Tournament already started');
-  }
   if (t.players.includes(userId)) {
     return t;
   }
-  if (t.players.length >= t.maxPlayers) {
-    throw new Error('Tournament full');
+
+  // Cenário normal: torneio ainda não começou.
+  if (t.status === 'waiting') {
+    if (t.players.length >= t.maxPlayers) {
+      throw new Error('Tournament full');
+    }
+
+    t.players.push(userId);
+    t.updatedAt = now();
+    return t;
   }
 
-  t.players.push(userId);
-  t.updatedAt = now();
-  return t;
+  // Permitir join tardio apenas para torneios 1v1 já iniciados que têm vaga aberta.
+  if (t.status === 'running' && t.maxPlayers === 2) {
+    if (t.players.length >= t.maxPlayers) {
+      throw new Error('Tournament full');
+    }
+
+    const pendingWithSlot = t.matches.find(
+      (m) =>
+        m.status === 'pending' &&
+        (m.player1Id === null || m.player1Id === undefined || m.player2Id === null || m.player2Id === undefined),
+    );
+
+    if (!pendingWithSlot) {
+      throw new Error('No available match to join');
+    }
+
+    t.players.push(userId);
+    if (!pendingWithSlot.player1Id) {
+      pendingWithSlot.player1Id = userId;
+    } else {
+      pendingWithSlot.player2Id = userId;
+    }
+    t.updatedAt = now();
+    return t;
+  }
+
+  throw new Error('Tournament already started');
 }
 
 function createMatch(
@@ -145,6 +174,35 @@ export function startTournament(tournamentId: string): Tournament {
     throw new Error('Tournament already started');
   }
 
+  // Caminho 1v1: podemos iniciar com apenas um jogador (host entra na sala e espera oponente).
+  if (t.maxPlayers === 2) {
+    if (t.players.length < 1) {
+      throw new Error('Not enough players (need at least 1)');
+    }
+    if (t.players.length > t.maxPlayers) {
+      throw new Error('Tournament full');
+    }
+
+    const players = [...t.players];
+    const matches: TournamentMatch[] = [];
+
+    createMatch(
+      t,
+      {
+        player1Id: players[0] ?? null,
+        player2Id: players[1] ?? null,
+        isFinal: true,
+      },
+      matches,
+    );
+
+    t.matches = matches;
+    t.status = 'running';
+    t.updatedAt = now();
+    return t;
+  }
+
+  // Caminho 4 jogadores mantém a lógica original.
   if (t.players.length < 2) {
     throw new Error('Not enough players (need at least 2)');
   }

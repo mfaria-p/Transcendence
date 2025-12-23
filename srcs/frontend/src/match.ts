@@ -28,6 +28,7 @@ interface GameStateMessage {
 	status: GameStatus;
 	scores: { left: number; right: number };
 	players: { left: string | null; right: string | null };
+	ready?: { left: boolean; right: boolean };
 	state: ServerGameState;
 	yourSide?: Side;
 }
@@ -42,15 +43,33 @@ interface GameFinishedMessage {
 	matchId?: string | null;
 }
 
+interface GameJoinedMessage {
+	type: 'game:joined';
+	roomId: string;
+	yourSide: Side | null;
+	ready: { left: boolean; right: boolean };
+	players: { left: string | null; right: string | null };
+	status: GameStatus;
+}
+
 interface GameErrorMessage {
 	type: 'game:error';
 	message?: string;
+}
+
+interface GameReadyAckMessage {
+	type: 'game:ready:ack';
+	roomId: string;
+	ready: { left: boolean; right: boolean };
 }
 
 type KnownServerMessage =
 	| GameStateMessage
 	| GameFinishedMessage
 	| GameErrorMessage
+	| GameReadyAckMessage
+	| GameJoinedMessage
+	| { type: 'debug'; scope?: string; event?: string; data?: unknown; ts?: number }
 	| { type: 'hello'; userId: string }
 	| { type: 'pong'; ts?: number }
 	| { type: 'presence'; event: string; userId: string }
@@ -65,6 +84,11 @@ class TournamentMatchPage {
 	private yourSide: Side | null = null;
 	private currentDirection: Direction = 'none';
 	private pressed = { up: false, down: false };
+	private readyFlags = { left: false, right: false };
+	private players: { left: string | null; right: string | null } = { left: null, right: null };
+	private sentReady = false;
+	private gameStatus: GameStatus = 'waiting';
+	private readyButton: HTMLButtonElement | null = null;
 	private keyDownHandler = (event: KeyboardEvent) => this.handleKeyDown(event);
 	private keyUpHandler = (event: KeyboardEvent) => this.handleKeyUp(event);
 	private beforeUnloadHandler = () => this.dispose();
@@ -83,6 +107,13 @@ class TournamentMatchPage {
 		this.matchId = ids?.matchId ?? null;
 		this.canvas = document.getElementById('gameCanvas') as HTMLCanvasElement | null;
 		this.ctx = this.canvas?.getContext('2d') ?? null;
+		console.log('[match] Constructor - initial state:', {
+			normalizedUserId: this.normalizedUser.id,
+			roomId: this.roomId,
+			readyFlags: this.readyFlags,
+			sentReady: this.sentReady,
+			gameStatus: this.gameStatus
+		});
 		this.displayRoomId();
 		this.setStatus('Connecting to server...');
 		void this.fetchSnapshot();
@@ -101,10 +132,11 @@ class TournamentMatchPage {
 			const match = (data.tournament?.matches as any[] | undefined)?.find((m) => m.id === this.matchId);
 			if (!match) return;
 
-			this.updatePlayers({
+			this.players = {
 				left: normalizeId(match.player1Id),
 				right: normalizeId(match.player2Id),
-			});
+			};
+			this.updatePlayers(this.players);
 			this.updateScores({ left: 0, right: 0 });
 
 			if (normalizeId(match.player1Id) === this.normalizedUser.id) {
@@ -117,11 +149,19 @@ class TournamentMatchPage {
 
 			if (match.status === 'finished') {
 				this.setStatus('Match finished.');
+				this.gameStatus = 'finished';
 			} else if (match.status === 'playing') {
 				this.setStatus('Match in progress!');
+				this.gameStatus = 'playing';
 			} else {
 				this.setStatus('Room created. Waiting for opponent to join.');
+				this.gameStatus = 'waiting';
 			}
+
+			this.updateReadyUI({
+				left: normalizeId(match.player1Id),
+				right: normalizeId(match.player2Id),
+			});
 		} catch (err) {
 			console.warn('snapshot fetch failed', err);
 		}
@@ -137,18 +177,26 @@ class TournamentMatchPage {
 	private connect(): void {
 		const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
 		const wsUrl = `${protocol}://${window.location.host}/ws?token=${encodeURIComponent(this.token)}`;
+		console.log('[match] Connecting to WebSocket:', wsUrl);
 		const socket = new WebSocket(wsUrl);
 		this.socket = socket;
 
 		socket.addEventListener('open', () => {
+			console.log('[match] WebSocket connected!');
 			this.reconnectAttempts = 0;
 			this.setStatus('Connected! Preparing room...');
-			socket.send(JSON.stringify({ type: 'game:join', roomId: this.roomId }));
+			const joinMsg = { type: 'game:join', roomId: this.roomId };
+			console.log('[match] Sending game:join', joinMsg);
+			socket.send(JSON.stringify(joinMsg));
 		});
 
 		socket.addEventListener('message', (event) => this.handleSocketMessage(event));
-		socket.addEventListener('close', () => this.handleSocketClose());
-		socket.addEventListener('error', () => {
+		socket.addEventListener('close', (event) => {
+			console.log('[match] WebSocket closed', event.code, event.reason);
+			this.handleSocketClose();
+		});
+		socket.addEventListener('error', (event) => {
+			console.error('[match] WebSocket error', event);
 			this.showInlineMessage('Realtime connection error.', 'error');
 		});
 	}
@@ -171,6 +219,15 @@ class TournamentMatchPage {
 			case 'game:error':
 				this.showInlineMessage(payload.message ?? 'Match error.', 'error');
 				return;
+			case 'game:ready:ack':
+				this.handleReadyAck(payload);
+				return;
+			case 'game:joined':
+				this.handleGameJoined(payload);
+				return;
+			case 'debug':
+				this.handleDebug(payload);
+				return;
 			case 'hello':
 			case 'pong':
 			case 'presence':
@@ -181,11 +238,25 @@ class TournamentMatchPage {
 		}
 	}
 
+	private handleDebug(payload: { type: 'debug'; scope?: string; event?: string; data?: unknown; ts?: number }): void {
+		const scope = payload.scope ?? 'debug';
+		const event = payload.event ?? 'event';
+		console.debug('[ws debug]', scope, event, payload.data);
+		// debug only (no UI toast)
+	}
+
 	private handleGameState(payload: GameStateMessage): void {
 		const players = {
 			left: normalizeId(payload.players.left),
 			right: normalizeId(payload.players.right),
 		};
+		this.players = players;
+
+		if (payload.ready) {
+			this.readyFlags = { ...payload.ready };
+		}
+
+		this.gameStatus = payload.status;
 
 		if (payload.yourSide && payload.yourSide !== this.yourSide) {
 			this.yourSide = payload.yourSide;
@@ -203,13 +274,19 @@ class TournamentMatchPage {
 			}
 		}
 
+		if (payload.status !== 'waiting') this.sentReady = false;
+
 		this.updatePlayers(players);
 		this.updateScores(payload.scores);
-		this.updateStatusFromGame(payload);
+		this.updateStatusFromGame(payload, players);
+		this.updateReadyUI(players);
 		this.drawState(payload.state);
 	}
 
 	private handleGameFinished(payload: GameFinishedMessage): void {
+		this.gameStatus = 'finished';
+		this.readyFlags = { left: false, right: false };
+		this.sentReady = false;
 		this.updateScores(payload.scores);
 		this.setStatus('Match finished.');
 		const isWinner = normalizeId(payload.winnerUserId) === this.normalizedUser.id;
@@ -219,6 +296,35 @@ class TournamentMatchPage {
 				: `Winner: ${this.formatPlayer(payload.winnerUserId)}`
 			: 'Match ended.';
 		this.showInlineMessage(winnerText, isWinner ? 'success' : 'error');
+		this.updateReadyUI({ left: null, right: null });
+	}
+
+	private handleGameJoined(payload: GameJoinedMessage): void {
+		console.log('[match] Received game:joined', payload);
+		this.players = {
+			left: normalizeId(payload.players.left),
+			right: normalizeId(payload.players.right),
+		};
+		this.readyFlags = { ...payload.ready };
+		this.gameStatus = payload.status;
+
+		if (payload.yourSide && payload.yourSide !== this.yourSide) {
+			this.yourSide = payload.yourSide;
+			this.updateSideHint();
+		}
+
+		this.updatePlayers(this.players);
+		this.updateScores({ left: 0, right: 0 });
+		this.updateStatusFromReadyState(this.players);
+		this.updateReadyUI(this.players);
+	}
+
+	private handleReadyAck(payload: GameReadyAckMessage): void {
+		console.log('[match] Received game:ready:ack', payload);
+		this.readyFlags = { ...payload.ready };
+		console.log('[match] Updated readyFlags to:', this.readyFlags);
+		this.updateReadyUI(this.players);
+		this.updateStatusFromReadyState(this.players);
 	}
 
 	private handleSocketClose(): void {
@@ -231,14 +337,9 @@ class TournamentMatchPage {
 		window.setTimeout(() => this.connect(), delay);
 	}
 
-	private updateStatusFromGame(payload: GameStateMessage): void {
+	private updateStatusFromGame(payload: GameStateMessage, players: { left: string | null; right: string | null }): void {
 		if (payload.status === 'waiting') {
-			const waitingOpponent = !payload.players.left || !payload.players.right;
-			this.setStatus(
-				waitingOpponent
-					? 'Room created. Waiting for opponent to join.'
-					: 'Players ready. Game will start...',
-			);
+			this.updateStatusFromReadyState(players);
 			return;
 		}
 		if (payload.status === 'playing') {
@@ -246,6 +347,89 @@ class TournamentMatchPage {
 			return;
 		}
 		this.setStatus('Match finished.');
+	}
+
+	private updateStatusFromReadyState(players: { left: string | null; right: string | null }): void {
+		const waitingOpponent = !players.left || !players.right;
+		if (waitingOpponent) {
+			this.setStatus('Room created. Waiting for opponent to join.');
+			return;
+		}
+
+		const selfReady = this.isSelfReady();
+		const opponentReady = this.isOpponentReady(players);
+		if (selfReady && opponentReady) {
+			this.setStatus('Both players ready. Starting...');
+		} else if (selfReady) {
+			this.setStatus('Ready. Waiting for opponent to press SPACE.');
+		} else if (opponentReady) {
+			this.setStatus('Opponent is ready. Press SPACE to get ready.');
+		} else {
+			this.setStatus('Press SPACE to get ready.');
+		}
+	}
+
+	private isSelfReady(): boolean {
+		if (this.yourSide === 'left') return this.readyFlags.left;
+		if (this.yourSide === 'right') return this.readyFlags.right;
+		// Fallback: check by player id if yourSide not set yet
+		if (this.players.left === this.normalizedUser.id) return this.readyFlags.left;
+		if (this.players.right === this.normalizedUser.id) return this.readyFlags.right;
+		return false;
+	}
+
+	private isOpponentReady(players: { left: string | null; right: string | null }): boolean {
+		if (this.yourSide === 'left') return this.readyFlags.right;
+		if (this.yourSide === 'right') return this.readyFlags.left;
+		if (players.left === this.normalizedUser.id) return this.readyFlags.right;
+		if (players.right === this.normalizedUser.id) return this.readyFlags.left;
+		return false;
+	}
+
+	private updateReadyUI(players: { left: string | null; right: string | null }): void {
+		const controlHint = document.getElementById('controlHint');
+		if (!controlHint) return;
+
+		console.log('[match] updateReadyUI called', {
+			gameStatus: this.gameStatus,
+			players,
+			readyFlags: this.readyFlags,
+			yourSide: this.yourSide,
+			isSelfReady: this.isSelfReady()
+		});
+
+		if (this.gameStatus !== 'waiting') {
+			controlHint.textContent = 'Controls: use W/S or arrows.';
+			this.updateReadyButton(false, 'Ready');
+			return;
+		}
+
+		const waitingOpponent = !players.left || !players.right;
+		const selfReady = this.isSelfReady();
+		const opponentReady = this.isOpponentReady(players);
+
+		if (waitingOpponent) {
+			controlHint.textContent = 'Waiting for opponent to join | Press SPACE to Ready | Controls: W/S or ↑/↓';
+			this.updateReadyButton(selfReady, selfReady ? 'Ready ✓' : 'Press SPACE to Ready');
+			return;
+		}
+
+		controlHint.textContent = `${selfReady ? 'You are ready' : 'Press SPACE to Ready'} · ${opponentReady ? 'Opponent ready' : 'Opponent not ready'} | Controls: W/S or ↑/↓`;
+		this.updateReadyButton(selfReady, selfReady ? 'Ready ✓' : 'Press SPACE to Ready');
+	}
+
+	private updateReadyButton(selfReady: boolean, label: string): void {
+		if (!this.readyButton) return;
+		console.log('[match] updateReadyButton called', { selfReady, label, gameStatus: this.gameStatus });
+		this.readyButton.textContent = label;
+		this.readyButton.disabled = selfReady || this.gameStatus !== 'waiting';
+		this.readyButton.classList.toggle('opacity-50', this.readyButton.disabled);
+		this.readyButton.classList.toggle('cursor-not-allowed', this.readyButton.disabled);
+		this.readyButton.classList.toggle('bg-green-600', selfReady);
+		this.readyButton.classList.toggle('hover:bg-green-500', selfReady);
+		this.readyButton.classList.toggle('bg-blue-600', !selfReady);
+		this.readyButton.classList.toggle('hover:bg-blue-500', !selfReady);
+		console.log('[match] Button classes:', this.readyButton.className);
 	}
 
 	private updatePlayers(players: { left: string | null; right: string | null }): void {
@@ -320,9 +504,40 @@ class TournamentMatchPage {
 		window.addEventListener('keydown', this.keyDownHandler);
 		window.addEventListener('keyup', this.keyUpHandler);
 		window.addEventListener('beforeunload', this.beforeUnloadHandler);
+
+		this.readyButton = document.getElementById('readyButton') as HTMLButtonElement | null;
+		if (this.readyButton) {
+			console.log('[match] Ready button found and wired');
+			console.log('[match] Button initial state:', {
+				disabled: this.readyButton.disabled,
+				className: this.readyButton.className,
+				textContent: this.readyButton.textContent
+			});
+			this.readyButton.addEventListener('click', () => {
+				console.log('[match] Ready button clicked!');
+				this.sendReadySignal();
+			});
+		} else {
+			console.error('[match] Ready button NOT found!');
+		}
 	}
 
 	private handleKeyDown(event: KeyboardEvent): void {
+		if (event.code === 'Space' || event.key === ' ') {
+			console.log('[match] SPACE key pressed', {
+				gameStatus: this.gameStatus,
+				sentReady: this.sentReady,
+				isSelfReady: this.isSelfReady(),
+				readyFlags: this.readyFlags,
+				yourSide: this.yourSide
+			});
+			if (this.gameStatus === 'waiting') {
+				event.preventDefault();
+				this.sendReadySignal();
+			}
+			return;
+		}
+
 		const mapped = this.normalizeKey(event.key);
 		if (!mapped) return;
 
@@ -361,6 +576,21 @@ class TournamentMatchPage {
 	private sendInput(direction: Direction): void {
 		if (!this.socket || this.socket.readyState !== WebSocket.OPEN) return;
 		this.socket.send(JSON.stringify({ type: 'game:input', direction }));
+	}
+
+	private sendReadySignal(): void {
+		console.log('[match] sendReadySignal called');
+		if (!this.socket || this.socket.readyState !== WebSocket.OPEN) {
+			console.log('[match] Socket not open');
+			return;
+		}
+		if (this.gameStatus !== 'waiting') {
+			console.log('[match] Game not waiting');
+			return;
+		}
+		console.log('[match] Sending game:ready');
+		this.socket.send(JSON.stringify({ type: 'game:ready' }));
+		this.sentReady = true;
 	}
 
 	private formatPlayer(userId: string | null): string {
@@ -405,13 +635,16 @@ function getRoomIdFromUrl(): string | null {
 function parseRoomIdentifiers(roomId: string | null): { tournamentId: string; matchId: string } | null {
 	if (!roomId) return null;
 	if (!roomId.startsWith('room_')) return null;
+	// room format: room_<tournamentId>_<matchId>
+	// matchId already has prefix m_, so split on "_m_" to avoid breaking tournamentId
 	const payload = roomId.slice('room_'.length);
-	const lastSep = payload.lastIndexOf('_');
-	if (lastSep === -1) return null;
-	const tournamentId = payload.slice(0, lastSep);
-	const matchId = payload.slice(lastSep + 1);
-	if (!tournamentId || !matchId) return null;
-	return { tournamentId, matchId };
+	const marker = '_m_';
+	const markerIndex = payload.indexOf(marker);
+	if (markerIndex === -1) return null;
+	const tournamentId = payload.slice(0, markerIndex);
+	const matchIdRest = payload.slice(markerIndex + 1); // keeps leading 'm'
+	if (!tournamentId || !matchIdRest.startsWith('m_')) return null;
+	return { tournamentId, matchId: matchIdRest };
 }
 
 function normalizeId(value: unknown): string | null {
@@ -492,6 +725,8 @@ document.addEventListener('DOMContentLoaded', () => {
 	}
 
 	const normalizedUser = normalizeUser(user);
+	console.log('[match] DOMContentLoaded - creating TournamentMatchPage');
+	console.log('[match] readyButton exists in DOM?', !!document.getElementById('readyButton'));
 	new TournamentMatchPage(roomId, token, normalizedUser);
 });
 
