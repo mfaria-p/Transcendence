@@ -11,27 +11,32 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model User {
-  id            String   @id @default(cuid())
-  email         String   @unique
+model Account {
+  id            String    @id @default(cuid())
+  username      String    @unique
+  email         String    @unique
   passwordHash  String?
-  name          String   @unique
   emailVerified DateTime?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
   oauthAccounts OAuthAccount[]
   refreshTokens RefreshToken[]
 }
 
+enum OAuthProvider {
+  google
+}
+
 model OAuthAccount {
   id                String  @id @default(cuid())
-  provider          String
-  providerUserId    String
-  user              User    @relation(fields: [userId], references: [id])
-  userId            String
+  provider          OAuthProvider
+  providerAccountId String
 
-  @@unique([provider, providerUserId])
+  account           Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  accountId         String  @unique
+
+  @@unique([provider, providerAccountId])
 }
 
 model RefreshToken {
@@ -41,6 +46,6 @@ model RefreshToken {
   revokedAt  DateTime?
   createdAt  DateTime @default(now())
 
-  user   User   @relation(fields: [userId], references: [id])
-  userId String
+  account   Account   @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  accountId String
 }

@@ -20,8 +20,6 @@ enum FriendRequestStatus {
 
 model Profile {
   id            String   @id
-  email         String   @unique
-  name          String   @unique
   avatarUrl     String?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
@@ -31,52 +29,35 @@ model Profile {
 
   sentRequests  FriendRequest[] @relation("SentRequests")
   recvRequests  FriendRequest[] @relation("RecvRequests")
-
-  blocksMade    Block[]         @relation("BlocksMade")
-  blocksRecv    Block[]         @relation("BlocksRecv")
 }
 
 model FriendRequest {
-  id         String               @id @default(cuid())
-  fromUserId String
-  toUserId   String
-  status     FriendRequestStatus  @default(PENDING)
-  message    String?
-  createdAt  DateTime             @default(now())
-  updatedAt  DateTime             @updatedAt
+  id            String               @id @default(cuid())
+  fromProfileId String
+  toProfileId   String
+  status        FriendRequestStatus  @default(PENDING)
+  message       String?
+  createdAt     DateTime             @default(now())
+  updatedAt     DateTime             @updatedAt
 
-  fromUser   Profile @relation("SentRequests", fields: [fromUserId], references: [id], onDelete: Cascade)
-  toUser     Profile @relation("RecvRequests", fields: [toUserId], references: [id], onDelete: Cascade)
+  fromProfile   Profile @relation("SentRequests", fields: [fromProfileId], references: [id], onDelete: Cascade)
+  toProfile     Profile @relation("RecvRequests", fields: [toProfileId], references: [id], onDelete: Cascade)
 
-  @@unique([fromUserId, toUserId])
-  @@index([toUserId, status])
-  @@index([fromUserId, status])
+  @@unique([fromProfileId, toProfileId])
+  @@index([toProfileId, status])
+  @@index([fromProfileId, status])
 }
 
 model Friendship {
-  id        String   @id @default(cuid())
-  userAId   String
-  userBId   String
-  createdAt DateTime @default(now())
+  id          String   @id @default(cuid())
+  profileAId  String
+  profileBId  String
+  createdAt   DateTime @default(now())
 
-  // userAId < userBId
-  userA     Profile @relation("FriendshipsA", fields: [userAId], references: [id], onDelete: Cascade)
-  userB     Profile @relation("FriendshipsB", fields: [userBId], references: [id], onDelete: Cascade)
+  // profileAId < profileBId
+  profileA     Profile @relation("FriendshipsA", fields: [profileAId], references: [id], onDelete: Cascade)
+  profileB     Profile @relation("FriendshipsB", fields: [profileBId], references: [id], onDelete: Cascade)
 
-  @@unique([userAId, userBId])
+  @@unique([profileAId, profileBId])
   @@index([createdAt])
-}
-
-model Block {
-  id         String   @id @default(cuid())
-  blockerId  String
-  blockedId  String
-  reason     String?
-  createdAt  DateTime @default(now())
-
-  blocker    Profile @relation("BlocksMade", fields: [blockerId], references: [id], onDelete: Cascade)
-  blocked    Profile @relation("BlocksRecv", fields: [blockedId], references: [id], onDelete: Cascade)
-
-  @@unique([blockerId, blockedId])
-  @@index([blockedId])
 }

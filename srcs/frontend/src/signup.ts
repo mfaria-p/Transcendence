@@ -8,8 +8,8 @@ interface SignupCredentials {
 interface SignupResponse {
   success: boolean;
   message: string;
-  user?: { id: string; username: string; email: string };
-  at?: string;  // Access token - auto-login after signup
+  account?: { id: string; username: string; email: string };  
+  at?: string;
 }
 
 class SignupManager {
@@ -83,32 +83,55 @@ class SignupManager {
       console.log('Signup response:', response);
       
       if (response.success) {
+        console.log('Signup successful! Now logging in automatically...');
         
-        console.log('Access token from signup:', response.at);
-        
-        if (response.at) {
-          localStorage.setItem('access_token', response.at);
-          console.log('Stored access_token in localStorage');
+        try {
+          const loginResponse = await this.loginAfterSignup(credentials.username, credentials.password);
           
-          // Create user profile in user service
-          await this.provisionProfile(response.at, response.user!.username, response.user!.email);
-        } else {
-          console.warn('No access token in signup response!');
+          if (loginResponse.success && loginResponse.at) {
+            localStorage.setItem('access_token', loginResponse.at);
+            console.log('Stored access_token from login:', loginResponse.at);
+            
+            if (loginResponse.account) {
+              localStorage.setItem('user', JSON.stringify({
+                id: loginResponse.account.id,
+                username: loginResponse.account.username,
+                email: loginResponse.account.email
+              }));
+              console.log('Stored user from login');
+              
+              const provisionSuccess = await this.provisionProfile(loginResponse.at);
+              if (!provisionSuccess) {
+                console.warn('Profile provision failed, but continuing with signup');
+              }
+            }
+            
+            this.showSuccess('Account created successfully! Redirecting...');
+            
+            setTimeout(() => {
+              window.location.replace('./index.html');
+            }, 2000);
+          } else {
+            this.showSuccess('Account created! Please log in to continue.');
+            setTimeout(() => {
+              window.location.replace('./login.html');
+            }, 2000);
+          }
+        } catch (loginError: any) {
+          console.error('Auto-login error:', loginError);
+          this.showSuccess('Account created! Please log in to continue.');
+          setTimeout(() => {
+            window.location.replace('./login.html');
+          }, 2000);
         }
-        
-        if (response.user) {
-          localStorage.setItem('user', JSON.stringify(response.user));
-          console.log('Stored user in localStorage');
-        }
-
-        this.showSuccess(response.message || 'Account created successfully!');
-
-        // Redirect to game after 2 seconds
-        setTimeout(() => {
-          window.location.href = './index.html';
-        }, 2000);
       } else {
-        this.showError(response.message || 'Signup failed');
+        const errorMessage = response.message || 'Signup failed';
+        if (errorMessage.toLowerCase().includes('email')) {
+          this.setInputError(this.emailInput, errorMessage);
+        } else if (errorMessage.toLowerCase().includes('username')) {
+          this.setInputError(this.usernameInput, errorMessage);
+        }
+        this.showError(errorMessage);
       }
     } catch (error: any) {
       console.error('Signup error:', error);
@@ -253,38 +276,6 @@ class SignupManager {
     }
   }
 
-  private async simulateSignup(credentials: { username: string; email: string; password: string }): Promise<SignupResponse> {
-  // Simulate network delay
-  await new Promise(resolve => setTimeout(resolve, 1500));
-  
-  // Simulate existing user check
-  if (credentials.username.toLowerCase() === 'admin' || credentials.username.toLowerCase() === 'test') {
-    return {
-      success: false,
-      message: 'Username already taken. Please choose another one.'
-    };
-  }
-
-  // Simulate invalid email check
-  if (credentials.email.includes('invalid')) {
-    return {
-      success: false,
-      message: 'Email address is not valid.'
-    };
-  }
-  
-  // Simulate successful signup
-  return {
-    success: true,
-    message: 'Account created successfully!',
-    user: {
-      id: Date.now().toString(),
-      username: credentials.username,
-      email: credentials.email
-    }
-  };
-}
-
   private async signupWithBackend(payload: { username: string; email: string; password: string }): Promise<SignupResponse> {
     const url = '/api/auth/signup';
     const controller = new AbortController();
@@ -311,10 +302,8 @@ class SignupManager {
       }
 
       if (!res.ok) {
-        const message = res.status === 401 
-        ? (data?.message || 'Signup failed') 
-        : `Signup failed (${res.status})`;
-      return { success: false, message };
+        const message = data?.message || `Signup failed (${res.status})`;
+        return { success: false, message };
       }
 
       return data as SignupResponse;
@@ -328,7 +317,51 @@ class SignupManager {
     }
   }
 
-  private async provisionProfile(accessToken: string, username: string, email: string): Promise<void> {
+  private async loginAfterSignup(username: string, password: string): Promise<any> {
+    const url = '/api/auth/login';
+    const controller = new AbortController();
+    const timeoutMs = 10_000;
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+    try {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify({
+          ident: username,
+          password: password
+        }),
+        signal: controller.signal,
+      });
+      
+      let data: any = null;
+      try {
+        data = await res.json();
+      } catch {
+        const text = await res.text();
+        data = { message: text || 'Unknown error' };
+      }
+
+      if (!res.ok) {
+        const message = data?.message || `Login failed (${res.status})`;
+        return { success: false, message };
+      }
+
+      return data;
+    } catch (err: any) {
+      if (err.name === 'AbortError') {
+        throw new Error('Request timed out. Please try again.');
+      }
+      throw new Error(err?.message || 'Network error');
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  }
+
+  private async provisionProfile(accessToken: string): Promise<boolean> {
     try {
       console.log('Provisioning profile in user service...');
       const response = await fetch('/api/user/provision', {
@@ -337,20 +370,20 @@ class SignupManager {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${accessToken}`,
         },
-        body: JSON.stringify({
-          username: username,
-          email: email,
-        }),
+        body: JSON.stringify({}), // Empty body - ID comes from JWT
       });
 
       if (response.ok) {
         console.log('Profile provisioned successfully');
+        return true;
       } else {
-        console.warn('Failed to provision profile:', response.status);
+        const errorText = await response.text();
+        console.error('Failed to provision profile:', response.status, errorText);
+        return false;
       }
     } catch (error) {
       console.error('Profile provision error:', error);
-      // Don't fail signup if profile creation fails
+      return false;
     }
   }
 

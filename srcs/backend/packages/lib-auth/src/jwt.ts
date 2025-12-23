@@ -16,8 +16,6 @@ declare module 'fastify' {
   }
 }
 
-// TODO
-// use private/public key pair
 export default fp(async (auth) => {
   auth.register(jwt, {
     secret: process.env.JWT_SECRET!,

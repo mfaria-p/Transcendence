@@ -7,7 +7,7 @@ interface LoginResponse {
 
 document.addEventListener('DOMContentLoaded', () => {
   const loginForm = document.getElementById('loginForm') as HTMLFormElement;
-  const emailInput = document.getElementById('email') as HTMLInputElement;
+  const identInput = document.getElementById('ident') as HTMLInputElement;
   const passwordInput = document.getElementById('password') as HTMLInputElement;
   const loginButton = document.getElementById('loginButton') as HTMLButtonElement;
   const errorMessage = document.getElementById('errorMessage') as HTMLDivElement;
@@ -22,10 +22,10 @@ document.addEventListener('DOMContentLoaded', () => {
     errorMessage.classList.add('hidden');
     successMessage.classList.add('hidden');
 
-    const email = emailInput.value.trim();
+    const ident = identInput.value.trim();
     const password = passwordInput.value;
 
-    if (!email || !password) {
+    if (!ident || !password) {
       errorMessage.textContent = 'Please fill in all fields';
       errorMessage.classList.remove('hidden');
       return;
@@ -47,7 +47,7 @@ document.addEventListener('DOMContentLoaded', () => {
           'Accept': 'application/json'
         },
         body: JSON.stringify({
-          email: email,
+          ident: ident,  
           password: password,
         }),
         signal: controller.signal,
@@ -68,14 +68,19 @@ document.addEventListener('DOMContentLoaded', () => {
         if (data.at) {
           localStorage.setItem('access_token', data.at);
           
-          // Provision profile in user service (in case it doesn't exist)
-          if (data.user) {
-            await provisionProfile(data.at, data.user.username, data.user.email);
+          if (data.account) {
+            provisionProfile(data.at).catch(err => {
+              console.warn('Profile provision failed:', err);
+            });
           }
         }
-        
-        if (data.user) {
-          localStorage.setItem('user', JSON.stringify(data.user));
+
+        if (data.account) {  
+          localStorage.setItem('user', JSON.stringify({
+            id: data.account.id,
+            username: data.account.username,
+            email: data.account.email
+          }));
         }
 
         successMessage.textContent = data.message || 'Login successful! Redirecting...';
@@ -85,9 +90,8 @@ document.addEventListener('DOMContentLoaded', () => {
           window.location.href = './index.html';
         }, 1000);
       } else {
-        // Only use response.message for 401 errors
         const message = response.status === 401 
-          ? (data?.message || 'Invalid email or password') 
+          ? (data?.message || 'Invalid email/username or password') 
           : `Login failed (${response.status})`;
         
         errorMessage.textContent = message;
@@ -113,7 +117,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  emailInput.addEventListener('input', () => {
+  identInput.addEventListener('input', () => {
     errorMessage.classList.add('hidden');
   });
 
@@ -122,7 +126,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 });
 
-async function provisionProfile(accessToken: string, username: string, email: string): Promise<void> {
+async function provisionProfile(accessToken: string): Promise<void> {
   try {
     console.log('Provisioning profile in user service...');
     const response = await fetch('/api/user/provision', {
@@ -131,19 +135,17 @@ async function provisionProfile(accessToken: string, username: string, email: st
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${accessToken}`,
       },
-      body: JSON.stringify({
-        username: username,
-        email: email,
-      }),
+      body: JSON.stringify({}), // Empty body, ID comes from JWT
     });
 
     if (response.ok) {
       console.log('Profile provisioned successfully');
     } else {
-      console.warn('Failed to provision profile:', response.status);
+      const errorText = await response.text();
+      console.warn('Failed to provision profile:', response.status, errorText);
     }
   } catch (error) {
     console.error('Profile provision error:', error);
-    // Don't fail login if profile creation fails
+    throw error;
   }
 }
