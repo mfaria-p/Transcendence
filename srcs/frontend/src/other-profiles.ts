@@ -30,6 +30,7 @@ class UserProfileViewer {
   private accessToken: string | null = null;
   private userId: string | null = null;
   private friendshipStatus: 'none' | 'friend' | 'pending_sent' | 'pending_received' = 'none';
+  private isOnline: boolean = false;
 
   constructor() {
     this.init();
@@ -124,6 +125,24 @@ class UserProfileViewer {
         console.log('No profile found for user, using defaults');
       }
 
+      // Fetch online status from realtime service
+      try {
+        const presenceResponse = await fetch(`/api/realtime/presence/${userId}`, {
+          headers: {
+            'Authorization': `Bearer ${this.accessToken}`,
+          },
+        });
+        
+        if (presenceResponse.ok) {
+          const presenceData = await presenceResponse.json();
+          this.isOnline = presenceData.online || false;
+          console.log(`User ${userId} online status:`, this.isOnline);
+        }
+      } catch (error) {
+        console.log('Could not check online status');
+        this.isOnline = false;
+      }
+
       // Combine data from auth and user services
       this.viewedUser = {
         id: account.id,
@@ -132,8 +151,8 @@ class UserProfileViewer {
         avatarUrl: avatarUrl,
       };
 
-      this.displayProfile();
       await this.checkFriendshipStatus();
+      this.displayProfile();
       this.displayFriendActions();
     } catch (error) {
       console.error('Load user profile error:', error);
@@ -149,6 +168,15 @@ class UserProfileViewer {
     const emailEl = document.getElementById('userEmail');
     const avatarEl = document.getElementById('userAvatarPlaceholder');
     const avatarImg = document.getElementById('userAvatarImage') as HTMLImageElement;
+    const statusBadge = document.getElementById('statusBadge');
+
+    console.log('=== Display Profile Debug ===');
+    console.log('Username:', this.viewedUser.username);
+    console.log('Is Online:', this.isOnline);
+    console.log('Friendship Status:', this.friendshipStatus);
+    console.log('Status Badge Element:', statusBadge);
+    console.log('Avatar Element:', avatarEl);
+    console.log('Avatar Img:', avatarImg);
 
     if (usernameEl) usernameEl.textContent = this.viewedUser.username;
     if (emailEl) emailEl.textContent = this.viewedUser.email;
@@ -162,6 +190,28 @@ class UserProfileViewer {
       avatarImg?.classList.add('hidden');
       avatarEl.classList.remove('hidden');
       avatarEl.textContent = this.viewedUser.username.charAt(0).toUpperCase();
+    }
+
+    // Display online status badge
+    if (statusBadge) {
+      if (this.friendshipStatus === 'friend') {
+        // Show badge for friends
+        statusBadge.classList.remove('hidden', 'bg-gray-500', 'bg-green-500');
+
+        if (this.isOnline) {
+          statusBadge.classList.add('bg-green-500');
+          statusBadge.title = 'Online';
+          console.log('Friend is ONLINE (green badge)');
+        } else {
+          statusBadge.classList.add('bg-gray-500');
+          statusBadge.title = 'Offline';
+          console.log('Friend is OFFLINE (gray badge)');
+        }
+      } else {
+        // Hide badge for non-friends
+        statusBadge.classList.add('hidden');
+        console.log('Not friends, badge hidden');
+      }
     }
   }
 
