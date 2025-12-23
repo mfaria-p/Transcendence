@@ -1,12 +1,11 @@
-import { connectPresenceSocket, disconnectPresenceSocket } from './presence-ws.js';
+import { connectPresenceSocket, disconnectPresenceSocket } from './utils-ws.js';
+import { verifySession, handleLogout } from './utils-api.js';
 
 interface User {
   id: string;
   username: string;
   email: string;
 }
-
-let accessToken: string | null = null;
 
 document.addEventListener('DOMContentLoaded', async () => {
   const authContainer = document.getElementById('authContainer');
@@ -17,7 +16,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   const userStr = localStorage.getItem('user');
-  accessToken = localStorage.getItem('access_token');
+  const accessToken = localStorage.getItem('access_token');
   
   console.log('Auth check - userStr:', userStr);
   console.log('Auth check - accessToken:', accessToken);
@@ -27,16 +26,11 @@ document.addEventListener('DOMContentLoaded', async () => {
       const user: User = JSON.parse(userStr);
       
       // Verify session is still valid
-      const isValid = await verifySession(accessToken);
+      await verifySession(accessToken);
       
-      if (isValid) {
-        console.log('User logged in:', user);
-        connectPresenceSocket();
-        showLoggedInState(authContainer, user);
-      } else {
-        console.log('Session expired, showing logged out state');
-        clearSessionAndShowLoggedOut(authContainer);
-      }
+      console.log('User logged in:', user);
+      connectPresenceSocket();
+      showLoggedInState(authContainer, user);
     } catch (error) {
       console.error('Error parsing user data or verifying session:', error);
       clearSessionAndShowLoggedOut(authContainer);
@@ -46,21 +40,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     showLoggedOutState(authContainer);
   }
 });
-
-async function verifySession(token: string): Promise<boolean> {
-  try {
-    const response = await fetch('/api/auth/me', {
-      headers: {
-        'Authorization': `Bearer ${token}`,
-      },
-    });
-
-    return response.ok;
-  } catch (error) {
-    console.error('Session verification failed:', error);
-    return false;
-  }
-}
 
 function clearSessionAndShowLoggedOut(container: HTMLElement): void {
   disconnectPresenceSocket();
@@ -84,7 +63,7 @@ function showLoggedInState(container: HTMLElement, user: User): void {
   
   const logoutButton = document.getElementById('logoutButton');
   if (logoutButton) {
-    logoutButton.addEventListener('click', handleLogout);
+    logoutButton.addEventListener('click', () => handleLogout());
   }
 }
 
@@ -98,23 +77,4 @@ function showLoggedOutState(container: HTMLElement): void {
       Sign Up
     </a>
   `;
-}
-
-async function handleLogout(): Promise<void> {
-  disconnectPresenceSocket();
-  
-  try {
-    await fetch('/api/auth/logout', {
-      method: 'POST',
-      credentials: 'include',
-    });
-  } catch (error) {
-    console.error('Logout error:', error);
-  } finally {
-    localStorage.removeItem('access_token');
-    localStorage.removeItem('user');
-    
-    console.log('Logged out, refreshing UI...');
-    window.location.reload();
-  }
 }
