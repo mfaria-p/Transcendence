@@ -33,6 +33,9 @@ class TournamentsPage {
   private currentUser: User | null = null;
   private accessToken: string | null = null;
   private isLoading = false;
+  private nameCache = new Map<string, string>();
+  private fetchingNames = new Set<string>();
+  private tournamentsCache: Tournament[] = [];
 
   constructor() {
     void this.init();
@@ -111,6 +114,7 @@ class TournamentsPage {
       const tournaments: Tournament[] = data.tournaments ?? [];
       // show most recent first (by update/creation timestamp)
       const sorted = [...tournaments].sort((a, b) => (b.updatedAt ?? b.createdAt) - (a.updatedAt ?? a.createdAt));
+      this.tournamentsCache = sorted;
       this.renderTournaments(sorted);
     } catch (error) {
       console.error('loadTournaments error:', error);
@@ -187,7 +191,7 @@ class TournamentsPage {
             </div>
             <div>
               <h4 class="text-sm uppercase tracking-wide text-gray-400">Winner</h4>
-              <p class="text-gray-200">${tournament.winnerId ? this.formatPlayer(tournament.winnerId) : 'To be decided'}</p>
+              <p class="text-gray-200" data-winner="${tournament.id}">${tournament.winnerId ? this.formatPlayer(tournament.winnerId) : 'To be decided'}</p>
             </div>
           </div>
 
@@ -206,6 +210,8 @@ class TournamentsPage {
       `;
 
       list.appendChild(card);
+
+      void this.loadWinnerName(tournament);
 
       const joinButton = card.querySelector('[data-action="join"]') as HTMLButtonElement | null;
       joinButton?.addEventListener('click', () => {
@@ -283,11 +289,53 @@ class TournamentsPage {
   }
 
   private formatPlayer(userId: string | null): string {
+    return this.getDisplayNameSync(userId);
+  }
+
+  private getDisplayNameSync(userId: string | null): string {
     if (!userId) return 'TBD';
     if (this.currentUser && userId === this.currentUser.id) {
       return `${this.currentUser.username} (you)`;
     }
-    return userId;
+    const cached = this.nameCache.get(userId);
+    return cached ?? userId;
+  }
+
+  private async loadWinnerName(tournament: Tournament): Promise<void> {
+    const winnerId = tournament.winnerId;
+    if (!winnerId || this.nameCache.has(winnerId) || this.fetchingNames.has(winnerId)) return;
+    if (!this.accessToken) return;
+
+    this.fetchingNames.add(winnerId);
+    try {
+      const profile = await this.fetchUserProfile(winnerId);
+      const display = profile?.name || profile?.username || profile?.id || winnerId;
+      this.nameCache.set(winnerId, display);
+
+      // update winner text in place if still in DOM
+      const el = document.querySelector(`[data-winner="${tournament.id}"]`);
+      if (el) {
+        el.textContent = display;
+      }
+    } catch (err) {
+      console.warn('Failed to fetch winner name', winnerId, err);
+    } finally {
+      this.fetchingNames.delete(winnerId);
+    }
+  }
+
+  private async fetchUserProfile(userId: string): Promise<{ name?: string; username?: string; id?: string } | null> {
+    if (!this.accessToken) return null;
+    try {
+      const res = await fetch(`/api/user/${userId}`, {
+        headers: { 'Authorization': `Bearer ${this.accessToken}` },
+      });
+      if (!res.ok) return null;
+      const data = await res.json();
+      return (data as any).profile ?? null;
+    } catch (err) {
+      return null;
+    }
   }
 
   private getTournamentName(tournament: Tournament): string {
