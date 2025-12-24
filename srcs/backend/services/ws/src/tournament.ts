@@ -42,7 +42,9 @@ function genId(prefix: string): string {
 }
 
 export function listTournaments(): Tournament[] {
-  return Array.from(tournaments.values());
+  return Array.from(tournaments.values()).sort(
+    (a, b) => (b.updatedAt ?? b.createdAt) - (a.updatedAt ?? a.createdAt),
+  );
 }
 
 export function getTournament(id: string): Tournament | undefined {

@@ -109,7 +109,9 @@ class TournamentsPage {
 
       const data = await response.json();
       const tournaments: Tournament[] = data.tournaments ?? [];
-      this.renderTournaments(tournaments);
+      // show most recent first (by update/creation timestamp)
+      const sorted = [...tournaments].sort((a, b) => (b.updatedAt ?? b.createdAt) - (a.updatedAt ?? a.createdAt));
+      this.renderTournaments(sorted);
     } catch (error) {
       console.error('loadTournaments error:', error);
       this.showMessage('Unable to load tournaments.', 'error');
