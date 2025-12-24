@@ -92,6 +92,7 @@ class TournamentMatchPage {
 	private userNameCache = new Map<string, string>();
 	private fetchingNames = new Set<string>();
 	private tournamentName: string | null = null;
+	private confettiFrame: number | null = null;
 	private keyDownHandler = (event: KeyboardEvent) => this.handleKeyDown(event);
 	private keyUpHandler = (event: KeyboardEvent) => this.handleKeyUp(event);
 	private beforeUnloadHandler = () => this.dispose();
@@ -301,6 +302,9 @@ class TournamentMatchPage {
 				: `Winner: ${this.formatPlayer(payload.winnerUserId)}`
 			: 'Match ended.';
 		this.showInlineMessage(winnerText, isWinner ? 'success' : 'error');
+		if (payload.isTournament && isWinner) {
+			this.startConfetti();
+		}
 		this.updateReadyUI({ left: null, right: null });
 	}
 
@@ -670,6 +674,81 @@ class TournamentMatchPage {
 		if (title) title.textContent = display || 'Match';
 		if (subtitle) subtitle.textContent = 'Tournament match';
 
+
+	private startConfetti(): void {
+		const duration = 3800;
+		const end = performance.now() + duration;
+		const canvas = document.createElement('canvas');
+		canvas.id = 'confetti-canvas';
+		canvas.style.position = 'fixed';
+		canvas.style.inset = '0';
+		canvas.style.pointerEvents = 'none';
+		canvas.style.zIndex = '9999';
+		document.body.appendChild(canvas);
+
+		const ctx = canvas.getContext('2d');
+		if (!ctx) {
+			canvas.remove();
+			return;
+		}
+
+		const resize = () => {
+			canvas.width = window.innerWidth;
+			canvas.height = window.innerHeight;
+		};
+		resize();
+		window.addEventListener('resize', resize);
+
+		const colors = ['#10b981', '#22d3ee', '#f59e0b', '#ef4444', '#8b5cf6'];
+		const particles = Array.from({ length: 160 }, () => ({
+			x: Math.random() * canvas.width,
+			y: Math.random() * canvas.height - canvas.height,
+			size: Math.random() * 6 + 4,
+			speedY: Math.random() * 4 + 2,
+			speedX: Math.random() * 2 - 1,
+			color: colors[Math.floor(Math.random() * colors.length)],
+		}));
+
+		const fadeWindow = 800; // ms used to fade-out near the end
+		const draw = () => {
+			const now = performance.now();
+			const remaining = end - now;
+			const alpha = remaining < fadeWindow ? Math.max(remaining / fadeWindow, 0) : 1;
+
+			ctx.clearRect(0, 0, canvas.width, canvas.height);
+			ctx.globalAlpha = alpha;
+			for (const p of particles) {
+				p.x += p.speedX;
+				p.y += p.speedY;
+				if (p.y > canvas.height) {
+					p.y = -10;
+					p.x = Math.random() * canvas.width;
+				}
+				ctx.fillStyle = p.color;
+				ctx.beginPath();
+				ctx.rect(p.x, p.y, p.size, p.size * 0.6);
+				ctx.fill();
+			}
+			ctx.globalAlpha = 1;
+
+			if (remaining > 0) {
+				this.confettiFrame = requestAnimationFrame(draw);
+			} else {
+				this.stopConfetti(canvas, resize);
+			}
+		};
+
+		this.confettiFrame = requestAnimationFrame(draw);
+	}
+
+	private stopConfetti(canvas: HTMLCanvasElement, resizeHandler: () => void): void {
+		if (this.confettiFrame !== null) {
+			cancelAnimationFrame(this.confettiFrame);
+			this.confettiFrame = null;
+		}
+		window.removeEventListener('resize', resizeHandler);
+		canvas.remove();
+	}
 	private showInlineMessage(message: string, type: 'success' | 'error'): void {
 		showMessage(message, type);
 	}
