@@ -89,6 +89,9 @@ class TournamentMatchPage {
 	private sentReady = false;
 	private gameStatus: GameStatus = 'waiting';
 	private readyButton: HTMLButtonElement | null = null;
+	private userNameCache = new Map<string, string>();
+	private fetchingNames = new Set<string>();
+	private tournamentName: string | null = null;
 	private keyDownHandler = (event: KeyboardEvent) => this.handleKeyDown(event);
 	private keyUpHandler = (event: KeyboardEvent) => this.handleKeyUp(event);
 	private beforeUnloadHandler = () => this.dispose();
@@ -130,6 +133,11 @@ class TournamentMatchPage {
 			if (!res.ok) return;
 			const data = await res.json();
 			const match = (data.tournament?.matches as any[] | undefined)?.find((m) => m.id === this.matchId);
+			const tournamentName = data.tournament?.name as string | undefined;
+			if (tournamentName && tournamentName.trim().length > 0) {
+				this.tournamentName = tournamentName;
+				this.setRoomName(tournamentName);
+			}
 			if (!match) return;
 
 			this.players = {
@@ -168,10 +176,7 @@ class TournamentMatchPage {
 	}
 
 	private displayRoomId(): void {
-		const roomEl = document.getElementById('roomIdText');
-		if (roomEl) {
-			roomEl.textContent = this.roomId;
-		}
+		this.setRoomName(this.roomId ?? '');
 	}
 
 	private connect(): void {
@@ -308,6 +313,11 @@ class TournamentMatchPage {
 		this.readyFlags = { ...payload.ready };
 		this.gameStatus = payload.status;
 
+		if (payload.roomId && !this.tournamentName) {
+			// keep showing current label; tournament name is resolved via snapshot
+			this.setRoomName(this.tournamentName ?? this.roomId);
+		}
+
 		if (payload.yourSide && payload.yourSide !== this.yourSide) {
 			this.yourSide = payload.yourSide;
 			this.updateSideHint();
@@ -435,8 +445,11 @@ class TournamentMatchPage {
 	private updatePlayers(players: { left: string | null; right: string | null }): void {
 		const leftLabel = document.getElementById('leftPlayerLabel');
 		const rightLabel = document.getElementById('rightPlayerLabel');
-		if (leftLabel) leftLabel.textContent = this.formatPlayer(players.left);
-		if (rightLabel) rightLabel.textContent = this.formatPlayer(players.right);
+
+		if (leftLabel) leftLabel.textContent = this.getDisplayNameSync(players.left);
+		if (rightLabel) rightLabel.textContent = this.getDisplayNameSync(players.right);
+
+		void this.loadUsernames(players);
 	}
 
 	private updateScores(scores: { left: number; right: number }): void {
@@ -594,12 +607,49 @@ class TournamentMatchPage {
 	}
 
 	private formatPlayer(userId: string | null): string {
+		return this.getDisplayNameSync(userId);
+	}
+
+	private getDisplayNameSync(userId: string | null): string {
 		const normalized = normalizeId(userId);
 		if (!normalized) return 'TBD';
-		if (normalized === this.normalizedUser.id) {
-			return `${this.normalizedUser.username} (you)`;
+		if (normalized === this.normalizedUser.id) return `${this.normalizedUser.username} (you)`;
+		const cached = this.userNameCache.get(normalized);
+		return cached ?? normalized;
+	}
+
+	private async loadUsernames(players: { left: string | null; right: string | null }): Promise<void> {
+		const ids = [players.left, players.right]
+			.map((id) => normalizeId(id))
+			.filter((id): id is string => Boolean(id) && id !== this.normalizedUser.id);
+
+		for (const id of ids) {
+			if (this.userNameCache.has(id) || this.fetchingNames.has(id)) continue;
+			this.fetchingNames.add(id);
+			try {
+				const profile = await this.fetchUserProfile(id);
+				const display = profile?.name || profile?.username || profile?.id || id;
+				this.userNameCache.set(id, display);
+				this.updatePlayers({ ...this.players });
+			} catch (err) {
+				console.warn('Failed to fetch username for', id, err);
+			} finally {
+				this.fetchingNames.delete(id);
+			}
 		}
-		return normalized;
+	}
+
+	private async fetchUserProfile(userId: string): Promise<{ name?: string; username?: string; id?: string } | null> {
+		try {
+			const res = await fetch(`/api/user/${userId}`, {
+				headers: { 'Authorization': `Bearer ${this.token}` },
+			});
+			if (!res.ok) return null;
+			const data = await res.json();
+			return (data as any).profile ?? null;
+		} catch (err) {
+			return null;
+		}
 	}
 
 	private setStatus(message: string): void {
@@ -608,6 +658,17 @@ class TournamentMatchPage {
 			statusEl.textContent = message;
 		}
 	}
+
+	private setRoomName(display: string): void {
+		const roomLabel = document.getElementById('roomLabel');
+		const roomText = document.getElementById('roomIdText');
+		const title = document.getElementById('matchTitle');
+		const subtitle = document.getElementById('roomSubtitle');
+
+		if (roomLabel) roomLabel.textContent = 'Tournament:';
+		if (roomText) roomText.textContent = display;
+		if (title) title.textContent = display || 'Match';
+		if (subtitle) subtitle.textContent = 'Tournament match';
 
 	private showInlineMessage(message: string, type: 'success' | 'error'): void {
 		showMessage(message, type);
