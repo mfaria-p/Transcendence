@@ -93,6 +93,11 @@ class TournamentMatchPage {
 	private fetchingNames = new Set<string>();
 	private tournamentName: string | null = null;
 	private confettiFrame: number | null = null;
+	private lottieLoader: Promise<any> | null = null;
+	private championAnimationInstance: any | null = null;
+	private championShownFor = new Set<string>();
+	private loserAnimationInstance: any | null = null;
+	private loserShownFor = new Set<string>();
 	private keyDownHandler = (event: KeyboardEvent) => this.handleKeyDown(event);
 	private keyUpHandler = (event: KeyboardEvent) => this.handleKeyUp(event);
 	private beforeUnloadHandler = () => this.dispose();
@@ -123,6 +128,8 @@ class TournamentMatchPage {
 		void this.fetchSnapshot();
 		this.connect();
 		this.setupControls();
+		this.setupChampionOverlay();
+		this.setupLoserOverlay();
 	}
 
 	private async fetchSnapshot(): Promise<void> {
@@ -302,8 +309,14 @@ class TournamentMatchPage {
 				: `Winner: ${this.formatPlayer(payload.winnerUserId)}`
 			: 'Match ended.';
 		this.showInlineMessage(winnerText, isWinner ? 'success' : 'error');
-		if (payload.isTournament && isWinner) {
-			this.startConfetti();
+		if (payload.isTournament) {
+			if (isWinner) {
+				this.startConfetti();
+				void this.showLottieOverlay('win');
+				void this.maybeShowChampionOverlay(payload);
+			} else {
+				void this.maybeShowLoserOverlay(payload);
+			}
 		}
 		this.updateReadyUI({ left: null, right: null });
 	}
@@ -656,6 +669,20 @@ class TournamentMatchPage {
 		}
 	}
 
+	private async fetchTournament(tournamentId: string): Promise<{ status?: string; winnerId?: string; name?: string } | null> {
+		try {
+			const res = await fetch(`/api/realtime/tournaments/${tournamentId}`, {
+				headers: { 'Authorization': `Bearer ${this.token}` },
+			});
+			if (!res.ok) return null;
+			const data = await res.json().catch(() => null);
+			return (data as any)?.tournament ?? null;
+		} catch (err) {
+			console.warn('fetchTournament failed', err);
+			return null;
+		}
+	}
+
 	private setStatus(message: string): void {
 		const statusEl = document.getElementById('statusText');
 		if (statusEl) {
@@ -673,7 +700,7 @@ class TournamentMatchPage {
 		if (roomText) roomText.textContent = display;
 		if (title) title.textContent = display || 'Match';
 		if (subtitle) subtitle.textContent = 'Tournament match';
-
+	}
 
 	private startConfetti(): void {
 		const duration = 3800;
@@ -683,7 +710,7 @@ class TournamentMatchPage {
 		canvas.style.position = 'fixed';
 		canvas.style.inset = '0';
 		canvas.style.pointerEvents = 'none';
-		canvas.style.zIndex = '9999';
+		canvas.style.zIndex = '13000';
 		document.body.appendChild(canvas);
 
 		const ctx = canvas.getContext('2d');
@@ -748,6 +775,303 @@ class TournamentMatchPage {
 		}
 		window.removeEventListener('resize', resizeHandler);
 		canvas.remove();
+	}
+
+	private async loadLottie(): Promise<any> {
+		if ((window as any).lottie) return (window as any).lottie;
+		if (this.lottieLoader) return this.lottieLoader;
+
+		const sources = [
+			'https://cdnjs.cloudflare.com/ajax/libs/lottie-web/5.12.2/lottie.min.js',
+			'https://unpkg.com/lottie-web@5.12.2/build/player/lottie.min.js',
+		];
+
+		this.lottieLoader = new Promise((resolve, reject) => {
+			let idx = 0;
+			const tryNext = () => {
+				if (idx >= sources.length) {
+					reject(new Error('Failed to load lottie-web'));
+					return;
+				}
+				const url = sources[idx++];
+				const script = document.createElement('script');
+				script.src = url;
+				script.async = true;
+				script.onload = () => resolve((window as any).lottie);
+				script.onerror = () => tryNext();
+				document.head.appendChild(script);
+			};
+			tryNext();
+		});
+
+		return this.lottieLoader;
+	}
+
+	private setupChampionOverlay(): void {
+		const closeBtn = document.getElementById('championClose');
+		const overlay = document.getElementById('championOverlay');
+
+		closeBtn?.addEventListener('click', () => {
+			this.hideChampionOverlay();
+			window.location.href = './tournaments.html';
+		});
+
+		overlay?.addEventListener('click', (ev) => {
+			if (ev.target === overlay) this.hideChampionOverlay();
+		});
+	}
+
+	private setupLoserOverlay(): void {
+		const closeBtn = document.getElementById('loserClose');
+		const overlay = document.getElementById('loserOverlay');
+
+		closeBtn?.addEventListener('click', () => {
+			this.hideLoserOverlay();
+			window.location.href = './tournaments.html';
+		});
+		overlay?.addEventListener('click', (ev) => {
+			if (ev.target === overlay) this.hideLoserOverlay();
+		});
+	}
+
+	private hideChampionOverlay(): void {
+		const overlay = document.getElementById('championOverlay');
+		const animationContainer = document.getElementById('championAnimation');
+
+		overlay?.classList.add('hidden');
+		overlay?.classList.remove('flex');
+
+		if (this.championAnimationInstance && typeof this.championAnimationInstance.destroy === 'function') {
+			this.championAnimationInstance.destroy();
+		}
+		this.championAnimationInstance = null;
+		animationContainer && (animationContainer.innerHTML = '');
+	}
+
+	private hideLoserOverlay(): void {
+		const overlay = document.getElementById('loserOverlay');
+		const animationContainer = document.getElementById('loserAnimation');
+
+		overlay?.classList.add('hidden');
+		overlay?.classList.remove('flex');
+
+		if (this.loserAnimationInstance && typeof this.loserAnimationInstance.destroy === 'function') {
+			this.loserAnimationInstance.destroy();
+		}
+		this.loserAnimationInstance = null;
+		animationContainer && (animationContainer.innerHTML = '');
+	}
+
+	private async maybeShowChampionOverlay(payload: GameFinishedMessage): Promise<void> {
+		if (!payload.isTournament || !payload.tournamentId || !payload.winnerUserId) return;
+		if (normalizeId(payload.winnerUserId) !== this.normalizedUser.id) return;
+		if (this.championShownFor.has(payload.tournamentId)) return;
+
+		try {
+			const tournament = await this.fetchTournament(payload.tournamentId);
+			if (!tournament) return;
+			if (tournament.status !== 'finished') return;
+			if (normalizeId(tournament.winnerId) !== this.normalizedUser.id) return;
+			this.championShownFor.add(payload.tournamentId);
+			await this.showChampionOverlay(tournament.name ?? 'Torneio');
+		} catch (err) {
+			console.warn('Erro ao verificar campeão do torneio', err);
+		}
+	}
+
+	private async maybeShowLoserOverlay(payload: GameFinishedMessage): Promise<void> {
+		if (!payload.isTournament || !payload.tournamentId || !payload.winnerUserId) return;
+		if (normalizeId(payload.winnerUserId) === this.normalizedUser.id) return;
+		if (this.loserShownFor.has(payload.tournamentId)) return;
+
+		try {
+			const tournament = await this.fetchTournament(payload.tournamentId);
+			if (!tournament) return;
+			// If tournament already has a winner and it's not the current user, show once.
+			if (normalizeId(tournament.winnerId) === this.normalizedUser.id) return;
+			this.loserShownFor.add(payload.tournamentId);
+			await this.showLoserOverlay(tournament.name ?? 'Torneio');
+		} catch (err) {
+			console.warn('Erro ao mostrar overlay de derrota', err);
+		}
+	}
+
+	private async showChampionOverlay(tournamentName: string): Promise<void> {
+		const overlay = document.getElementById('championOverlay');
+		const textEl = document.getElementById('championText');
+		const animationContainer = document.getElementById('championAnimation');
+
+		if (!overlay || !textEl || !animationContainer) return;
+
+		textEl.textContent = `Você venceu o torneio "${tournamentName}"!`;
+
+		overlay.classList.remove('hidden');
+		overlay.classList.add('flex');
+		overlay.classList.remove('opacity-0');
+
+		await this.playChampionAnimation(animationContainer);
+	}
+
+	private async showLoserOverlay(tournamentName: string): Promise<void> {
+		const overlay = document.getElementById('loserOverlay');
+		const textEl = document.getElementById('loserText');
+		const animationContainer = document.getElementById('loserAnimation');
+
+		if (!overlay || !textEl || !animationContainer) return;
+
+		textEl.textContent = `Torneio "${tournamentName}" - tente novamente!`;
+
+		overlay.classList.remove('hidden');
+		overlay.classList.add('flex');
+		overlay.classList.remove('opacity-0');
+
+		await this.playLoserAnimation(animationContainer);
+	}
+
+	private async playChampionAnimation(container: HTMLElement): Promise<void> {
+		try {
+			const lottie = await this.loadLottie();
+			if (!lottie) throw new Error('lottie não disponível');
+			const animationData = await this.resolveLottieData('win');
+			if (!animationData) throw new Error('win.json não encontrado');
+
+			if (this.championAnimationInstance && typeof this.championAnimationInstance.destroy === 'function') {
+				this.championAnimationInstance.destroy();
+			}
+
+			this.championAnimationInstance = lottie.loadAnimation({
+				container,
+				renderer: 'svg',
+				loop: false,
+				autoplay: true,
+				animationData,
+				rendererSettings: {
+					preserveAspectRatio: 'xMidYMid meet',
+				},
+			});
+			if (typeof this.championAnimationInstance.setSpeed === 'function') {
+				this.championAnimationInstance.setSpeed(0.8);
+			}
+		} catch (err) {
+			console.warn('Não foi possível tocar animação de campeão', err);
+		}
+	}
+
+	private async playLoserAnimation(container: HTMLElement): Promise<void> {
+		try {
+			const lottie = await this.loadLottie();
+			if (!lottie) throw new Error('lottie não disponível');
+			const animationData = await this.resolveLottieData('lose');
+			if (!animationData) throw new Error('lose.json não encontrado');
+
+			if (this.loserAnimationInstance && typeof this.loserAnimationInstance.destroy === 'function') {
+				this.loserAnimationInstance.destroy();
+			}
+
+			this.loserAnimationInstance = lottie.loadAnimation({
+				container,
+				renderer: 'svg',
+				loop: false,
+				autoplay: true,
+				animationData,
+				rendererSettings: {
+					preserveAspectRatio: 'xMidYMid meet',
+				},
+			});
+			if (typeof this.loserAnimationInstance.setSpeed === 'function') {
+				this.loserAnimationInstance.setSpeed(0.8);
+			}
+		} catch (err) {
+			console.warn('Não foi possível tocar animação de derrota', err);
+		}
+	}
+
+	private async resolveLottieData(kind: 'win' | 'lose'): Promise<any | null> {
+		const src = kind === 'win' ? WIN_LOTTIE_SRC : LOSE_LOTTIE_SRC;
+		if (typeof src === 'string') {
+			try {
+				const res = await fetch(src);
+				if (!res.ok) throw new Error(`Failed to fetch lottie: ${res.status}`);
+				return await res.json();
+			} catch (err) {
+				console.warn('Failed to fetch lottie from URL', src, err);
+				return null;
+			}
+		}
+		return src;
+	}
+
+	private async showLottieOverlay(kind: 'win' | 'lose'): Promise<void> {
+		const container = document.createElement('div');
+		container.style.position = 'fixed';
+		container.style.inset = '0';
+		container.style.width = '100%';
+		container.style.height = '100%';
+		container.style.display = 'flex';
+		container.style.alignItems = 'center';
+		container.style.justifyContent = 'center';
+		container.style.pointerEvents = 'none';
+		container.style.zIndex = '10000';
+		document.body.appendChild(container);
+
+		const showFallback = () => {
+			const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+			svg.setAttribute('width', '220');
+			svg.setAttribute('height', '220');
+			svg.setAttribute('viewBox', '0 0 200 200');
+			svg.style.filter = 'drop-shadow(0 6px 18px rgba(0,0,0,0.35))';
+			const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+			circle.setAttribute('cx', '100');
+			circle.setAttribute('cy', '100');
+			circle.setAttribute('r', '80');
+			circle.setAttribute('fill', kind === 'win' ? '#16a34a' : '#ef4444');
+			circle.setAttribute('opacity', '0.9');
+			const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+			text.setAttribute('x', '100');
+			text.setAttribute('y', '120');
+			text.setAttribute('text-anchor', 'middle');
+			text.setAttribute('font-size', '82');
+			text.setAttribute('fill', '#fff');
+			text.textContent = kind === 'win' ? '★' : '✕';
+			svg.appendChild(circle);
+			svg.appendChild(text);
+			container.appendChild(svg);
+			svg.animate(
+				[
+					{ transform: 'scale(0.6)', opacity: 0 },
+					{ transform: 'scale(1.05)', opacity: 1, offset: 0.6 },
+					{ transform: 'scale(1)', opacity: 0, offset: 1 },
+				],
+				{ duration: 1200, easing: 'ease-out' },
+			);
+			setTimeout(() => container.remove(), 1300);
+		};
+
+		try {
+			const lottie = await this.loadLottie();
+			if (!lottie) throw new Error('lottie-web not available');
+			const animationData = await this.resolveLottieData(kind);
+			if (!animationData) throw new Error('animation data unavailable');
+
+			const anim = lottie.loadAnimation({
+				container,
+				renderer: 'svg',
+				loop: false,
+				autoplay: true,
+				animationData,
+			});
+
+			anim.setSpeed(1.05);
+			anim.addEventListener('complete', () => {
+				setTimeout(() => {
+					anim.destroy();
+					container.remove();
+				}, 300);
+			});
+		} catch (err) {
+			console.warn('Failed to load Lottie animation', err);
+			showFallback();
+		}
 	}
 	private showInlineMessage(message: string, type: 'success' | 'error'): void {
 		showMessage(message, type);
@@ -869,4 +1193,11 @@ document.addEventListener('DOMContentLoaded', () => {
 	console.log('[match] readyButton exists in DOM?', !!document.getElementById('readyButton'));
 	new TournamentMatchPage(roomId, token, normalizedUser);
 });
+
+// Configure your Lottie sources here. Set to a URL (string) or leave as inline JSON.
+// Example: const WIN_LOTTIE_SRC = '/static/win.json'; const LOSE_LOTTIE_SRC = '/static/lose.json';
+// Use your custom Lottie file (relative path so it works under the same origin)
+// If your app is served under a sub-path, keep this absolute-from-site-root. Ensure dist/assets/win.json exists in the built image.
+const WIN_LOTTIE_SRC: string | object = '/assets/win.json';
+const LOSE_LOTTIE_SRC: string | object = '/assets/lose.json';
 

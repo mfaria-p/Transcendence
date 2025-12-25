@@ -5,6 +5,7 @@
 	<meta charset="UTF-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
 	<link href="./output.css" rel="stylesheet">
+	<script src="https://cdnjs.cloudflare.com/ajax/libs/lottie-web/5.12.2/lottie.min.js" defer></script>
 	<title>PHONG - Match</title>
 </head>
 
@@ -30,7 +31,8 @@
 					<div>
 						<p class="text-sm uppercase tracking-wide text-gray-400" id="roomSubtitle">Tournament room</p>
 						<h1 class="text-3xl font-bold text-green-400" id="matchTitle">Match</h1>
-						<p class="text-gray-300" id="roomLabel">Tournament: <code id="roomIdText" class="text-green-300"></code></p>
+						<p class="text-gray-300" id="roomLabel">Tournament: <code id="roomIdText"
+								class="text-green-300"></code></p>
 					</div>
 					<div class="flex gap-2">
 						<a href="./tournaments.html"
@@ -75,6 +77,24 @@
 	</main>
 
 	<div id="messageContainer" class="fixed bottom-4 right-4 max-w-md z-50 space-y-2"></div>
+
+	<div id="championOverlay" class="fixed inset-0 bg-black/70 backdrop-blur-sm hidden items-center justify-center z-[12000] transition-opacity duration-200">
+		<div class="bg-gray-900 border border-green-500/50 rounded-2xl p-6 shadow-2xl max-w-lg w-11/12 text-center space-y-4">
+			<h3 class="text-2xl font-bold text-green-300">Campeão do torneio!</h3>
+			<p id="championText" class="text-gray-200">Você venceu o torneio.</p>
+			<div id="championAnimation" class="w-48 h-48 mx-auto"></div>
+			<button id="championClose" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg transition w-full">Fechar</button>
+		</div>
+	</div>
+
+	<div id="loserOverlay" class="fixed inset-0 bg-black/70 backdrop-blur-sm hidden items-center justify-center z-[12000] transition-opacity duration-200">
+		<div class="bg-gray-900 border border-red-500/50 rounded-2xl p-6 shadow-2xl max-w-lg w-11/12 text-center space-y-4">
+			<h3 class="text-2xl font-bold text-red-300">Partida encerrada</h3>
+			<p id="loserText" class="text-gray-200">Não foi dessa vez. Tente novamente!</p>
+			<div id="loserAnimation" class="w-48 h-48 mx-auto"></div>
+			<button id="loserClose" class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg transition w-full">Fechar</button>
+		</div>
+	</div>
 
 	<script type="module" src="./match.js"></script>
 </body>
