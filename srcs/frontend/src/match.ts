@@ -422,6 +422,8 @@ class TournamentMatchPage {
 		const controlHint = document.getElementById('controlHint');
 		if (!controlHint) return;
 
+		this.updateReadyBadges(players);
+
 		console.log('[match] updateReadyUI called', {
 			gameStatus: this.gameStatus,
 			players,
@@ -448,6 +450,17 @@ class TournamentMatchPage {
 
 		controlHint.textContent = `${selfReady ? 'You are ready' : 'Press SPACE to Ready'} · ${opponentReady ? 'Opponent ready' : 'Opponent not ready'} | Controls: W/S or ↑/↓`;
 		this.updateReadyButton(selfReady, selfReady ? 'Ready ✓' : 'Press SPACE to Ready');
+	}
+
+	private updateReadyBadges(players: { left: string | null; right: string | null }): void {
+		const leftBadge = document.getElementById('leftReadyBadge');
+		const rightBadge = document.getElementById('rightReadyBadge');
+
+		const showLeft = this.gameStatus === 'waiting' && Boolean(players.left) && this.readyFlags.left;
+		const showRight = this.gameStatus === 'waiting' && Boolean(players.right) && this.readyFlags.right;
+
+		if (leftBadge) leftBadge.classList.toggle('hidden', !showLeft);
+		if (rightBadge) rightBadge.classList.toggle('hidden', !showRight);
 	}
 
 	private updateReadyButton(selfReady: boolean, label: string): void {
