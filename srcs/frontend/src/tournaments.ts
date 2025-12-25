@@ -339,16 +339,33 @@ class TournamentsPage {
   }
 
   private formatPlayer(userId: string | null): string {
-    return this.getDisplayNameSync(userId);
-  }
-
-  private getDisplayNameSync(userId: string | null): string {
     if (!userId) return 'TBD';
+    const cached = this.nameCache.get(userId);
+    if (cached) return cached;
     if (this.currentUser && userId === this.currentUser.id) {
       return `${this.currentUser.username} (you)`;
     }
-    const cached = this.nameCache.get(userId);
-    return cached ?? userId;
+    // fallback while fetching
+    void this.enqueueProfileFetch(userId);
+    return userId;
+  }
+
+  private async enqueueProfileFetch(userId: string): Promise<void> {
+    if (!this.accessToken) return;
+    if (this.nameCache.has(userId) || this.fetchingNames.has(userId)) return;
+    this.fetchingNames.add(userId);
+    try {
+      const profile = await this.fetchUserProfile(userId);
+      const display = profile?.name || profile?.username || profile?.id || userId;
+      this.nameCache.set(userId, display);
+      // re-render visible lists quickly
+      this.renderTournaments(this.tournamentsCache);
+      this.renderHistory(this.historyCache);
+    } catch (err) {
+      console.warn('Failed to fetch player name', userId, err);
+    } finally {
+      this.fetchingNames.delete(userId);
+    }
   }
 
   private async loadWinnerName(tournament: Tournament): Promise<void> {
