@@ -36,6 +36,7 @@ class TournamentsPage {
   private nameCache = new Map<string, string>();
   private fetchingNames = new Set<string>();
   private tournamentsCache: Tournament[] = [];
+  private historyCache: Tournament[] = [];
 
   constructor() {
     void this.init();
@@ -112,10 +113,19 @@ class TournamentsPage {
 
       const data = await response.json();
       const tournaments: Tournament[] = data.tournaments ?? [];
-      // show most recent first (by update/creation timestamp)
-      const sorted = [...tournaments].sort((a, b) => (b.updatedAt ?? b.createdAt) - (a.updatedAt ?? a.createdAt));
-      this.tournamentsCache = sorted;
-      this.renderTournaments(sorted);
+
+      const ongoing = tournaments.filter((t) => t.status !== 'finished');
+      const finishedSorted = tournaments
+        .filter((t) => t.status === 'finished')
+        .sort((a, b) => (b.updatedAt ?? b.createdAt) - (a.updatedAt ?? a.createdAt))
+        .slice(0, 10);
+
+      const ongoingSorted = [...ongoing].sort((a, b) => (b.updatedAt ?? b.createdAt) - (a.updatedAt ?? a.createdAt));
+
+      this.tournamentsCache = ongoingSorted;
+      this.historyCache = finishedSorted;
+      this.renderTournaments(ongoingSorted);
+      this.renderHistory(finishedSorted);
     } catch (error) {
       console.error('loadTournaments error:', error);
       this.showMessage('Unable to load tournaments.', 'error');
@@ -233,9 +243,49 @@ class TournamentsPage {
     }
   }
 
+  private renderHistory(tournaments: Tournament[]): void {
+    const list = document.getElementById('historyList');
+    const empty = document.getElementById('historyEmpty');
+    if (!list || !empty) return;
+
+    list.innerHTML = '';
+
+    if (tournaments.length === 0) {
+      empty.classList.remove('hidden');
+      return;
+    }
+
+    empty.classList.add('hidden');
+
+    for (const tournament of tournaments) {
+      const li = document.createElement('li');
+      li.className = 'bg-gray-900 border border-gray-700 rounded-lg p-4 shadow-sm flex flex-col gap-2';
+
+      const winner = tournament.winnerId ? this.formatPlayer(tournament.winnerId) : 'TBD';
+      const matchLabel = tournament.matches.find((m) => m.isFinal)?.roomId || tournament.matches[0]?.roomId || '—';
+      const playersList = tournament.players.length > 0
+        ? tournament.players.map((id) => this.formatPlayer(id)).join(', ')
+        : 'No players';
+
+      li.innerHTML = `
+        <div class="flex items-center justify-between gap-2 flex-wrap">
+          <div>
+            <p class="text-sm uppercase tracking-wide text-gray-500">Finished</p>
+            <h4 class="text-lg font-semibold text-gray-200">${this.getTournamentName(tournament)}</h4>
+          </div>
+          <div class="text-xs text-gray-400">Room: <code>${matchLabel}</code></div>
+        </div>
+        <p class="text-sm text-gray-300">Players: ${playersList}</p>
+        <p class="text-sm text-green-300">Winner: ${winner}</p>
+      `;
+
+      list.appendChild(li);
+    }
+  }
+
   private getCurrentMatchForUser(tournament: Tournament): TournamentMatch | null {
     if (!this.currentUser) return null;
-    if (tournament.status === 'waiting') return null;
+    if (tournament.status === 'waiting' || tournament.status === 'finished') return null;
 
     const uid = this.currentUser.id;
     const isParticipant = tournament.players.includes(uid);

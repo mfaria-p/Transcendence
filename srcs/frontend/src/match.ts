@@ -146,6 +146,11 @@ class TournamentMatchPage {
 				this.tournamentName = tournamentName;
 				this.setRoomName(tournamentName);
 			}
+			if (data.tournament?.status === 'finished') {
+				showMessage('This tournament has finished. Redirecting...', 'error');
+				setTimeout(() => (window.location.href = './tournaments.html'), 1200);
+				return;
+			}
 			if (!match) return;
 
 			this.players = {

@@ -47,20 +47,29 @@
 				</form>
 			</section>
 
-			<section class="bg-gray-800 border border-gray-700 rounded-xl shadow-xl p-6 sm:p-8">
-				<div class="flex items-center justify-between flex-wrap gap-4 mb-4">
+			<section class="bg-gray-800 border border-gray-700 rounded-xl shadow-xl p-6 sm:p-8 space-y-6">
+				<header class="flex items-center justify-between flex-wrap gap-4">
 					<h2 class="text-2xl font-semibold text-green-300">Ongoing tournaments</h2>
 					<button id="refreshButton"
 						class="flex items-center gap-2 bg-gray-700 hover:bg-gray-600 text-white px-4 py-2 rounded-lg transition">
 						<span>Refresh</span>
 					</button>
-				</div>
+				</header>
 				<div id="tournamentsEmpty" class="text-gray-400 hidden">
 					No tournaments yet. Create the first one above!
 				</div>
 				<div id="tournamentsList" class="space-y-4">
 					<!-- Populated by tournaments.js -->
 				</div>
+			</section>
+
+			<section class="bg-gray-800 border border-gray-700 rounded-xl shadow-xl p-6 sm:p-8 space-y-4">
+				<h2 class="text-2xl font-semibold text-gray-200">Recent tournaments</h2>
+				<p class="text-sm text-gray-400">Latest finished tournaments (up to 10).</p>
+				<div id="historyEmpty" class="text-gray-500 hidden">No finished tournaments yet.</div>
+				<ul id="historyList" class="space-y-3">
+					<!-- History items -->
+				</ul>
 			</section>
 		</div>
 	</main>
