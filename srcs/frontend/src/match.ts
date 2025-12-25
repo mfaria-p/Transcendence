@@ -903,7 +903,7 @@ class TournamentMatchPage {
 
 		if (!overlay || !textEl || !animationContainer) return;
 
-		textEl.textContent = `Você venceu o torneio "${tournamentName}"!`;
+		textEl.textContent = `You won the tournament "${tournamentName}"!`;
 
 		overlay.classList.remove('hidden');
 		overlay.classList.add('flex');
@@ -919,7 +919,7 @@ class TournamentMatchPage {
 
 		if (!overlay || !textEl || !animationContainer) return;
 
-		textEl.textContent = `Torneio "${tournamentName}" - tente novamente!`;
+		textEl.textContent = `Tournament "${tournamentName}" - try again!`;
 
 		overlay.classList.remove('hidden');
 		overlay.classList.add('flex');
