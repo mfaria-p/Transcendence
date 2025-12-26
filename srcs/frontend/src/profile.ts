@@ -655,7 +655,7 @@ class ProfileManager {
                 </div>`;
             
             requestDiv.innerHTML = `
-              <div class="flex items-center">
+              <div class="flex items-center cursor-pointer flex-1" data-profile-id="${fromProfileId}">
                 ${avatarHtml}
                 <div>
                   <p class="text-white font-semibold">${username}</p>
@@ -671,13 +671,26 @@ class ProfileManager {
                 </button>
               </div>
             `;
+
+            // Make profile info clickable
+            const profileClick = requestDiv.querySelector('.flex.items-center.cursor-pointer');
+            profileClick?.addEventListener('click', () => {
+              window.location.href = `./other-profiles.html?id=${fromProfileId}`;
+            });
             
             const acceptBtn = requestDiv.querySelector('.accept-btn');
             const declineBtn = requestDiv.querySelector('.decline-btn');
             
-            acceptBtn?.addEventListener('click', () => this.acceptFriendRequest(fromProfileId));
-            declineBtn?.addEventListener('click', () => this.declineFriendRequest(fromProfileId));
+            acceptBtn?.addEventListener('click', (e) => {
+              e.stopPropagation(); // Prevent profile click
+              this.acceptFriendRequest(fromProfileId);
+            });
             
+            declineBtn?.addEventListener('click', (e) => {
+              e.stopPropagation(); // Prevent profile click
+              this.declineFriendRequest(fromProfileId);
+            });
+
             friendRequestsList.appendChild(requestDiv);
           } catch (error) {
             console.error('Failed to fetch user info:', error);
