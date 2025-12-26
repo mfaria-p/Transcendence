@@ -783,13 +783,33 @@ class ProfileManager {
               console.log('No avatar for friend:', friendId);
             }
             
+            // Fetch online status from ws service
+            let isOnline = false;
+            try {
+              const presenceResponse = await handleApiCall(this.accessToken, `/api/realtime/presence/${friendId}`);
+              
+              if (presenceResponse.ok) {
+                const presenceData = await presenceResponse.json();
+                isOnline = presenceData.online || false;
+              }
+            } catch (error) {
+              console.log('Could not check online status for friend:', friendId);
+            }
+            
             const friendDiv = document.createElement('div');
             friendDiv.className = 'flex items-center justify-between p-4 bg-gray-700 rounded-lg';
-            
+
+            // Avatar with status badge
             const avatarHtml = avatarUrl
-              ? `<img src="${avatarUrl}" class="w-12 h-12 rounded-full object-cover mr-4" alt="${account.username}'s avatar" />`
-              : `<div class="w-12 h-12 rounded-full bg-blue-500 flex items-center justify-center text-white font-bold mr-4">
-                  ${account.username.charAt(0).toUpperCase()}
+              ? `<div class="relative inline-block mr-4">
+                  <img src="${avatarUrl}" class="w-12 h-12 rounded-full object-cover" alt="${account.username}'s avatar" />
+                  <div class="absolute bottom-0 right-0 w-4 h-4 rounded-full border-2 border-gray-700 ${isOnline ? 'bg-green-500' : 'bg-gray-500'}" title="${isOnline ? 'Online' : 'Offline'}"></div>
+                </div>`
+              : `<div class="relative inline-block mr-4">
+                  <div class="w-12 h-12 rounded-full bg-blue-500 flex items-center justify-center text-white font-bold">
+                    ${account.username.charAt(0).toUpperCase()}
+                  </div>
+                  <div class="absolute bottom-0 right-0 w-4 h-4 rounded-full border-2 border-gray-700 ${isOnline ? 'bg-green-500' : 'bg-gray-500'}" title="${isOnline ? 'Online' : 'Offline'}"></div>
                 </div>`;
             
             friendDiv.innerHTML = `
