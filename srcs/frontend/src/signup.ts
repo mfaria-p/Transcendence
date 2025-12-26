@@ -44,11 +44,36 @@ class SignupManager {
     });
 
     // Real-time password validation
-    this.passwordInput.addEventListener('input', () => this.updatePasswordRequirements());
+    this.passwordInput.addEventListener('input', () => {
+      this.updatePasswordRequirements();
+      // Also check if passwords match when changing the first password
+      if (this.confirmPasswordInput.value) {
+        this.validatePasswordMatch();
+      }
+    });
     this.passwordInput.addEventListener('focus', () => {
       this.passwordRequirements.classList.remove('hidden');
     });
     this.confirmPasswordInput.addEventListener('input', () => this.validatePasswordMatch());
+
+    // Clear errors when user starts typing
+    this.usernameInput.addEventListener('input', () => {
+      this.clearInputError(this.usernameInput);
+      this.hideMessages(); 
+    });
+    
+    this.emailInput.addEventListener('input', () => {
+      this.clearInputError(this.emailInput);
+      this.hideMessages(); 
+    });
+
+    this.passwordInput.addEventListener('input', () => {
+      this.hideMessages(); // Hide general error message
+    });
+    
+    this.confirmPasswordInput.addEventListener('input', () => {
+      this.hideMessages(); // Hide general error message
+    });
   }
 
   private async handleSignup(): Promise<void> {
@@ -212,6 +237,11 @@ class SignupManager {
     this.updateRequirement('req-uppercase', hasUppercase);
     this.updateRequirement('req-lowercase', hasLowercase);
     this.updateRequirement('req-number', hasNumber);
+
+    // Clear any existing error if all requirements are met
+    if (hasMinLength && hasUppercase && hasLowercase && hasNumber) {
+      this.clearInputError(this.passwordInput);
+    }
   }
 
   private updateRequirement(id: string, isValid: boolean): void {
@@ -240,6 +270,12 @@ class SignupManager {
     const password = this.passwordInput.value;
     const confirmPassword = this.confirmPasswordInput.value;
     
+    // Only validate if confirmPassword has been entered
+    if (!confirmPassword) {
+      this.clearInputError(this.confirmPasswordInput);
+      return false;
+    }
+
     if (password !== confirmPassword) {
       this.setInputError(this.confirmPasswordInput, 'Passwords do not match');
       return false;
