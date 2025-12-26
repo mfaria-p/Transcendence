@@ -1,4 +1,4 @@
-import { connectPresenceSocket, disconnectPresenceSocket } from './utils-ws.js';
+import { connectPresenceSocket, disconnectPresenceSocket, addPresenceListener } from './utils-ws.js';
 import { verifySession, clearSessionAndRedirect, handleApiCall, showMessage, handleLogout } from './utils-api.js';
 
 interface User {
@@ -16,6 +16,7 @@ class ProfileManager {
   private currentUser: User | null = null;
   private currentProfile: Profile | null = null;
   private accessToken: string | null = null;
+  private friendOnlineStatus: Map<string, boolean> = new Map(); 
 
   constructor() {
     this.init();
@@ -35,6 +36,8 @@ class ProfileManager {
       await verifySession(this.accessToken);
       this.setupAuthContainer();
       connectPresenceSocket();
+
+      this.setupPresenceListener();
       
       await this.loadProfile();
       this.setupEventListeners();
@@ -47,6 +50,42 @@ class ProfileManager {
       setTimeout(() => {
         clearSessionAndRedirect();
       }, 2000);
+    }
+  }
+
+  private setupPresenceListener(): void {
+    addPresenceListener((event, userId) => {
+      console.log(`[Profile] Presence update: ${userId} is now ${event}`);
+      
+      // Update the status in our map
+      this.friendOnlineStatus.set(userId, event === 'online');
+      
+      // Update the badge in the UI
+      this.updateFriendStatusBadge(userId, event === 'online');
+    });
+  }
+
+  private updateFriendStatusBadge(friendId: string, isOnline: boolean): void {
+    // Find ALL elements with this friend ID (there might be multiple contexts)
+    const friendElement = document.querySelector(`[data-friend-id="${friendId}"]`);
+    
+    if (!friendElement) {
+      console.warn(`Could not find friend element for ${friendId}`);
+      return;
+    }
+
+    // Look for status badge within this element
+    const statusBadge = friendElement.querySelector('.status-badge') as HTMLElement;
+    
+    if (statusBadge) {
+      // Update badge color
+      statusBadge.classList.remove('bg-green-500', 'bg-gray-500');
+      statusBadge.classList.add(isOnline ? 'bg-green-500' : 'bg-gray-500');
+      statusBadge.title = isOnline ? 'Online' : 'Offline';
+      
+      console.log(`Updated ${friendId} badge to ${isOnline ? 'ONLINE (green)' : 'OFFLINE (gray)'}`);
+    } else {
+      console.warn(`Could not find status-badge for friend ${friendId}`);
     }
   }
 
@@ -804,6 +843,7 @@ class ProfileManager {
               if (presenceResponse.ok) {
                 const presenceData = await presenceResponse.json();
                 isOnline = presenceData.online || false;
+                this.friendOnlineStatus.set(friendId, isOnline);
               }
             } catch (error) {
               console.log('Could not check online status for friend:', friendId);
@@ -816,13 +856,13 @@ class ProfileManager {
             const avatarHtml = avatarUrl
               ? `<div class="relative inline-block mr-4">
                   <img src="${avatarUrl}" class="w-12 h-12 rounded-full object-cover" alt="${account.username}'s avatar" />
-                  <div class="absolute bottom-0 right-0 w-4 h-4 rounded-full border-2 border-gray-700 ${isOnline ? 'bg-green-500' : 'bg-gray-500'}" title="${isOnline ? 'Online' : 'Offline'}"></div>
+                  <div class="status-badge absolute bottom-0 right-0 w-4 h-4 rounded-full border-2 border-gray-700 ${isOnline ? 'bg-green-500' : 'bg-gray-500'}" title="${isOnline ? 'Online' : 'Offline'}"></div>
                 </div>`
               : `<div class="relative inline-block mr-4">
                   <div class="w-12 h-12 rounded-full bg-blue-500 flex items-center justify-center text-white font-bold">
                     ${account.username.charAt(0).toUpperCase()}
                   </div>
-                  <div class="absolute bottom-0 right-0 w-4 h-4 rounded-full border-2 border-gray-700 ${isOnline ? 'bg-green-500' : 'bg-gray-500'}" title="${isOnline ? 'Online' : 'Offline'}"></div>
+                  <div class="status-badge absolute bottom-0 right-0 w-4 h-4 rounded-full border-2 border-gray-700 ${isOnline ? 'bg-green-500' : 'bg-gray-500'}" title="${isOnline ? 'Online' : 'Offline'}"></div>
                 </div>`;
             
             friendDiv.innerHTML = `

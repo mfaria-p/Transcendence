@@ -2,6 +2,27 @@ let ws: WebSocket | null = null;
 let reconnectTimer: number | null = null;
 let manualClose = false;
 
+type PresenceListener = (event: 'online' | 'offline', userId: string) => void;
+const presenceListeners: Set<PresenceListener> = new Set();
+
+export function addPresenceListener(listener: PresenceListener): void {
+  presenceListeners.add(listener);
+}
+
+export function removePresenceListener(listener: PresenceListener): void {
+  presenceListeners.delete(listener);
+}
+
+function notifyPresenceListeners(event: 'online' | 'offline', userId: string): void {
+  presenceListeners.forEach(listener => {
+    try {
+      listener(event, userId);
+    } catch (error) {
+      console.error('[Presence WS] Error in listener:', error);
+    }
+  });
+}
+
 export function connectPresenceSocket(): void {
   const token = localStorage.getItem('access_token');
   
@@ -49,6 +70,7 @@ export function connectPresenceSocket(): void {
           break;
         case 'presence':
           console.log(`[Presence WS] Presence update: User ${message.userId} is now ${message.event}`);
+          notifyPresenceListeners(message.event, message.userId);
           break;
         case 'pong':
           console.log('[Presence WS] Pong received');
@@ -107,6 +129,8 @@ export function disconnectPresenceSocket(): void {
     ws.close();
     ws = null;
   }
+
+  presenceListeners.clear();
   
   console.log('[Presence WS] Disconnected');
 }
