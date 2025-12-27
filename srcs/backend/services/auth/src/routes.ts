@@ -227,16 +227,13 @@ export default async function (app: FastifyInstance): Promise<void> {
 
     const at: String = utils.atGenerate(app.jwt, {sub: account.id});
 
-    return {
-      success: true,
-      message: 'Google Account Logged In',
-      account: {
+    const accountData = encodeURIComponent(JSON.stringify({
         id: account.id,
-        username: payload.name,
-        email: payload.email,
-        avatarUrl: payload.picture,
-      },
-      at: at,
-    };
+        username: account.username,
+        email: account.email,
+        avatarUrl: payload.picture || '',
+      }));
+
+      return reply.redirect(`/google-callback.html?at=${at}&account=${accountData}`);
   });
 };

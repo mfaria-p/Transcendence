@@ -10,6 +10,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const identInput = document.getElementById('ident') as HTMLInputElement;
   const passwordInput = document.getElementById('password') as HTMLInputElement;
   const loginButton = document.getElementById('loginButton') as HTMLButtonElement;
+  const googleLoginButton = document.getElementById('googleLoginButton') as HTMLButtonElement;
   const errorMessage = document.getElementById('errorMessage') as HTMLDivElement;
   const successMessage = document.getElementById('successMessage') as HTMLDivElement;
 
@@ -114,6 +115,26 @@ document.addEventListener('DOMContentLoaded', () => {
       loginButton.disabled = false;
       loginButton.textContent = 'Login';
       loginButton.classList.remove('opacity-50', 'cursor-not-allowed');
+    }
+  });
+
+  // NEW: Google OAuth login
+  googleLoginButton.addEventListener('click', async () => {
+    googleLoginButton.disabled = true;
+    googleLoginButton.textContent = 'Redirecting to Google...';
+    googleLoginButton.classList.add('opacity-50', 'cursor-not-allowed');
+
+    try {
+      // Redirect to backend Google OAuth endpoint
+      window.location.href = '/api/auth/google/login';
+    } catch (error) {
+      console.error('Google login error:', error);
+      errorMessage.textContent = 'Failed to initiate Google login';
+      errorMessage.classList.remove('hidden');
+      
+      googleLoginButton.disabled = false;
+      googleLoginButton.textContent = 'Continue with Google';
+      googleLoginButton.classList.remove('opacity-50', 'cursor-not-allowed');
     }
   });
 
