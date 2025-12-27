@@ -2,38 +2,44 @@
 
 import type {FastifySchema} from 'fastify'
 
-const user = {
+const account = {
   type: 'object',
   properties: {
     id: {type: 'string'},
     username: {type: 'string'},
     email: {type: 'string'},
+    avatarUrl: {type: 'string'},
+  },
+  additionalProperties: false,
+  required: ['id', 'username', 'email'],
+};
+
+export const getMeOpts: FastifySchema = {
+  summary: 'Get account info',
+  description: '',
+  response: {
+    200: {
+      type: 'object',
+      properties: {
+        success: {type: 'boolean'},
+        message: {type: 'string'},
+        account: account,
+      },
+      additionalProperties: false,
+    },
   },
 };
 
-export const postMeOpts: FastifySchema = {
-  summary: 'Get user info',
+export const putMeOpts: FastifySchema = {
+  summary: 'Update Username and Email',
   description: '',
   body: {
     type: 'object',
-    required: ['email'],
-    properties: {
-      email: {type: 'string'},
-    }
-  },
-};
-
-export const postSignupOpts: FastifySchema = {
-  summary: 'Create user',
-  description: '',
-  body: {
-    type: 'object',
-    required: ['username','email', 'password'],
     properties: {
       username: {type: 'string'},
       email: {type: 'string'},
-      password: {type: 'string'},
-    }
+    },
+    additionalProperties: false,
   },
   response: {
     200: {
@@ -41,9 +47,167 @@ export const postSignupOpts: FastifySchema = {
       properties: {
         success: {type: 'boolean'},
         message: {type: 'string'},
-        user: user,
+        account: account,
+      },
+      additionalProperties: false,
+    },
+  },
+};
+
+export const putMePasswordOpts: FastifySchema = {
+  summary: 'Update Password',
+  description: '',
+  body: {
+    type: 'object',
+    required: ['currentPassword','newPassword'],
+    properties: {
+      currentPassword: {type: 'string'},
+      newPassword: {type: 'string'},
+    },
+    additionalProperties: false,
+  },
+  response: {
+    200: {
+      type: 'object',
+      properties: {
+        success: {type: 'boolean'},
+        message: {type: 'string'},
+        account: account,
+      },
+      additionalProperties: false,
+    },
+  },
+};
+
+export const deleteMeOpts: FastifySchema = {
+  summary: 'Delete Account',
+  description: '',
+  response: {
+    200: {
+      type: 'object',
+      properties: {
+        success: {type: 'boolean'},
+        message: {type: 'string'},
+        account: account,
+      },
+      additionalProperties: false,
+    },
+  },
+};
+
+export const getAccountsOpts: FastifySchema = {
+  summary: 'Get Account List',
+  description: '',
+  response: {
+    200: {
+      type: 'object',
+      properties: {
+        success: {type: 'boolean'},
+        message: {type: 'string'},
+        accounts: {
+          type: 'array',
+          items: account,
+        },
+      },
+      additionalProperties: false,
+    },
+  },
+};
+
+export const getAccountByIdOpts: FastifySchema = {
+  summary: 'Get Account By Id',
+  description: '',
+  params: {
+    type: "object",
+    properties: {
+      id: { type: "string" },
+    },
+    additionalProperties: false,
+    required: ["id"],
+  },
+  response: {
+    200: {
+      type: 'object',
+      properties: {
+        success: {type: 'boolean'},
+        message: {type: 'string'},
+        account: account,
+      },
+      additionalProperties: false,
+    },
+  },
+};
+
+
+export const getAccountsByIdentPrefixOpts: FastifySchema = {
+  summary: 'Get Account List',
+  description: '',
+  querystring: {
+    type: "object",
+    properties: {
+      prefix: { type: "string", minLength: 1 },
+      limit: { type: "number", default: 20 },
+      page: { type: "number", default: 1 },
+    },
+    additionalProperties: false,
+    required: ["prefix"],
+  },
+  response: {
+    200: {
+      type: 'object',
+      properties: {
+        success: {type: 'boolean'},
+        message: {type: 'string'},
+        accounts: {
+          type: 'array',
+          items: account,
+        },
+      },
+      additionalProperties: false,
+    },
+  },
+};
+
+export const postGoogleAuthOpts: FastifySchema = {
+  summary: 'Google remote login',
+  description: '',
+  response: {
+    200: {
+      type: 'object',
+      properties: {
+        success: {type: 'boolean'},
+        message: {type: 'string'},
+        account: account,
         at: {type: 'string'},
       },
+      additionalProperties: false,
+    },
+  },
+};
+
+export const postSignupOpts: FastifySchema = {
+  summary: 'Create account',
+  description: '',
+  body: {
+    type: 'object',
+    required: ['username', 'email', 'password'],
+    properties: {
+      username: {type: 'string'},
+      email: {type: 'string'},
+      password: {type: 'string'},
+    },
+    additionalProperties: false,
+  },
+  response: {
+    200: {
+      type: 'object',
+      properties: {
+        success: {type: 'boolean'},
+        message: {type: 'string'},
+        account: account,
+        at: {type: 'string'},
+      },
+      additionalProperties: false,
     },
   },
 };
@@ -53,11 +217,12 @@ export const postLoginOpts: FastifySchema = {
   description: '',
   body: {
     type: 'object',
-    required: ['email', 'password'],
+    required: ['ident', 'password'],
     properties: {
-      email: {type: 'string'},
+      ident: {type: 'string'},
       password: {type: 'string'},
-    }
+    },
+    additionalProperties: false,
   },
   response: {
     200: {
@@ -65,9 +230,10 @@ export const postLoginOpts: FastifySchema = {
       properties: {
         success: {type: 'boolean'},
         message: {type: 'string'},
-        user: user,
+        account: account,
         at: {type: 'string'},
       },
+      additionalProperties: false,
     },
     401: {
       type: 'object',
@@ -75,6 +241,7 @@ export const postLoginOpts: FastifySchema = {
         success: {type: 'boolean'},
         message: {type: 'string'},
       },
+      additionalProperties: false,
     },
   },
 };
@@ -102,6 +269,7 @@ export const postRefreshOpts: FastifySchema = {
         message: {type: 'string'},
         at: {type: 'string'},
       },
+      additionalProperties: false,
     },
     401: {
       type: 'object',
@@ -109,6 +277,7 @@ export const postRefreshOpts: FastifySchema = {
         success: {type: 'boolean'},
         message: {type: 'string'},
       },
+      additionalProperties: false,
     },
   },
 };
@@ -124,6 +293,7 @@ export const postLogoutOpts: FastifySchema = {
         success: {type: 'boolean'},
         message: {type: 'string'},
       },
+      additionalProperties: false,
     },
     401: {
       type: 'object',
@@ -131,6 +301,7 @@ export const postLogoutOpts: FastifySchema = {
         success: {type: 'boolean'},
         message: {type: 'string'},
       },
+      additionalProperties: false,
     },
   },
 }

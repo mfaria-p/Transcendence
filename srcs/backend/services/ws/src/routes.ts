@@ -193,7 +193,7 @@ export default async function routes(app: FastifyInstance): Promise<void> {
     '/ws',
     { websocket: true },
     async (connection, req: FastifyRequest) => {
-      const socket = (connection as any).socket as WebSocket;
+      const socket = connection as unknown as WebSocket;
 
       // 1) Autenticação por JWT
       const rawToken = extractToken(req);

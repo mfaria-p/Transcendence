@@ -1,7 +1,7 @@
 // src/utils.ts
 
 import type {FastifyInstance} from 'fastify';
-import type {Profile, FriendRequest, FriendRequestStatus, Friendship, Block} from './generated/prisma/client.js';
+import type {Profile, FriendRequest, FriendRequestStatus, Friendship} from './generated/prisma/client.js';
 import {Prisma} from './generated/prisma/client.js';
 import createError from '@fastify/error';
 
@@ -15,7 +15,7 @@ function handlePrismaError(error: unknown): never {
     switch (error.code) {
       case 'P2002':
         const fields = (error.meta?.target as string[]) || [];
-        const fieldList = fields.join(', ') || 'unkown field';
+        const fieldList = fields.join(', ') || 'unknown field';
         throw new AlreadyExistsError(`${fieldList} already exists`);
       case 'P2003':
       case 'P2014': throw new InvalidRelationError();
@@ -31,27 +31,22 @@ function handlePrismaError(error: unknown): never {
 }
 
 // profile
-export async function profileProvide(db: FastifyInstance['prisma'], user: {id: string, name: string, email: string, avatarUrl?: string}): Promise<Profile> {
+export async function profileProvide(db: FastifyInstance['prisma'], profile: {id: string, avatarUrl?: string}): Promise<Profile> {
   try {
-    const createData: any = {
-      id:   user.id,
-      name: user.name,
-      email: user.email,
+    let createData: any = {
+      id: profile.id,
     };
     
-    const updateData: any = {
-      name: user.name,
-      email: user.email,
-    };
+    let updateData: any = {};
     
-    if (user.avatarUrl) {
-      createData.avatarUrl = user.avatarUrl;
-      updateData.avatarUrl = user.avatarUrl;
+    if (profile?.avatarUrl) {
+      createData.avatarUrl = profile.avatarUrl;
+      updateData.avatarUrl = profile.avatarUrl;
     }
     
     return await db.profile.upsert({
       where: {
-        id: user.id
+        id: profile.id
       },
       create: createData,
       update: updateData,
@@ -61,7 +56,7 @@ export async function profileProvide(db: FastifyInstance['prisma'], user: {id: s
   };
 };
 
-export async function profileDeleteByUserId(db: FastifyInstance['prisma'], id: string): Promise<Profile> {
+export async function profileDeleteById(db: FastifyInstance['prisma'], id: string): Promise<Profile> {
   try {
     return await db.profile.delete({
       where: {
@@ -73,7 +68,7 @@ export async function profileDeleteByUserId(db: FastifyInstance['prisma'], id: s
   };
 };
 
-export async function profileFindByUserId(db: FastifyInstance['prisma'], id: string): Promise<Profile | null> {
+export async function profileFindByProfileId(db: FastifyInstance['prisma'], id: string): Promise<Profile | null> {
   try {
     return await db.profile.findUnique({
       where: {
@@ -95,13 +90,13 @@ export async function profileFindAll(db: FastifyInstance['prisma']): Promise<Pro
 
 // friend
 export async function friendCreate(db: FastifyInstance['prisma'], id1: string, id2: string): Promise<Friendship> {
-  const userIds: [string, string] = id1 < id2 ? [id1,id2] : [id2,id1];
+  const profileIds: [string, string] = id1 < id2 ? [id1,id2] : [id2,id1];
 
   try {
     return await db.friendship.create({
       data: {
-        userAId: userIds[0],
-        userBId: userIds[1],
+        profileAId: profileIds[0],
+        profileBId: profileIds[1],
       },
     });
   } catch(err) {
@@ -110,14 +105,14 @@ export async function friendCreate(db: FastifyInstance['prisma'], id1: string, i
 };
 
 export async function friendDelete(db: FastifyInstance['prisma'], id1: string, id2: string): Promise<Friendship> {
-  const userIds: [string, string] = id1 < id2 ? [id1,id2] : [id2,id1];
+  const profileIds: [string, string] = id1 < id2 ? [id1,id2] : [id2,id1];
 
   try {
     return await db.friendship.delete({
       where: {
-        userAId_userBId: {
-          userAId: userIds[0],
-          userBId: userIds[1],
+        profileAId_profileBId: {
+          profileAId: profileIds[0],
+          profileBId: profileIds[1],
         },
       },
     });
@@ -131,8 +126,8 @@ export async function friendFindById(db: FastifyInstance['prisma'], id: string):
     return await db.friendship.findMany({
       where: {
         OR: [
-          {userAId: id},
-          {userBId: id},
+          {profileAId: id},
+          {profileBId: id},
         ],
       },
     });
@@ -146,8 +141,8 @@ export async function requestCreate(db: FastifyInstance['prisma'], fromId: strin
   try {
     return await db.friendRequest.create({
       data: {
-        fromUserId: fromId,
-        toUserId: toId,
+        fromProfileId: fromId,
+        toProfileId: toId,
         message: message,
       },
     });
@@ -160,9 +155,9 @@ export async function requestUpdate(db: FastifyInstance['prisma'], fromId: strin
   try {
     return await db.friendRequest.update({
       where: {
-        fromUserId_toUserId: {
-          fromUserId: fromId,
-          toUserId: toId,
+        fromProfileId_toProfileId: {
+          fromProfileId: fromId,
+          toProfileId: toId,
         },
       },
       data: {
@@ -174,8 +169,8 @@ export async function requestUpdate(db: FastifyInstance['prisma'], fromId: strin
   };
 };
 
-export async function requestFindByUserIds(db: FastifyInstance['prisma'], fromId: string, toId: string, status?: string): Promise<FriendRequest | null> {
-  const where: any = {fromUserId_toUserId: {fromUserId: fromId, toUserId: toId}};
+export async function requestFindByProfileIds(db: FastifyInstance['prisma'], fromId: string, toId: string, status?: string): Promise<FriendRequest | null> {
+  const where: any = {fromProfileId_toProfileId: {fromProfileId: fromId, toProfileId: toId}};
   if (status) where.status = status;
 
   try {
@@ -187,23 +182,35 @@ export async function requestFindByUserIds(db: FastifyInstance['prisma'], fromId
   };
 };
 
-export async function requestFindByToUserId(db: FastifyInstance['prisma'], userId: string, status?: string): Promise<FriendRequest[]> {
-  const where: any = {toUserId: userId};
+export async function requestFindByToProfileId(db: FastifyInstance['prisma'], profileId: string, status?: string): Promise<FriendRequest[]> {
+  const where: any = {toProfileId: profileId};
   if (status) where.status = status;
   try {
     return await db.friendRequest.findMany({
-      where
+      where,
     });
   } catch(err) {
     handlePrismaError(err);
   };
 };
 
-export async function requestDelete(db: FastifyInstance['prisma'], fromUserId: string, toUserId: string, status?: string): Promise<FriendRequest | null> {
+export async function requestFindByFromProfileId(db: FastifyInstance['prisma'], profileId: string, status?: string): Promise<FriendRequest[]> {
+  const where: any = {fromProfileId: profileId};
+  if (status) where.status = status;
+  try {
+    return await db.friendRequest.findMany({
+      where,
+    });
+  } catch(err) {
+    handlePrismaError(err);
+  };
+};
+
+export async function requestDelete(db: FastifyInstance['prisma'], fromProfileId: string, toProfileId: string, status?: string): Promise<FriendRequest | null> {
   const where: any = {
-    fromUserId_toUserId: {
-      fromUserId: fromUserId,
-      toUserId: toUserId,
+    fromProfileId_toProfileId: {
+      fromProfileId: fromProfileId,
+      toProfileId: toProfileId,
     },
   };
   if (status) where.status = status;
@@ -211,48 +218,6 @@ export async function requestDelete(db: FastifyInstance['prisma'], fromUserId: s
   try {
     return await db.friendRequest.delete({
       where
-    });
-  } catch(err) {
-    handlePrismaError(err);
-  };
-};
-
-// block
-export async function blockCreate(db: FastifyInstance['prisma'], blockerId: string, blockedId: string, reason: string = ''): Promise<Block> {
-  try {
-    return await db.block.create({
-      data: {
-        blockerId: blockerId,
-        blockedId: blockedId,
-        reason: reason,
-      },
-    });
-  } catch(err) {
-    handlePrismaError(err);
-  };
-};
-
-export async function blockDelete(db: FastifyInstance['prisma'], blockerId: string, blockedId: string): Promise<Block> {
-  try {
-    return await db.block.delete({
-      where: {
-        blockerId_blockedId: {
-          blockerId: blockerId,
-          blockedId: blockedId,
-        }
-      },
-    });
-  } catch(err) {
-    handlePrismaError(err);
-  };
-};
-
-export async function blockFindByBlockerId(db: FastifyInstance['prisma'], blockerId: string): Promise<Block[]> {
-  try {
-    return await db.block.findMany({
-      where: {
-        blockerId: blockerId,
-      },
     });
   } catch(err) {
     handlePrismaError(err);
