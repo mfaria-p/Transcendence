@@ -52,6 +52,8 @@ interface GameRoom {
   scores: { left: number; right: number };
   maxScore: number;
   loop?: NodeJS.Timeout;
+  countdownTimeout?: NodeJS.Timeout;
+  countdownEndsAt?: number;
   // tournament integration (opcional)
   isTournament: boolean;
   tournamentId?: string;
@@ -74,6 +76,8 @@ const TICK_MS = 1000 / TICK_RATE;
 const PADDLE_SPEED = 400; // px/s
 const BALL_SPEED = 550; // velocidade base da bola
 const MAX_SCORE_DEFAULT = 5;
+// Frontend: 3,2,1,Start! (1s cada) + 600ms para esconder
+const TOURNAMENT_COUNTDOWN_TOTAL_MS = 3600;
 
 // rooms em memória e mapping user -> room
 const rooms = new Map<string, GameRoom>();
@@ -82,6 +86,18 @@ const userToRoom = new Map<string, string>();
 function normalizeId(value: unknown): string | null {
   if (value === null || value === undefined) return null;
   return String(value);
+}
+
+function parseTournamentRoomId(roomId: string): { tournamentId: string; matchId: string } | null {
+  if (!roomId.startsWith('room_')) return null;
+  const payload = roomId.slice('room_'.length);
+  const marker = '_m_';
+  const idx = payload.indexOf(marker);
+  if (idx === -1) return null;
+  const tournamentId = payload.slice(0, idx);
+  const matchId = payload.slice(idx + 1);
+  if (!tournamentId || !matchId.startsWith('m_')) return null;
+  return { tournamentId, matchId };
 }
 
 function createInitialState(): GameState {
@@ -162,11 +178,36 @@ function broadcastRoomState(room: GameRoom): void {
   }
 }
 
-function startLoopIfReady(room: GameRoom): void {
+function clearTournamentCountdown(room: GameRoom): void {
+  if (room.countdownTimeout) {
+    clearTimeout(room.countdownTimeout);
+    delete room.countdownTimeout;
+  }
+  delete room.countdownEndsAt;
+}
+
+function beginTournamentCountdownIfNeeded(room: GameRoom): boolean {
+  if (!room.isTournament) return false;
+  if (room.status !== 'waiting') return false;
+  if (!room.left || !room.right) return false;
+  if (!room.ready.left || !room.ready.right) return false;
+  if (room.countdownTimeout) return true;
+
+  room.countdownEndsAt = Date.now() + TOURNAMENT_COUNTDOWN_TOTAL_MS;
+  room.countdownTimeout = setTimeout(() => {
+    if (room.status !== 'waiting') return;
+    if (!room.left || !room.right) return;
+    if (!room.ready.left || !room.ready.right) return;
+    clearTournamentCountdown(room);
+    startGame(room);
+  }, TOURNAMENT_COUNTDOWN_TOTAL_MS);
+
+  return true;
+}
+
+function startGame(room: GameRoom): void {
   if (room.status === 'playing') return;
   if (!room.left || !room.right) return;
-  // exigimos readiness apenas em torneios
-  if (room.isTournament && (!room.ready.left || !room.ready.right)) return;
 
   room.status = 'playing';
   // reset flags para não interferir em futuros reusos
@@ -182,7 +223,31 @@ function startLoopIfReady(room: GameRoom): void {
   }, TICK_MS);
 }
 
+function startLoopIfReady(room: GameRoom): void {
+  if (room.status === 'playing') return;
+  if (!room.left || !room.right) return;
+
+  // Defensive: se o id parece de torneio, garante flag e metadados
+  if (!room.isTournament) {
+    const parsed = parseTournamentRoomId(room.id);
+    if (parsed) {
+      room.isTournament = true;
+      room.tournamentId = room.tournamentId ?? parsed.tournamentId;
+      room.matchId = room.matchId ?? parsed.matchId;
+    }
+  }
+
+  // exigimos readiness apenas em torneios
+  if (room.isTournament && (!room.ready.left || !room.ready.right)) return;
+
+  // In tournaments, defer the real start until the client-side countdown finishes.
+  if (beginTournamentCountdownIfNeeded(room)) return;
+
+  startGame(room);
+}
+
 function stopLoop(room: GameRoom): void {
+  clearTournamentCountdown(room);
   if (room.loop) {
     clearInterval(room.loop);
     delete room.loop; // em vez de room.loop = undefined
@@ -401,6 +466,28 @@ function ensureRoomForJoin(userId: string, msg: GameMessage): GameRoom | null {
           isTournament: true,
           tournamentId: tournament.id,
           matchId: match.id,
+        };
+        rooms.set(room.id, room);
+      }
+      if (!room.ready) room.ready = { left: false, right: false };
+      return room;
+    }
+
+    // fallback: se parecer room de torneio, marcar como tal mesmo sem mapping
+    const parsedTournament = parseTournamentRoomId(requestedRoomId);
+    if (parsedTournament) {
+      let room = rooms.get(requestedRoomId);
+      if (!room) {
+        room = {
+          id: requestedRoomId,
+          status: 'waiting',
+          state: createInitialState(),
+          scores: { left: 0, right: 0 },
+          ready: { left: false, right: false },
+          maxScore: MAX_SCORE_DEFAULT,
+          isTournament: true,
+          tournamentId: parsedTournament.tournamentId,
+          matchId: parsedTournament.matchId,
         };
         rooms.set(room.id, room);
       }

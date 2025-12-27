@@ -29,6 +29,9 @@ interface GameStateMessage {
 	scores: { left: number; right: number };
 	players: { left: string | null; right: string | null };
 	ready?: { left: boolean; right: boolean };
+	isTournament?: boolean;
+	tournamentId?: string | null;
+	matchId?: string | null;
 	state: ServerGameState;
 	yourSide?: Side;
 }
@@ -98,11 +101,16 @@ class TournamentMatchPage {
 	private championShownFor = new Set<string>();
 	private loserAnimationInstance: any | null = null;
 	private loserShownFor = new Set<string>();
+	private countdownOverlay: HTMLElement | null = null;
+	private countdownValueEl: HTMLElement | null = null;
+	private countdownInterval: number | null = null;
+	private countdownActive = false;
 	private keyDownHandler = (event: KeyboardEvent) => this.handleKeyDown(event);
 	private keyUpHandler = (event: KeyboardEvent) => this.handleKeyUp(event);
 	private beforeUnloadHandler = () => this.dispose();
 	private tournamentId: string | null;
 	private matchId: string | null;
+	private isTournamentMatch = false;
 	private readonly normalizedUser: User;
 
 	constructor(
@@ -114,6 +122,7 @@ class TournamentMatchPage {
 		const ids = parseRoomIdentifiers(this.roomId);
 		this.tournamentId = ids?.tournamentId ?? null;
 		this.matchId = ids?.matchId ?? null;
+		this.isTournamentMatch = Boolean(this.tournamentId);
 		this.canvas = document.getElementById('gameCanvas') as HTMLCanvasElement | null;
 		this.ctx = this.canvas?.getContext('2d') ?? null;
 		console.log('[match] Constructor - initial state:', {
@@ -128,6 +137,7 @@ class TournamentMatchPage {
 		void this.fetchSnapshot();
 		this.connect();
 		this.setupControls();
+		this.setupCountdownOverlay();
 		this.setupChampionOverlay();
 		this.setupLoserOverlay();
 	}
@@ -270,11 +280,20 @@ class TournamentMatchPage {
 		};
 		this.players = players;
 
+		if (typeof payload.isTournament === 'boolean') {
+			this.isTournamentMatch = payload.isTournament;
+		}
+		if (payload.tournamentId) this.tournamentId = payload.tournamentId;
+		if (payload.matchId) this.matchId = payload.matchId;
+
 		if (payload.ready) {
 			this.readyFlags = { ...payload.ready };
 		}
 
 		this.gameStatus = payload.status;
+		if (payload.status === 'playing') {
+			this.stopCountdownUI();
+		}
 
 		if (payload.yourSide && payload.yourSide !== this.yourSide) {
 			this.yourSide = payload.yourSide;
@@ -305,6 +324,7 @@ class TournamentMatchPage {
 		this.gameStatus = 'finished';
 		this.readyFlags = { left: false, right: false };
 		this.sentReady = false;
+		this.stopCountdownUI();
 		this.updateScores(payload.scores);
 		this.setStatus('Match finished.');
 		const isWinner = normalizeId(payload.winnerUserId) === this.normalizedUser.id;
@@ -445,11 +465,13 @@ class TournamentMatchPage {
 		if (waitingOpponent) {
 			controlHint.textContent = 'Waiting for opponent to join | Press SPACE to Ready | Controls: W/S or ↑/↓';
 			this.updateReadyButton(selfReady, selfReady ? 'Ready ✓' : 'Press SPACE to Ready');
+			this.maybeHandleCountdown(players);
 			return;
 		}
 
 		controlHint.textContent = `${selfReady ? 'You are ready' : 'Press SPACE to Ready'} · ${opponentReady ? 'Opponent ready' : 'Opponent not ready'} | Controls: W/S or ↑/↓`;
 		this.updateReadyButton(selfReady, selfReady ? 'Ready ✓' : 'Press SPACE to Ready');
+		this.maybeHandleCountdown(players);
 	}
 
 	private updateReadyBadges(players: { left: string | null; right: string | null }): void {
@@ -477,6 +499,29 @@ class TournamentMatchPage {
 		console.log('[match] Button classes:', this.readyButton.className);
 	}
 
+	private maybeHandleCountdown(players: { left: string | null; right: string | null }): void {
+		if (!this.isTournamentMatch) {
+			this.stopCountdownUI();
+			return;
+		}
+		if (this.gameStatus !== 'waiting') {
+			this.stopCountdownUI();
+			return;
+		}
+		if (!players.left || !players.right) {
+			this.stopCountdownUI();
+			return;
+		}
+
+		const selfReady = this.isSelfReady();
+		const opponentReady = this.isOpponentReady(players);
+		if (selfReady && opponentReady) {
+			this.startCountdownUI();
+		} else {
+			this.stopCountdownUI();
+		}
+	}
+
 	private updatePlayers(players: { left: string | null; right: string | null }): void {
 		const leftLabel = document.getElementById('leftPlayerLabel');
 		const rightLabel = document.getElementById('rightPlayerLabel');
@@ -492,6 +537,52 @@ class TournamentMatchPage {
 		const rightScore = document.getElementById('rightPlayerScore');
 		if (leftScore) leftScore.textContent = scores.left.toString();
 		if (rightScore) rightScore.textContent = scores.right.toString();
+	}
+
+	private setupCountdownOverlay(): void {
+		this.countdownOverlay = document.getElementById('countdownOverlay');
+		this.countdownValueEl = document.getElementById('countdownValue');
+	}
+
+	private startCountdownUI(): void {
+		if (this.countdownActive) return;
+		const overlay = this.countdownOverlay ?? document.getElementById('countdownOverlay');
+		const valueEl = this.countdownValueEl ?? document.getElementById('countdownValue');
+		if (!overlay || !valueEl) return;
+		this.countdownOverlay = overlay;
+		this.countdownValueEl = valueEl;
+		this.countdownActive = true;
+
+		const steps = ['3', '2', '1', 'START!'];
+		let step = 0;
+		overlay.classList.remove('hidden');
+		overlay.classList.add('flex');
+		valueEl.textContent = steps[step];
+
+		this.countdownInterval = window.setInterval(() => {
+			step += 1;
+			if (step >= steps.length) {
+				this.stopCountdownUI();
+				return;
+			}
+			valueEl.textContent = steps[step];
+			if (step === steps.length - 1) {
+				window.setTimeout(() => this.stopCountdownUI(), 600);
+			}
+		}, 1000);
+	}
+
+	private stopCountdownUI(): void {
+		if (this.countdownInterval !== null) {
+			window.clearInterval(this.countdownInterval);
+			this.countdownInterval = null;
+		}
+		this.countdownActive = false;
+		const overlay = this.countdownOverlay ?? document.getElementById('countdownOverlay');
+		if (overlay) {
+			overlay.classList.add('hidden');
+			overlay.classList.remove('flex');
+		}
 	}
 
 	private updateSideHint(): void {
@@ -1100,6 +1191,7 @@ class TournamentMatchPage {
 		window.removeEventListener('keydown', this.keyDownHandler);
 		window.removeEventListener('keyup', this.keyUpHandler);
 		window.removeEventListener('beforeunload', this.beforeUnloadHandler);
+		this.stopCountdownUI();
 
 		if (this.socket && this.socket.readyState === WebSocket.OPEN) {
 			this.socket.send(JSON.stringify({ type: 'game:leave' }));
