@@ -118,7 +118,15 @@ class TournamentsPage {
       const data = await response.json();
       const tournaments: Tournament[] = data.tournaments ?? [];
 
-      const ongoing = tournaments.filter((t) => t.status !== 'finished');
+      const cutoffMs = 21 * 60 * 1000;
+      const now = Date.now();
+
+      const ongoing = tournaments.filter((t) => {
+        const referenceTs = t.updatedAt ?? t.createdAt ?? 0;
+        const age = now - referenceTs;
+        const isStaleWaiting = t.status === 'waiting' && age > cutoffMs;
+        return t.status !== 'finished' && !isStaleWaiting;
+      });
       const finishedSorted = tournaments
         .filter((t) => t.status === 'finished')
         .sort((a, b) => (b.updatedAt ?? b.createdAt) - (a.updatedAt ?? a.createdAt))
