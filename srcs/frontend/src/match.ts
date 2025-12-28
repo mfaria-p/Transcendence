@@ -523,6 +523,16 @@ class TournamentMatchPage {
 		this.readyButton.classList.toggle('hover:bg-green-500', selfReady);
 		this.readyButton.classList.toggle('bg-blue-600', !selfReady);
 		this.readyButton.classList.toggle('hover:bg-blue-500', !selfReady);
+
+		// Scroll the game area into view when user becomes ready.
+		if (selfReady) {
+			const gameCanvas = document.getElementById('gameCanvas');
+			const section = gameCanvas?.closest('section') as HTMLElement | null;
+			const target = section ?? gameCanvas;
+			if (target) {
+				target.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
+			}
+		}
 		console.log('[match] Button classes:', this.readyButton.className);
 	}
 
