@@ -78,6 +78,24 @@ type KnownServerMessage =
 	| { type: 'presence'; event: string; userId: string }
 	| { type: 'tournament:update'; tournament: unknown };
 
+interface TournamentMatchSummary {
+	id: string;
+	roomId: string;
+	player1Id: string | null;
+	player2Id: string | null;
+	status: 'pending' | 'playing' | 'finished';
+	sourceMatch1Id?: string | null;
+	sourceMatch2Id?: string | null;
+	isFinal?: boolean;
+}
+
+interface TournamentSummary {
+	id: string;
+	status: 'waiting' | 'running' | 'finished';
+	winnerId?: string | null;
+	matches: TournamentMatchSummary[];
+}
+
 class TournamentMatchPage {
 	private canvas: HTMLCanvasElement | null;
 	private ctx: CanvasRenderingContext2D | null;
@@ -111,6 +129,8 @@ class TournamentMatchPage {
 	private tournamentId: string | null;
 	private matchId: string | null;
 	private isTournamentMatch = false;
+	private nextMatchInterval: number | null = null;
+	private nextMatchOverlay: HTMLDivElement | null = null;
 	private readonly normalizedUser: User;
 
 	constructor(
@@ -337,7 +357,7 @@ class TournamentMatchPage {
 		if (payload.isTournament) {
 			if (isWinner) {
 				this.startConfetti();
-				void this.maybeShowChampionOverlay(payload);
+				void this.maybeHandlePostTournamentWin(payload);
 			} else {
 				void this.maybeShowLoserOverlay(payload);
 			}
@@ -777,7 +797,7 @@ class TournamentMatchPage {
 		}
 	}
 
-	private async fetchTournament(tournamentId: string): Promise<{ status?: string; winnerId?: string; name?: string } | null> {
+	private async fetchTournament(tournamentId: string): Promise<TournamentSummary | null> {
 		try {
 			const res = await fetch(`/api/realtime/tournaments/${tournamentId}`, {
 				headers: { 'Authorization': `Bearer ${this.token}` },
@@ -789,6 +809,102 @@ class TournamentMatchPage {
 			console.warn('fetchTournament failed', err);
 			return null;
 		}
+	}
+
+	private startWaitingForNextMatch(tournament: TournamentSummary, currentMatchId: string): void {
+		this.stopWaitingForNextMatch();
+
+		const render = (state: { count: number; cap: number }) => {
+			if (!this.nextMatchOverlay) {
+				const overlay = document.createElement('div');
+				overlay.className = 'fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-[12000]';
+				overlay.innerHTML = `
+					<div class="bg-gray-900 border border-green-500/50 rounded-2xl p-6 shadow-2xl max-w-md w-11/12 text-center space-y-3">
+						<h3 class="text-xl font-bold text-green-300">Aguardando final</h3>
+						<p class="text-gray-200">Esperando o outro vencedor para a final.</p>
+						<p id="nextMatchCounter" class="text-2xl font-bold text-white"></p>
+						<p class="text-xs text-gray-400">Vamos redirecionar automaticamente quando a final abrir.</p>
+					</div>
+				`;
+				document.body.appendChild(overlay);
+				this.nextMatchOverlay = overlay;
+			}
+
+			const counter = this.nextMatchOverlay.querySelector('#nextMatchCounter');
+			if (counter) {
+				counter.textContent = `Jogadores na final: ${state.count} / ${state.cap}`;
+			}
+		};
+
+		const poll = async (): Promise<void> => {
+			const latest = await this.fetchTournament(tournament.id);
+			if (!latest) return;
+
+			const nextMatch = latest.matches.find((m) =>
+				(m.sourceMatch1Id === currentMatchId || m.sourceMatch2Id === currentMatchId) &&
+				(m.status === 'pending' || m.status === 'playing' || m.status === 'finished')
+			);
+
+			if (!nextMatch) {
+				return;
+			}
+
+			const playersReady = [nextMatch.player1Id, nextMatch.player2Id].filter(Boolean).length;
+			render({ count: playersReady, cap: 2 });
+
+			const hasRoom = Boolean(nextMatch.roomId && nextMatch.roomId.trim().length > 0);
+			const readyForFinal = hasRoom && playersReady >= 2;
+			if (readyForFinal || nextMatch.status === 'playing' || nextMatch.status === 'finished') {
+				this.stopWaitingForNextMatch();
+				if (hasRoom) {
+					window.location.href = `./match.html?roomId=${nextMatch.roomId}`;
+				}
+			}
+		};
+
+		void poll();
+		this.nextMatchInterval = window.setInterval(() => {
+			void poll();
+		}, 3000);
+	}
+
+	private stopWaitingForNextMatch(): void {
+		if (this.nextMatchInterval !== null) {
+			window.clearInterval(this.nextMatchInterval);
+			this.nextMatchInterval = null;
+		}
+		if (this.nextMatchOverlay) {
+			this.nextMatchOverlay.remove();
+			this.nextMatchOverlay = null;
+		}
+	}
+
+	private async maybeHandlePostTournamentWin(payload: GameFinishedMessage): Promise<void> {
+		if (!this.tournamentId || !this.matchId) {
+			await this.maybeShowChampionOverlay(payload);
+			return;
+		}
+
+		const tournament = await this.fetchTournament(this.tournamentId);
+		if (!tournament || tournament.status === 'finished') {
+			await this.maybeShowChampionOverlay(payload);
+			return;
+		}
+
+		const currentMatch = tournament.matches.find((m) => m.id === this.matchId);
+		if (!currentMatch) {
+			await this.maybeShowChampionOverlay(payload);
+			return;
+		}
+
+		// If this was the final, show champion overlay.
+		if (currentMatch.isFinal) {
+			await this.maybeShowChampionOverlay(payload);
+			return;
+		}
+
+		// Otherwise wait for the next match (e.g., final) to be ready and redirect.
+		this.startWaitingForNextMatch(tournament, currentMatch.id);
 	}
 
 	private setStatus(message: string): void {
@@ -1119,6 +1235,7 @@ class TournamentMatchPage {
 		window.removeEventListener('keyup', this.keyUpHandler);
 		window.removeEventListener('beforeunload', this.beforeUnloadHandler);
 		this.stopCountdownUI();
+		this.stopWaitingForNextMatch();
 
 		if (this.socket && this.socket.readyState === WebSocket.OPEN) {
 			this.socket.send(JSON.stringify({ type: 'game:leave' }));
