@@ -28,7 +28,7 @@ export interface Tournament {
   updatedAt: number;
 }
 
-// Armazenamento em memória
+// Storage em memória
 const tournaments = new Map<string, Tournament>();
 // Map roomId -> (tournamentId, matchId)
 const roomToTournament = new Map<string, { tournamentId: string; matchId: string }>();
@@ -39,6 +39,10 @@ function now(): number {
 
 function genId(prefix: string): string {
   return `${prefix}_${crypto.randomUUID()}`;
+}
+
+function isPowerOfTwo(n: number): boolean {
+  return n > 0 && (n & (n - 1)) === 0;
 }
 
 export function listTournaments(): Tournament[] {
@@ -54,7 +58,8 @@ export function createTournament(input: {
   name?: string;
   maxPlayers?: number;
 }): Tournament {
-  const maxPlayers = input.maxPlayers && input.maxPlayers > 1 ? input.maxPlayers : 4;
+  const maxPlayers =
+    typeof input.maxPlayers === 'number' && input.maxPlayers > 1 ? input.maxPlayers : 4;
 
   const t: Tournament = {
     id: genId('t'),
@@ -133,8 +138,12 @@ function createMatch(
 }
 
 /**
- * Gera matches iniciais.
- * Suporta apenas torneios com 2 ou 4 jogadores.
+ * Gera um bracket completo para N jogadores, onde N é potência de 2:
+ * 2, 4, 8, 16, ...
+ *
+ * Regras:
+ * - Não há byes.
+ * - Usa a ordem atual de t.players (se quiseres, podes baralhar antes).
  */
 export function startTournament(tournamentId: string): Tournament {
   const t = tournaments.get(tournamentId);
@@ -145,56 +154,59 @@ export function startTournament(tournamentId: string): Tournament {
     throw new Error('Tournament already started');
   }
 
-  if (t.players.length < 2) {
+  const playerCount = t.players.length;
+
+  if (playerCount < 2) {
     throw new Error('Not enough players (need at least 2)');
   }
-  if (t.players.length !== 2 && t.players.length !== 4) {
-    throw new Error('This implementation supports tournaments with 2 or 4 players only');
+  if (!isPowerOfTwo(playerCount)) {
+    throw new Error(
+      'Tournament must start with a number of players that is a power of 2 (2, 4, 8, 16, ...)',
+    );
   }
 
+  // Se quiseres randomizar os confrontos:
+  // const players = [...t.players].sort(() => Math.random() - 0.5);
   const players = [...t.players];
+
   const matches: TournamentMatch[] = [];
 
-  if (players.length === 2) {
-    // final direta
-    createMatch(
+  // Round 1 (players diretos)
+  let prevRound: TournamentMatch[] = [];
+  for (let i = 0; i < playerCount; i += 2) {
+    const m = createMatch(
       t,
       {
-        player1Id: players[0] ?? null,
-        player2Id: players[1] ?? null,
-        isFinal: true,
+        player1Id: players[i] ?? null,
+        player2Id: players[i + 1] ?? null,
       },
       matches,
     );
-  } else {
-    // 4 jogadores: duas meias-finais + final
-    const semi1 = createMatch(
-      t,
-      {
-        player1Id: players[0] ?? null,
-        player2Id: players[1] ?? null,
-      },
-      matches,
-    );
-    const semi2 = createMatch(
-      t,
-      {
-        player1Id: players[2] ?? null,
-        player2Id: players[3] ?? null,
-      },
-      matches,
-    );
+    prevRound.push(m);
+  }
 
-    // final (sem jogadores definidos ainda; vêm dos winners das semis)
-    createMatch(
-      t,
-      {
-        isFinal: true,
-        sourceMatch1Id: semi1.id,
-        sourceMatch2Id: semi2.id,
-      },
-      matches,
-    );
+  // Rounds seguintes (dependem dos winners)
+  while (prevRound.length > 1) {
+    const nextRound: TournamentMatch[] = [];
+    const nextIsFinal = prevRound.length === 2;
+
+    for (let i = 0; i < prevRound.length; i += 2) {
+      const a = prevRound[i];
+      const b = prevRound[i + 1];
+
+      const m = createMatch(
+        t,
+        {
+          isFinal: nextIsFinal ? true : undefined,
+          sourceMatch1Id: a.id,
+          sourceMatch2Id: b.id,
+        },
+        matches,
+      );
+      nextRound.push(m);
+    }
+
+    prevRound = nextRound;
   }
 
   t.matches = matches;
@@ -219,8 +231,9 @@ export function getMatchByRoomId(
 }
 
 /**
- * Chamado pelo módulo de jogo quando um match termina.
- * Atualiza winner + avança a árvore (final).
+ * Atualiza winner + avança a árvore.
+ * - Se o match é final: fecha torneio.
+ * - Caso contrário: coloca o winner no match pai (onde sourceMatch1Id/2Id apontam).
  */
 export function reportMatchResultByRoomId(
   roomId: string,
@@ -236,6 +249,7 @@ export function reportMatchResultByRoomId(
   if (!info) return undefined;
 
   const { tournament, match } = info;
+
   if (match.status === 'finished') {
     return { tournament, match };
   }
@@ -250,7 +264,6 @@ export function reportMatchResultByRoomId(
     tournament.status = 'finished';
     tournament.winnerId = winnerId;
   } else {
-    // procurar match dependente deste (ex.: final)
     for (const m of tournament.matches) {
       if (m.sourceMatch1Id === match.id) {
         m.player1Id = winnerId;
@@ -262,8 +275,6 @@ export function reportMatchResultByRoomId(
     }
   }
 
-  if (finalMatch) {
-    return { tournament, match, finalMatch };
-  }
+  if (finalMatch) return { tournament, match, finalMatch };
   return { tournament, match };
 }
