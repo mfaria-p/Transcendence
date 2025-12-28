@@ -37,6 +37,10 @@ class TournamentsPage {
   private fetchingNames = new Set<string>();
   private tournamentsCache: Tournament[] = [];
   private historyCache: Tournament[] = [];
+  private waitingOverlay: HTMLDivElement | null = null;
+  private waitingInterval: number | null = null;
+  private waitingTournamentId: string | null = null;
+  private waitingOwnerAutoStartTriggered = false;
 
   constructor() {
     void this.init();
@@ -486,12 +490,20 @@ class TournamentsPage {
       nameInput?.value && (nameInput.value = '');
       this.showMessage('Tournament created successfully!', 'success');
 
-      if (createdTournament?.id && createdTournament.maxPlayers === 2) {
-        const started = await this.startTournament(createdTournament.id, null, {
-          redirectAfterStart: true,
-          skipMessage: true,
-        });
-        if (started) return;
+      if (createdTournament?.id) {
+        if (createdTournament.maxPlayers === 4) {
+          // Stay on page, show live counter, auto-start when full.
+          this.startWaitingPopup(createdTournament, { autoStartIfOwner: true });
+          return;
+        }
+
+        if (createdTournament.maxPlayers === 2) {
+          const started = await this.startTournament(createdTournament.id, null, {
+            redirectAfterStart: true,
+            skipMessage: true,
+          });
+          if (started) return;
+        }
       }
 
       await this.loadTournaments();
@@ -526,8 +538,14 @@ class TournamentsPage {
 
       this.showMessage('Registration confirmed!', 'success');
 
-      if (joinedTournament && joinedTournament.status === 'running' && joinedTournament.maxPlayers === 2) {
-        await this.redirectToMatch(joinedTournament);
+      if (joinedTournament) {
+        if (joinedTournament.status === 'running') {
+          await this.redirectToMatch(joinedTournament);
+        } else if (joinedTournament.maxPlayers > 2) {
+          // Wait locally until it fills/starts.
+          const autoStartIfOwner = this.currentUser?.id === joinedTournament.ownerId;
+          this.startWaitingPopup(joinedTournament, { autoStartIfOwner });
+        }
       }
 
       await this.loadTournaments();
@@ -591,6 +609,83 @@ class TournamentsPage {
     }
   }
 
+  private startWaitingPopup(tournament: Tournament, options?: { autoStartIfOwner?: boolean }): void {
+    if (!tournament) return;
+
+    this.stopWaitingPopup();
+    this.waitingTournamentId = tournament.id;
+    this.waitingOwnerAutoStartTriggered = false;
+    this.renderWaitingOverlay(tournament);
+
+    const poll = async (): Promise<void> => {
+      if (!this.waitingTournamentId || this.waitingTournamentId !== tournament.id) return;
+      const latest = await this.fetchTournament(tournament.id);
+      if (!latest) return;
+
+      this.renderWaitingOverlay(latest);
+
+      if (latest.status === 'running') {
+        this.stopWaitingPopup();
+        await this.redirectToMatch(latest);
+        return;
+      }
+
+      const playerCount = latest.players.length;
+      const cap = latest.maxPlayers;
+      const isOwner = this.currentUser?.id === latest.ownerId;
+      if (
+        options?.autoStartIfOwner &&
+        isOwner &&
+        !this.waitingOwnerAutoStartTriggered &&
+        latest.status === 'waiting' &&
+        playerCount >= cap
+      ) {
+        this.waitingOwnerAutoStartTriggered = true;
+        await this.startTournament(latest.id, null, { redirectAfterStart: false, skipMessage: true });
+      }
+    };
+
+    void poll();
+    this.waitingInterval = window.setInterval(() => {
+      void poll();
+    }, 3000);
+  }
+
+  private renderWaitingOverlay(tournament: Tournament): void {
+    const count = tournament.players.length;
+    const cap = tournament.maxPlayers;
+
+    if (!this.waitingOverlay) {
+      const overlay = document.createElement('div');
+      overlay.className = 'fixed bottom-4 right-4 z-50 bg-gray-900 border border-green-500/60 shadow-2xl rounded-xl p-4 w-72';
+      overlay.innerHTML = `
+        <p class="text-sm text-green-300 font-semibold">Aguardando jogadores...</p>
+        <p id="waitingCounter" class="text-2xl font-bold text-white mt-1"></p>
+        <p class="text-xs text-gray-400 mt-2">Entraremos automaticamente quando atingir a capacidade.</p>
+      `;
+      document.body.appendChild(overlay);
+      this.waitingOverlay = overlay;
+    }
+
+    const counter = this.waitingOverlay.querySelector('#waitingCounter');
+    if (counter) {
+      counter.textContent = `Jogadores: ${count} / ${cap}`;
+    }
+  }
+
+  private stopWaitingPopup(): void {
+    if (this.waitingInterval !== null) {
+      window.clearInterval(this.waitingInterval);
+      this.waitingInterval = null;
+    }
+    this.waitingTournamentId = null;
+    this.waitingOwnerAutoStartTriggered = false;
+    if (this.waitingOverlay) {
+      this.waitingOverlay.remove();
+      this.waitingOverlay = null;
+    }
+  }
+
   private async fetchTournament(tournamentId: string): Promise<Tournament | null> {
     if (!this.accessToken) return null;
 
@@ -610,6 +705,7 @@ class TournamentsPage {
   private async redirectToMatch(tournament: Tournament | string): Promise<void> {
     const resolved = typeof tournament === 'string' ? await this.fetchTournament(tournament) : tournament;
     if (!resolved) return;
+    this.stopWaitingPopup();
     const match = this.getCurrentMatchForUser(resolved);
     if (match) {
       window.location.href = `./match.html?roomId=${match.roomId}`;
