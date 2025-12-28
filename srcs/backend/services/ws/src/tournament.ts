@@ -194,15 +194,26 @@ export function startTournament(tournamentId: string): Tournament {
       const a = prevRound[i];
       const b = prevRound[i + 1];
 
-      const m = createMatch(
-        t,
-        {
-          isFinal: nextIsFinal ? true : undefined,
-          sourceMatch1Id: a.id,
-          sourceMatch2Id: b.id,
-        },
-        matches,
-      );
+      // TS + runtime safety (noUncheckedIndexedAccess)
+      if (!a || !b) {
+        throw new Error('Internal error: invalid tournament bracket generation');
+      }
+
+      // Não passar isFinal: undefined (exactOptionalPropertyTypes)
+      const opts: {
+        sourceMatch1Id: string;
+        sourceMatch2Id: string;
+        isFinal?: boolean;
+      } = {
+        sourceMatch1Id: a.id,
+        sourceMatch2Id: b.id,
+      };
+
+      if (nextIsFinal) {
+        opts.isFinal = true;
+      }
+
+      const m = createMatch(t, opts, matches);
       nextRound.push(m);
     }
 
