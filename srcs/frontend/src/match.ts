@@ -822,10 +822,10 @@ class TournamentMatchPage {
 				overlay.className = 'fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-[12000]';
 				overlay.innerHTML = `
 					<div class="bg-gray-900 border border-green-500/50 rounded-2xl p-6 shadow-2xl max-w-md w-11/12 text-center space-y-3">
-						<h3 class="text-xl font-bold text-green-300">Aguardando final</h3>
-						<p class="text-gray-200">Esperando o outro vencedor para a final.</p>
+						<h3 class="text-xl font-bold text-green-300">Waiting for final</h3>
+						<p class="text-gray-200">Waiting for the other semifinal winner.</p>
 						<p id="nextMatchCounter" class="text-2xl font-bold text-white"></p>
-						<p class="text-xs text-gray-400">Vamos redirecionar automaticamente quando a final abrir.</p>
+						<p class="text-xs text-gray-400">We will auto-redirect when the final opens.</p>
 					</div>
 				`;
 				document.body.appendChild(overlay);
@@ -834,7 +834,7 @@ class TournamentMatchPage {
 
 			const counter = this.nextMatchOverlay.querySelector('#nextMatchCounter');
 			if (counter) {
-				counter.textContent = `Jogadores na final: ${state.count} / ${state.cap}`;
+				counter.textContent = `Players in final: ${state.count} / ${state.cap}`;
 			}
 		};
 
@@ -890,9 +890,9 @@ class TournamentMatchPage {
 		overlay.className = 'fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-[12000]';
 		overlay.innerHTML = `
 			<div class="bg-gray-900 border border-green-500/50 rounded-2xl p-6 shadow-2xl max-w-md w-11/12 text-center space-y-3 animate-pulse">
-				<h3 class="text-xl font-bold text-green-300">Vitória!</h3>
-				<p class="text-gray-200">Ganhaste a 1ª ronda e vais ser direcionado para a final.</p>
-				<p class="text-sm text-gray-400">A entrar na sala em alguns segundos...</p>
+				<h3 class="text-xl font-bold text-green-300">You won!</h3>
+				<p class="text-gray-200">You won the semifinal and will be redirected to the final.</p>
+				<p class="text-sm text-gray-400">Joining the final room in a few seconds...</p>
 			</div>
 		`;
 		document.body.appendChild(overlay);
@@ -1296,7 +1296,7 @@ function normalizeUser(user: User): User {
 
 function renderAuth(container: HTMLElement, user: User): void {
 	container.innerHTML = `
-		<span class="text-gray-300">Olá, <a href="./profile.html" class="text-green-400 hover:text-green-300 font-semibold underline transition">${user.username}</a></span>
+		<span class="text-gray-300">Hi, <a href="./profile.html" class="text-green-400 hover:text-green-300 font-semibold underline transition">${user.username}</a></span>
 		<button id="logoutButton" class="bg-red-600 hover:bg-red-700 text-white text-sm py-1.5 px-4 rounded transition">Logout</button>
 	`;
 

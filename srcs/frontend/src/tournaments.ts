@@ -659,9 +659,9 @@ class TournamentsPage {
       const overlay = document.createElement('div');
       overlay.className = 'fixed bottom-4 right-4 z-50 bg-gray-900 border border-green-500/60 shadow-2xl rounded-xl p-4 w-72';
       overlay.innerHTML = `
-        <p class="text-sm text-green-300 font-semibold">Aguardando jogadores...</p>
+        <p class="text-sm text-green-300 font-semibold">Waiting for players...</p>
         <p id="waitingCounter" class="text-2xl font-bold text-white mt-1"></p>
-        <p class="text-xs text-gray-400 mt-2">Entraremos automaticamente quando atingir a capacidade.</p>
+        <p class="text-xs text-gray-400 mt-2">You will be redirected automatically when the lobby is full.</p>
       `;
       document.body.appendChild(overlay);
       this.waitingOverlay = overlay;
@@ -669,7 +669,7 @@ class TournamentsPage {
 
     const counter = this.waitingOverlay.querySelector('#waitingCounter');
     if (counter) {
-      counter.textContent = `Jogadores: ${count} / ${cap}`;
+      counter.textContent = `Players: ${count} / ${cap}`;
     }
   }
 
