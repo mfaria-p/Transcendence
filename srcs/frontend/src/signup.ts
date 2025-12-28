@@ -1,3 +1,5 @@
+import { provisionProfile } from './utils-api.js';
+
 interface SignupCredentials {
   username: string;
   email: string;
@@ -125,10 +127,9 @@ class SignupManager {
               }));
               console.log('Stored user from login');
               
-              const provisionSuccess = await this.provisionProfile(loginResponse.at);
-              if (!provisionSuccess) {
-                console.warn('Profile provision failed, but continuing with signup');
-              }
+              await provisionProfile(loginResponse.at).catch(err => {
+                console.warn('Profile provision failed:', err);
+              });
             }
             
             this.showSuccess('Account created successfully! Redirecting...');
@@ -394,32 +395,6 @@ class SignupManager {
       throw new Error(err?.message || 'Network error');
     } finally {
       clearTimeout(timeoutId);
-    }
-  }
-
-  private async provisionProfile(accessToken: string): Promise<boolean> {
-    try {
-      console.log('Provisioning profile in user service...');
-      const response = await fetch('/api/user/provision', {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${accessToken}`,
-        },
-        body: JSON.stringify({}), // Empty body - ID comes from JWT
-      });
-
-      if (response.ok) {
-        console.log('Profile provisioned successfully');
-        return true;
-      } else {
-        const errorText = await response.text();
-        console.error('Failed to provision profile:', response.status, errorText);
-        return false;
-      }
-    } catch (error) {
-      console.error('Profile provision error:', error);
-      return false;
     }
   }
 

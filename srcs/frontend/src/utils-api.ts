@@ -90,3 +90,23 @@ export async function handleLogout(): Promise<void> {
     window.location.href = './login.html';
   }
 }
+
+//Provision user profile in user service after authentication
+export async function provisionProfile(accessToken: string): Promise<void> {
+  try {
+    const response = await fetch('/api/user/provision', {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify({}),
+    });
+
+    if (!response.ok) {
+      console.warn('Profile provision failed:', response.status);
+    }
+  } catch (error) {
+    console.error('Profile provision error:', error);
+  }
+}

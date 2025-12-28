@@ -202,24 +202,30 @@ export default async function (app: FastifyInstance): Promise<void> {
     return reply.redirect(url);
   });
 
-  app.get('/google/callback', {}, async (req: FastifyRequest, reply: FastifyReply) => {
-    const { code, state } = req.query as any;
-    if (!code || !state) { //|| !stateStore.has(state)) {
-      return reply.status(400).send({success: false, message: 'Invalid state or missing code'});
-    }
+app.get('/google/callback', {}, async (req: FastifyRequest, reply: FastifyReply) => {
+  const { code, state, error } = req.query as any;
+  
+  // User cancelled the authentication
+  if (error === 'access_denied') {
+    return reply.redirect(`/login.html`);
+  }
+  
+  // Missing required parameters (actual error)
+  if (!code || !state) {
+    return reply.redirect(`/google-callback.html?error=${encodeURIComponent('Invalid authentication request')}`);
+  }
 
-    // stateStore.delete(state);
-
+  try {
     const payload = await utils.googleGetPayload(code);
     if (!payload?.sub || !payload?.email || !payload?.name) {
-      return reply.status(401).send({success: false, message: 'Invalid google payload'});
+      return reply.redirect(`/google-callback.html?error=${encodeURIComponent('Invalid Google account data')}`);
     }
 
     let account: Account | null = await utils.accountFindByEmail(app.prisma, payload.email);
     let oauthAccount: OAuthAccount | null = await utils.oauthAccountFindByProviderAccountId(app.prisma, {sub: payload.sub, provider: OAuthProvider.google});
     if (account && !oauthAccount) {
-      return reply.status(400).send({success: false, message: 'Email already taken'});
-    }
+      return reply.redirect(`/google-callback.html?error=${encodeURIComponent('Email already registered with a different login method')}`);
+    }    
     if (!account) {
       account = await utils.accountCreate(app.prisma, {username: payload.name, email: payload.email});
       oauthAccount = await utils.oauthAccountCreate(app.prisma, account.id, {sub: payload.sub, provider: OAuthProvider.google});
@@ -234,6 +240,10 @@ export default async function (app: FastifyInstance): Promise<void> {
         avatarUrl: payload.picture || '',
       }));
 
-      return reply.redirect(`/google-callback.html?at=${at}&account=${accountData}`);
-  });
+    return reply.redirect(`/google-callback.html?at=${at}&account=${accountData}`);
+  } catch (error: any) {
+    app.log.error({ err: error }, 'Google OAuth callback error');
+    return reply.redirect(`/google-callback.html?error=${encodeURIComponent(error.message || 'Google authentication failed')}`);
+  }
+});
 };
