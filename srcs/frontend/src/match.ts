@@ -337,7 +337,6 @@ class TournamentMatchPage {
 		if (payload.isTournament) {
 			if (isWinner) {
 				this.startConfetti();
-				void this.showLottieOverlay('win');
 				void this.maybeShowChampionOverlay(payload);
 			} else {
 				void this.maybeShowLoserOverlay(payload);
@@ -1110,78 +1109,6 @@ class TournamentMatchPage {
 		return src;
 	}
 
-	private async showLottieOverlay(kind: 'win' | 'lose'): Promise<void> {
-		const container = document.createElement('div');
-		container.style.position = 'fixed';
-		container.style.inset = '0';
-		container.style.width = '100%';
-		container.style.height = '100%';
-		container.style.display = 'flex';
-		container.style.alignItems = 'center';
-		container.style.justifyContent = 'center';
-		container.style.pointerEvents = 'none';
-		container.style.zIndex = '10000';
-		document.body.appendChild(container);
-
-		const showFallback = () => {
-			const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-			svg.setAttribute('width', '220');
-			svg.setAttribute('height', '220');
-			svg.setAttribute('viewBox', '0 0 200 200');
-			svg.style.filter = 'drop-shadow(0 6px 18px rgba(0,0,0,0.35))';
-			const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-			circle.setAttribute('cx', '100');
-			circle.setAttribute('cy', '100');
-			circle.setAttribute('r', '80');
-			circle.setAttribute('fill', kind === 'win' ? '#16a34a' : '#ef4444');
-			circle.setAttribute('opacity', '0.9');
-			const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-			text.setAttribute('x', '100');
-			text.setAttribute('y', '120');
-			text.setAttribute('text-anchor', 'middle');
-			text.setAttribute('font-size', '82');
-			text.setAttribute('fill', '#fff');
-			text.textContent = kind === 'win' ? '★' : '✕';
-			svg.appendChild(circle);
-			svg.appendChild(text);
-			container.appendChild(svg);
-			svg.animate(
-				[
-					{ transform: 'scale(0.6)', opacity: 0 },
-					{ transform: 'scale(1.05)', opacity: 1, offset: 0.6 },
-					{ transform: 'scale(1)', opacity: 0, offset: 1 },
-				],
-				{ duration: 1200, easing: 'ease-out' },
-			);
-			setTimeout(() => container.remove(), 1300);
-		};
-
-		try {
-			const lottie = await this.loadLottie();
-			if (!lottie) throw new Error('lottie-web not available');
-			const animationData = await this.resolveLottieData(kind);
-			if (!animationData) throw new Error('animation data unavailable');
-
-			const anim = lottie.loadAnimation({
-				container,
-				renderer: 'svg',
-				loop: false,
-				autoplay: true,
-				animationData,
-			});
-
-			anim.setSpeed(1.05);
-			anim.addEventListener('complete', () => {
-				setTimeout(() => {
-					anim.destroy();
-					container.remove();
-				}, 300);
-			});
-		} catch (err) {
-			console.warn('Failed to load Lottie animation', err);
-			showFallback();
-		}
-	}
 	private showInlineMessage(message: string, type: 'success' | 'error'): void {
 		showMessage(message, type);
 	}
