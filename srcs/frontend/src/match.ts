@@ -131,6 +131,7 @@ class TournamentMatchPage {
 	private isTournamentMatch = false;
 	private nextMatchInterval: number | null = null;
 	private nextMatchOverlay: HTMLDivElement | null = null;
+	private redirectingToNextMatch = false;
 	private readonly normalizedUser: User;
 
 	constructor(
@@ -813,6 +814,7 @@ class TournamentMatchPage {
 
 	private startWaitingForNextMatch(tournament: TournamentSummary, currentMatchId: string): void {
 		this.stopWaitingForNextMatch();
+		this.redirectingToNextMatch = false;
 
 		const render = (state: { count: number; cap: number }) => {
 			if (!this.nextMatchOverlay) {
@@ -854,10 +856,14 @@ class TournamentMatchPage {
 
 			const hasRoom = Boolean(nextMatch.roomId && nextMatch.roomId.trim().length > 0);
 			const readyForFinal = hasRoom && playersReady >= 2;
-			if (readyForFinal || nextMatch.status === 'playing' || nextMatch.status === 'finished') {
+			if (!this.redirectingToNextMatch && (readyForFinal || nextMatch.status === 'playing' || nextMatch.status === 'finished')) {
+				this.redirectingToNextMatch = true;
 				this.stopWaitingForNextMatch();
 				if (hasRoom) {
-					window.location.href = `./match.html?roomId=${nextMatch.roomId}`;
+					this.showWinnerRedirectOverlay();
+					setTimeout(() => {
+						window.location.href = `./match.html?roomId=${nextMatch.roomId}`;
+					}, 5000);
 				}
 			}
 		};
@@ -877,6 +883,20 @@ class TournamentMatchPage {
 			this.nextMatchOverlay.remove();
 			this.nextMatchOverlay = null;
 		}
+	}
+
+	private showWinnerRedirectOverlay(): void {
+		const overlay = document.createElement('div');
+		overlay.className = 'fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-[12000]';
+		overlay.innerHTML = `
+			<div class="bg-gray-900 border border-green-500/50 rounded-2xl p-6 shadow-2xl max-w-md w-11/12 text-center space-y-3 animate-pulse">
+				<h3 class="text-xl font-bold text-green-300">Vitória!</h3>
+				<p class="text-gray-200">Ganhaste a 1ª ronda e vais ser direcionado para a final.</p>
+				<p class="text-sm text-gray-400">A entrar na sala em alguns segundos...</p>
+			</div>
+		`;
+		document.body.appendChild(overlay);
+		setTimeout(() => overlay.remove(), 5200);
 	}
 
 	private async maybeHandlePostTournamentWin(payload: GameFinishedMessage): Promise<void> {
