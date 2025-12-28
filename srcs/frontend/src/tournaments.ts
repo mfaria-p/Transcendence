@@ -289,26 +289,16 @@ class TournamentsPage {
 
   private getCurrentMatchForUser(tournament: Tournament): TournamentMatch | null {
     if (!this.currentUser) return null;
-    if (tournament.status === 'waiting' || tournament.status === 'finished') return null;
+    if (tournament.status === 'waiting') return null;
 
     const uid = this.currentUser.id;
-    const isParticipant = tournament.players.includes(uid);
-    const isOwner = tournament.ownerId === uid;
-    // prefer unfinished matches where the user participates
-    const pending = tournament.matches.find((m) =>
+    // Only allow access to matches where the user is a player and the match is not finished.
+    const active = tournament.matches.find((m) =>
       (m.status === 'pending' || m.status === 'playing') && (m.player1Id === uid || m.player2Id === uid)
     );
-    if (pending) return pending;
+    if (active) return active;
 
-    // fallback: if tournament finished, show the last match the user was in
-    const last = tournament.matches.find((m) => m.player1Id === uid || m.player2Id === uid);
-    if (last) return last;
-
-    // safety net: if user is a participant (or the organizer) but not mapped to a match, pick the first match
-    if ((isParticipant || isOwner) && tournament.matches.length > 0) {
-      return tournament.matches[0];
-    }
-
+    // If everything is finished, keep users (including winners) out of rooms.
     return null;
   }
 
@@ -539,6 +529,10 @@ class TournamentsPage {
       this.showMessage('Registration confirmed!', 'success');
 
       if (joinedTournament) {
+        if (joinedTournament.players.length >= joinedTournament.maxPlayers && !joinedTournament.players.includes(this.currentUser?.id ?? '')) {
+          this.showMessage('Tournament is full.', 'error');
+          return;
+        }
         if (joinedTournament.status === 'running') {
           await this.redirectToMatch(joinedTournament);
         } else if (joinedTournament.maxPlayers > 2) {

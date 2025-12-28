@@ -183,10 +183,17 @@ class TournamentMatchPage {
 				return;
 			}
 			if (!match) return;
+			const normalizedPlayer1 = normalizeId(match.player1Id);
+			const normalizedPlayer2 = normalizeId(match.player2Id);
+			if (normalizedPlayer1 !== this.normalizedUser.id && normalizedPlayer2 !== this.normalizedUser.id) {
+				showMessage('You are not part of this match.', 'error');
+				setTimeout(() => (window.location.href = './tournaments.html'), 1200);
+				return;
+			}
 
 			this.players = {
-				left: normalizeId(match.player1Id),
-				right: normalizeId(match.player2Id),
+				left: normalizedPlayer1,
+				right: normalizedPlayer2,
 			};
 			this.updatePlayers(this.players);
 			this.updateScores({ left: 0, right: 0 });
