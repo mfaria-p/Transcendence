@@ -1,10 +1,13 @@
+import { connectPresenceSocket, disconnectPresenceSocket } from './utils-ws.js';
+import { verifySession, handleLogout } from './utils-api.js';
+
 interface User {
   id: string;
   username: string;
   email: string;
 }
 
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
   const authContainer = document.getElementById('authContainer');
   
   if (!authContainer) {
@@ -21,17 +24,29 @@ document.addEventListener('DOMContentLoaded', () => {
   if (userStr && accessToken) {
     try {
       const user: User = JSON.parse(userStr);
+      
+      // Verify session is still valid
+      await verifySession(accessToken);
+      
       console.log('User logged in:', user);
+      connectPresenceSocket();
       showLoggedInState(authContainer, user);
     } catch (error) {
-      console.error('Error parsing user data:', error);
-      showLoggedOutState(authContainer);
+      console.error('Error parsing user data or verifying session:', error);
+      clearSessionAndShowLoggedOut(authContainer);
     }
   } else {
     console.log('No user found, showing logged out state');
     showLoggedOutState(authContainer);
   }
 });
+
+function clearSessionAndShowLoggedOut(container: HTMLElement): void {
+  disconnectPresenceSocket();
+  localStorage.removeItem('access_token');
+  localStorage.removeItem('user');
+  showLoggedOutState(container);
+}
 
 function showLoggedInState(container: HTMLElement, user: User): void {
   container.innerHTML = `
@@ -48,7 +63,7 @@ function showLoggedInState(container: HTMLElement, user: User): void {
   
   const logoutButton = document.getElementById('logoutButton');
   if (logoutButton) {
-    logoutButton.addEventListener('click', handleLogout);
+    logoutButton.addEventListener('click', () => handleLogout());
   }
 }
 
@@ -62,23 +77,4 @@ function showLoggedOutState(container: HTMLElement): void {
       Sign Up
     </a>
   `;
-}
-
-async function handleLogout(): Promise<void> {
-  try {
-    // Call backend logout endpoint
-    await fetch('/api/auth/logout', {
-      method: 'POST',
-      credentials: 'include', // Send cookies
-    });
-  } catch (error) {
-    console.error('Logout error:', error);
-  } finally {
-    localStorage.removeItem('access_token');
-    localStorage.removeItem('user');
-    
-    console.log('Logged out, refreshing UI...');
-    
-    window.location.reload();
-  }
 }
