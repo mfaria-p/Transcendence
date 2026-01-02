@@ -956,13 +956,12 @@ class ProfileManager {
     }
 
     try {
-      const response = await handleApiCall(this.accessToken, `/api/user/me`, {
+      const response = await handleApiCall(this.accessToken, `/api/auth/me`, {
         method: 'DELETE',
       });
 
       if (response.ok) {
         showMessage('Account deleted successfully', 'success');
-        // Optionally, redirect to login or home page
         window.location.href = '/login.html';
       } else {
         const data = await response.json();
