@@ -181,6 +181,8 @@ class ProfileManager {
 
     const searchInput = document.getElementById('searchUserInput');
     searchInput?.addEventListener('input', () => this.searchUsers());
+
+    document.getElementById('deleteAccountBtn')?.addEventListener('click', () => this.deleteAccount());
   }
 
   private openAvatarModal(): void {
@@ -926,6 +928,50 @@ class ProfileManager {
       if (error instanceof Error && error.message !== 'Session expired') {
         console.error('Remove friend error:', error);
         showMessage('Failed to remove friend', 'error');
+      }
+    }
+  }
+
+  private async deleteAccount(): Promise<void> {
+    const confirmed = confirm(
+      'WARNING: This will permanently delete your account!\n\n' +
+      'This action cannot be undone. You will lose:\n' +
+      '• Your profile and avatar\n' +
+      '• All your friends and friend requests\n' +
+      '• All other associated data\n\n' +
+      'Are you absolutely sure you want to continue?'
+    );
+
+    if (!confirmed) return;
+
+    const username = prompt(
+      `To confirm deletion, please type your username: "${this.currentUser?.username}"`
+    );
+
+    if (username !== this.currentUser?.username) {
+      if (username !== null) {
+        showMessage('Username does not match. Account deletion cancelled.', 'error');
+      }
+      return;
+    }
+
+    try {
+      const response = await handleApiCall(this.accessToken, `/api/user/me`, {
+        method: 'DELETE',
+      });
+
+      if (response.ok) {
+        showMessage('Account deleted successfully', 'success');
+        // Optionally, redirect to login or home page
+        window.location.href = '/login.html';
+      } else {
+        const data = await response.json();
+        showMessage(data.message || 'Failed to delete account', 'error');
+      }
+    } catch (error) {
+      if (error instanceof Error && error.message !== 'Session expired') {
+        console.error('Delete account error:', error);
+        showMessage('Failed to delete account', 'error');
       }
     }
   }
