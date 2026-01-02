@@ -532,7 +532,7 @@ class ProfileManager {
         },
         body: JSON.stringify({
           currentPassword: currentPassword,
-          password: newPassword,
+          newPassword: newPassword,
         }),
       });
 
