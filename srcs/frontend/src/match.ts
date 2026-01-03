@@ -124,6 +124,14 @@ class TournamentMatchPage {
 	private privateCodeShown = false;
 	private loserAnimationInstance: any | null = null;
 	private loserShownFor = new Set<string>();
+	private resultOverlay: HTMLElement | null = null;
+	private resultTitleEl: HTMLElement | null = null;
+	private resultTextEl: HTMLElement | null = null;
+	private resultAnimationEl: HTMLElement | null = null;
+	private resultRematchBtn: HTMLButtonElement | null = null;
+	private resultFindNewBtn: HTMLButtonElement | null = null;
+	private resultCloseBtn: HTMLButtonElement | null = null;
+	private resultAnimationInstance: any | null = null;
 	private countdownOverlay: HTMLElement | null = null;
 	private countdownValueEl: HTMLElement | null = null;
 	private countdownInterval: number | null = null;
@@ -176,6 +184,7 @@ class TournamentMatchPage {
 		this.setupChampionOverlay();
 		this.setupLoserOverlay();
 		this.setupQuickWaitOverlay();
+		this.setupResultOverlay();
 	}
 
 	private get requiresReady(): boolean {
@@ -408,6 +417,7 @@ class TournamentMatchPage {
 				void this.maybeShowLoserOverlay(payload);
 			}
 		}
+		void this.showResultOverlay(isWinner, payload);
 		this.updateReadyUI({ left: null, right: null });
 	}
 
@@ -705,6 +715,111 @@ class TournamentMatchPage {
 		}
 	}
 
+	private setupResultOverlay(): void {
+		this.resultOverlay = document.getElementById('resultOverlay');
+		this.resultTitleEl = document.getElementById('resultTitle');
+		this.resultTextEl = document.getElementById('resultText');
+		this.resultAnimationEl = document.getElementById('resultAnimation');
+		this.resultRematchBtn = document.getElementById('resultRematch') as HTMLButtonElement | null;
+		this.resultFindNewBtn = document.getElementById('resultFindNew') as HTMLButtonElement | null;
+		this.resultCloseBtn = document.getElementById('resultClose') as HTMLButtonElement | null;
+
+		this.resultRematchBtn?.addEventListener('click', () => this.handleRematch());
+		this.resultFindNewBtn?.addEventListener('click', () => this.handleFindNew());
+		this.resultCloseBtn?.addEventListener('click', () => this.hideResultOverlay());
+
+		this.resultOverlay?.addEventListener('click', (ev) => {
+			if (ev.target === this.resultOverlay) this.hideResultOverlay();
+		});
+	}
+
+	private hideResultOverlay(): void {
+		const overlay = this.resultOverlay ?? document.getElementById('resultOverlay');
+		if (!overlay) return;
+		overlay.classList.add('hidden');
+		overlay.classList.remove('flex');
+		if (this.resultAnimationInstance && typeof this.resultAnimationInstance.destroy === 'function') {
+			this.resultAnimationInstance.destroy();
+		}
+		this.resultAnimationInstance = null;
+		if (this.resultAnimationEl) this.resultAnimationEl.innerHTML = '';
+	}
+
+	private async showResultOverlay(isWinner: boolean, payload: GameFinishedMessage): Promise<void> {
+		if (!this.resultOverlay) this.setupResultOverlay();
+		const overlay = this.resultOverlay;
+		if (!overlay || !this.resultTitleEl || !this.resultTextEl) return;
+
+		const playerScore = this.yourSide === 'left' ? payload.scores.left : payload.scores.right;
+		const opponentScore = this.yourSide === 'left' ? payload.scores.right : payload.scores.left;
+		const scoreLine = Number.isFinite(playerScore) && Number.isFinite(opponentScore)
+			? `Placar: ${playerScore} - ${opponentScore}`
+			: `Placar: ${payload.scores.left} - ${payload.scores.right}`;
+
+		this.resultTitleEl.textContent = isWinner ? 'Vitória!' : 'Derrota';
+		this.resultTitleEl.classList.toggle('text-green-300', isWinner);
+		this.resultTitleEl.classList.toggle('text-red-300', !isWinner);
+
+		const outcomeLine = isWinner ? 'Você venceu esta partida.' : 'Você perdeu desta vez.';
+		this.resultTextEl.textContent = `${outcomeLine} ${scoreLine}.`;
+
+		overlay.classList.remove('hidden');
+		overlay.classList.add('flex');
+
+		await this.playResultAnimation(isWinner);
+	}
+
+	private async playResultAnimation(isWinner: boolean): Promise<void> {
+		const container = this.resultAnimationEl ?? document.getElementById('resultAnimation');
+		if (!container) return;
+		this.resultAnimationEl = container;
+		container.innerHTML = '';
+
+		if (this.resultAnimationInstance && typeof this.resultAnimationInstance.destroy === 'function') {
+			this.resultAnimationInstance.destroy();
+		}
+		this.resultAnimationInstance = null;
+
+		try {
+			const lottie = await this.loadLottie();
+			const animationData = await this.resolveLottieData(isWinner ? 'win' : 'lose');
+			if (!lottie || !animationData) return;
+
+			this.resultAnimationInstance = lottie.loadAnimation({
+				container,
+				renderer: 'svg',
+				loop: false,
+				autoplay: true,
+				animationData,
+				rendererSettings: {
+					preserveAspectRatio: 'xMidYMid meet',
+				},
+			});
+			if (typeof this.resultAnimationInstance.setSpeed === 'function') {
+				this.resultAnimationInstance.setSpeed(0.9);
+			}
+		} catch (err) {
+			console.warn('Failed to play result animation', err);
+		}
+	}
+
+	private handleRematch(): void {
+		const targetRoom = this.roomId ?? this.initialRoomFromUrl;
+		if (targetRoom) {
+			const params = new URLSearchParams();
+			params.set('roomId', targetRoom);
+			params.set('mode', 'quick');
+			params.set('rematch', '1');
+			window.location.href = `./match.html?${params.toString()}`;
+			return;
+		}
+		this.handleFindNew();
+	}
+
+	private handleFindNew(): void {
+		window.location.href = './match.html?mode=quick';
+	}
+
 	private updateSideHint(): void {
 		const sideEl = document.getElementById('sideHint');
 		if (!sideEl) return;
@@ -854,6 +969,12 @@ class TournamentMatchPage {
 
 	private formatPlayer(userId: string | null): string {
 		return this.getDisplayNameSync(userId);
+	}
+
+	private getOpponentId(): string | null {
+		if (this.players.left === this.normalizedUser.id) return this.players.right ?? null;
+		if (this.players.right === this.normalizedUser.id) return this.players.left ?? null;
+		return null;
 	}
 
 	private getDisplayNameSync(userId: string | null): string {
@@ -1416,6 +1537,7 @@ class TournamentMatchPage {
 		window.removeEventListener('beforeunload', this.beforeUnloadHandler);
 		this.stopCountdownUI();
 		this.stopWaitingForNextMatch();
+		this.hideResultOverlay();
 
 		if (this.socket && this.socket.readyState === WebSocket.OPEN) {
 			this.socket.send(JSON.stringify({ type: 'game:leave' }));
