@@ -134,17 +134,26 @@ class TournamentMatchPage {
 	private tournamentId: string | null;
 	private matchId: string | null;
 	private isTournamentMatch = false;
+	private readonly isQuickMatch: boolean;
+	private roomId: string | null;
+	private readonly initialRoomFromUrl: string | null;
 	private nextMatchInterval: number | null = null;
 	private nextMatchOverlay: HTMLDivElement | null = null;
 	private redirectingToNextMatch = false;
+	private quickWaitOverlay: HTMLElement | null = null;
+	private quickWaitText: HTMLElement | null = null;
 	private readonly normalizedUser: User;
 
 	constructor(
-		private readonly roomId: string,
+		roomId: string | null,
 		private readonly token: string,
 		currentUser: User,
+		isQuickMatch: boolean,
 	) {
 		this.normalizedUser = { ...currentUser, id: String((currentUser as any).id) };
+		this.roomId = roomId;
+		this.initialRoomFromUrl = roomId;
+		this.isQuickMatch = isQuickMatch;
 		const ids = parseRoomIdentifiers(this.roomId);
 		this.tournamentId = ids?.tournamentId ?? null;
 		this.matchId = ids?.matchId ?? null;
@@ -166,6 +175,11 @@ class TournamentMatchPage {
 		this.setupCountdownOverlay();
 		this.setupChampionOverlay();
 		this.setupLoserOverlay();
+		this.setupQuickWaitOverlay();
+	}
+
+	private get requiresReady(): boolean {
+		return this.isTournamentMatch || this.isQuickMatch;
 	}
 
 	private async fetchSnapshot(): Promise<void> {
@@ -239,7 +253,11 @@ class TournamentMatchPage {
 	}
 
 	private displayRoomId(): void {
-		this.setRoomName(this.roomId ?? '');
+		if (this.isQuickMatch && !this.roomId) {
+			this.setRoomName('Quick match (searching)');
+			return;
+		}
+		this.setRoomName(this.tournamentName ?? this.roomId ?? 'Quick match');
 	}
 
 	private connect(): void {
@@ -252,8 +270,14 @@ class TournamentMatchPage {
 		socket.addEventListener('open', () => {
 			console.log('[match] WebSocket connected!');
 			this.reconnectAttempts = 0;
-			this.setStatus('Connected! Preparing room...');
-			const joinMsg = { type: 'game:join', roomId: this.roomId };
+			if (this.isQuickMatch && !this.roomId) {
+				this.setStatus('Connected. Searching for opponent...');
+				this.setQuickWaitVisible(true, 'Looking for another player to join.');
+			} else {
+				this.setStatus('Connected! Preparing room...');
+			}
+			const joinMsg: Record<string, unknown> = { type: 'game:join' };
+			if (this.roomId) joinMsg.roomId = this.roomId;
 			console.log('[match] Sending game:join', joinMsg);
 			socket.send(JSON.stringify(joinMsg));
 		});
@@ -358,6 +382,7 @@ class TournamentMatchPage {
 		this.updateStatusFromGame(payload, players);
 		this.updateReadyUI(players);
 		this.drawState(payload.state);
+		this.updateQuickWaitOverlay(players);
 	}
 
 	private handleGameFinished(payload: GameFinishedMessage): void {
@@ -365,6 +390,7 @@ class TournamentMatchPage {
 		this.readyFlags = { left: false, right: false };
 		this.sentReady = false;
 		this.stopCountdownUI();
+		this.setQuickWaitVisible(false);
 		this.updateScores(payload.scores);
 		this.setStatus('Match finished.');
 		const isWinner = normalizeId(payload.winnerUserId) === this.normalizedUser.id;
@@ -394,9 +420,17 @@ class TournamentMatchPage {
 		this.readyFlags = { ...payload.ready };
 		this.gameStatus = payload.status;
 
+		if (!this.roomId && payload.roomId) {
+			this.roomId = payload.roomId;
+			if (this.isQuickMatch) {
+				this.updateUrlWithRoom(payload.roomId);
+			}
+			this.displayRoomId();
+		}
+
 		if (payload.roomId && !this.tournamentName) {
 			// keep showing current label; tournament name is resolved via snapshot
-			this.setRoomName(this.tournamentName ?? this.roomId);
+			this.setRoomName(this.tournamentName ?? this.roomId ?? '');
 		}
 
 		if (payload.yourSide && payload.yourSide !== this.yourSide) {
@@ -408,6 +442,7 @@ class TournamentMatchPage {
 		this.updateScores({ left: 0, right: 0 });
 		this.updateStatusFromReadyState(this.players);
 		this.updateReadyUI(this.players);
+		this.updateQuickWaitOverlay(this.players);
 	}
 
 	private handleReadyAck(payload: GameReadyAckMessage): void {
@@ -443,7 +478,11 @@ class TournamentMatchPage {
 	private updateStatusFromReadyState(players: { left: string | null; right: string | null }): void {
 		const waitingOpponent = !players.left || !players.right;
 		if (waitingOpponent) {
-			this.setStatus('Room created. Waiting for opponent to join.');
+			if (this.isQuickMatch) {
+				this.setStatus('Searching for another player...');
+			} else {
+				this.setStatus('Room created. Waiting for opponent to join.');
+			}
 			return;
 		}
 
@@ -549,7 +588,7 @@ class TournamentMatchPage {
 	}
 
 	private maybeHandleCountdown(players: { left: string | null; right: string | null }): void {
-		if (!this.isTournamentMatch) {
+		if (!this.requiresReady) {
 			this.stopCountdownUI();
 			return;
 		}
@@ -631,6 +670,38 @@ class TournamentMatchPage {
 		if (overlay) {
 			overlay.classList.add('hidden');
 			overlay.classList.remove('flex');
+		}
+	}
+
+	private setupQuickWaitOverlay(): void {
+		this.quickWaitOverlay = document.getElementById('quickWaitOverlay');
+		this.quickWaitText = document.getElementById('quickWaitText');
+		if (!this.isQuickMatch) {
+			this.setQuickWaitVisible(false);
+			return;
+		}
+		this.setQuickWaitVisible(true, this.roomId ? 'Waiting for your opponent to join.' : 'Looking for another player...');
+	}
+
+	private setQuickWaitVisible(show: boolean, text?: string): void {
+		if (!this.quickWaitOverlay) return;
+		if (text && this.quickWaitText) {
+			this.quickWaitText.textContent = text;
+		}
+		this.quickWaitOverlay.classList.toggle('hidden', !show);
+		this.quickWaitOverlay.classList.toggle('flex', show);
+	}
+
+	private updateQuickWaitOverlay(players: { left: string | null; right: string | null }): void {
+		if (!this.isQuickMatch || !this.quickWaitOverlay) return;
+		const waitingOpponent = !players.left || !players.right;
+		const shouldShow = this.gameStatus === 'waiting' && waitingOpponent;
+		const message = waitingOpponent
+			? (this.roomId ? 'Waiting for an opponent to join your room.' : 'Looking for another player to pair you with...')
+			: 'Opponent found! Get ready.';
+		this.setQuickWaitVisible(shouldShow, message);
+		if (!shouldShow && this.gameStatus === 'playing') {
+			this.setStatus('Match in progress!');
 		}
 	}
 
@@ -1004,11 +1075,30 @@ class TournamentMatchPage {
 		}
 	}
 
+	private updateUrlWithRoom(roomId: string): void {
+		try {
+			const url = new URL(window.location.href);
+			url.searchParams.set('roomId', roomId);
+			if (this.isQuickMatch) url.searchParams.set('mode', 'quick');
+			window.history.replaceState({}, '', url.toString());
+		} catch (err) {
+			console.warn('Failed to update URL with room id', err);
+		}
+	}
+
 	private setRoomName(display: string): void {
 		const roomLabel = document.getElementById('roomLabel');
 		const roomText = document.getElementById('roomIdText');
 		const title = document.getElementById('matchTitle');
 		const subtitle = document.getElementById('roomSubtitle');
+
+		if (this.isQuickMatch) {
+			if (roomLabel) roomLabel.textContent = 'Room:';
+			if (roomText) roomText.textContent = display || 'Auto-match';
+			if (title) title.textContent = display || 'Quick match';
+			if (subtitle) subtitle.textContent = 'Quick multiplayer match';
+			return;
+		}
 
 		if (roomLabel) roomLabel.textContent = 'Tournament:';
 		if (roomText) roomText.textContent = display;
@@ -1400,7 +1490,9 @@ function showMessage(message: string, type: 'success' | 'error'): void {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+	const params = new URLSearchParams(window.location.search);
 	const roomId = getRoomIdFromUrl();
+	const isQuickMatch = params.get('mode') === 'quick' || !roomId;
 	const userStr = localStorage.getItem('user');
 	const token = localStorage.getItem('access_token');
 
@@ -1425,17 +1517,10 @@ document.addEventListener('DOMContentLoaded', () => {
 		renderAuth(authContainer, user);
 	}
 
-	if (!roomId) {
-		showMessage('RoomId not provided in URL.', 'error');
-		const statusEl = document.getElementById('statusText');
-		if (statusEl) statusEl.textContent = 'Invalid room';
-		return;
-	}
-
 	const normalizedUser = normalizeUser(user);
 	console.log('[match] DOMContentLoaded - creating TournamentMatchPage');
 	console.log('[match] readyButton exists in DOM?', !!document.getElementById('readyButton'));
-	new TournamentMatchPage(roomId, token, normalizedUser);
+	new TournamentMatchPage(roomId, token, normalizedUser, isQuickMatch);
 });
 
 // Configure your Lottie sources here. Set to a URL (string) or leave as inline JSON.

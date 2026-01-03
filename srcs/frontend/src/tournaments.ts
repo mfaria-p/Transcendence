@@ -79,6 +79,8 @@ class TournamentsPage {
     authContainer.innerHTML = `
       <a href="./index.html" class="text-gray-300 hover:text-white transition">Game</a>
       <span class="text-gray-400">|</span>
+      <a href="./multiplayer.html" class="text-gray-300 hover:text-white transition">Quick match</a>
+      <span class="text-gray-400">|</span>
       <a href="./tournaments.html" class="text-green-400">Tournaments</a>
       <span class="text-gray-400">|</span>
       <span class="text-gray-300">Hello, <a href="./profile.html" class="text-green-300 hover:text-green-200 font-semibold underline transition duration-200">${this.currentUser.username}</a></span>

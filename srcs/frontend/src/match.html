@@ -16,6 +16,8 @@
 				<div class="flex items-center gap-3 text-gray-300">
 					<a href="./index.html" class="hover:text-white">Free play</a>
 					<span class="text-gray-500">|</span>
+					<a href="./multiplayer.html" class="hover:text-white">Quick match</a>
+					<span class="text-gray-500">|</span>
 					<a href="./tournaments.html" class="hover:text-white">Tournaments</a>
 				</div>
 			</div>
@@ -29,15 +31,16 @@
 			<header class="bg-gray-800 border border-gray-700 rounded-xl p-6 shadow-xl">
 				<div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
 					<div>
-						<p class="text-sm uppercase tracking-wide text-gray-400" id="roomSubtitle">Tournament room</p>
+						<p class="text-sm uppercase tracking-wide text-gray-400" id="roomSubtitle">Multiplayer match</p>
 						<h1 class="text-3xl font-bold text-green-400" id="matchTitle">Match</h1>
-						<p class="text-gray-300" id="roomLabel">Tournament: <code id="roomIdText"
+						<p class="text-gray-300" id="roomLabel">Room: <code id="roomIdText"
 								class="text-green-300"></code></p>
 					</div>
-					<div class="flex gap-2">
+					<div class="flex gap-2 flex-wrap">
+						<a href="./multiplayer.html"
+							class="bg-gray-700 hover:bg-gray-600 text-white px-4 py-2 rounded-lg transition">Back to quick menu</a>
 						<a href="./tournaments.html"
-							class="bg-gray-700 hover:bg-gray-600 text-white px-4 py-2 rounded-lg transition">Back to
-							tournaments</a>
+							class="bg-gray-700 hover:bg-gray-600 text-white px-4 py-2 rounded-lg transition">Back to tournaments</a>
 						<button id="readyButton"
 							class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg transition font-bold text-lg shadow-lg hover:shadow-xl transform hover:scale-105"
 							type="button">
@@ -84,6 +87,15 @@
 	</main>
 
 	<div id="messageContainer" class="fixed bottom-4 right-4 max-w-md z-50 space-y-2"></div>
+
+	<div id="quickWaitOverlay"
+		class="fixed inset-0 bg-black/75 backdrop-blur-sm hidden items-center justify-center z-[11500] px-4">
+		<div class="bg-gray-900 border border-green-500/40 rounded-2xl p-6 shadow-2xl max-w-md w-full text-center space-y-4">
+			<div class="w-12 h-12 rounded-full border-4 border-green-400 border-t-transparent animate-spin mx-auto"></div>
+			<h3 class="text-xl font-bold text-green-300">Looking for an opponent...</h3>
+			<p id="quickWaitText" class="text-gray-300 text-sm">Hang tight while we pair you with the next player who clicks play.</p>
+		</div>
+	</div>
 
 	<div id="countdownOverlay"
 		class="fixed inset-0 bg-black/80 backdrop-blur-md hidden items-center justify-center z-[11000]">

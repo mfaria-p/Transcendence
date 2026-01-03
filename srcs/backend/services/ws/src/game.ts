@@ -186,8 +186,7 @@ function clearTournamentCountdown(room: GameRoom): void {
   delete room.countdownEndsAt;
 }
 
-function beginTournamentCountdownIfNeeded(room: GameRoom): boolean {
-  if (!room.isTournament) return false;
+function beginReadyCountdownIfNeeded(room: GameRoom): boolean {
   if (room.status !== 'waiting') return false;
   if (!room.left || !room.right) return false;
   if (!room.ready.left || !room.ready.right) return false;
@@ -227,6 +226,8 @@ function startLoopIfReady(room: GameRoom): void {
   if (room.status === 'playing') return;
   if (!room.left || !room.right) return;
 
+  const requiresReady = room.isTournament || room.id.startsWith('match_');
+
   // Defensive: se o id parece de torneio, garante flag e metadados
   if (!room.isTournament) {
     const parsed = parseTournamentRoomId(room.id);
@@ -237,11 +238,10 @@ function startLoopIfReady(room: GameRoom): void {
     }
   }
 
-  // exigimos readiness apenas em torneios
-  if (room.isTournament && (!room.ready.left || !room.ready.right)) return;
+  if (requiresReady && (!room.ready.left || !room.ready.right)) return;
 
-  // In tournaments, defer the real start until the client-side countdown finishes.
-  if (beginTournamentCountdownIfNeeded(room)) return;
+  // Defer real start until countdown when readiness is required.
+  if (requiresReady && beginReadyCountdownIfNeeded(room)) return;
 
   startGame(room);
 }
