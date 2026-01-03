@@ -71,8 +71,8 @@ class QuickMatchPage {
     if (!this.quickButton) return;
     this.quickButton.disabled = true;
     this.quickButton.classList.add('opacity-70', 'cursor-wait');
-    this.quickButton.textContent = 'A procurar adversario...';
-    this.setStatus('A ligar ao servidor e a entrar na fila automatica.');
+    this.quickButton.textContent = 'Looking for an opponent...';
+    this.setStatus('Connecting to the server and joining the queue.');
     window.location.href = './match.html?mode=quick';
   }
 

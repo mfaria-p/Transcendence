@@ -2,69 +2,73 @@
 <html lang="en">
 
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <link href="./output.css" rel="stylesheet">
-  <title>PHONG - Quick Match</title>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link href="./output.css" rel="stylesheet">
+	<title>PHONG - Quick Match</title>
 </head>
 
 <body class="bg-gray-900 text-white min-h-screen flex flex-col">
-  <nav class="bg-gray-800 border-b border-gray-700">
-    <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
-      <div class="flex justify-between h-16 items-center">
-        <div class="flex items-center gap-3 text-gray-300">
-          <a href="./index.html" class="hover:text-white">Free play</a>
-          <span class="text-gray-500">|</span>
-          <a href="./multiplayer.html" class="text-green-400">Quick match</a>
-          <span class="text-gray-500">|</span>
-          <a href="./tournaments.html" class="hover:text-white">Tournaments</a>
-        </div>
-      </div>
-    </div>
-  </nav>
+	<nav class="bg-gray-800 border-b border-gray-700">
+		<div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+			<div class="flex justify-between h-16 items-center">
+				<div class="flex items-center gap-3 text-gray-300">
+					<a href="./index.html" class="hover:text-white">Free play</a>
+					<span class="text-gray-500">|</span>
+					<a href="./multiplayer.html" class="text-green-400">Quick match</a>
+					<span class="text-gray-500">|</span>
+					<a href="./tournaments.html" class="hover:text-white">Tournaments</a>
+				</div>
+			</div>
+		</div>
+	</nav>
 
-  <div id="authContainer" style="position: fixed; top: 1rem; right: 1rem; display: flex; gap: 0.5rem; z-index: 50;"></div>
+	<div id="authContainer" style="position: fixed; top: 1rem; right: 1rem; display: flex; gap: 0.5rem; z-index: 50;">
+	</div>
 
-  <main class="flex-1 px-4 py-12">
-    <div class="max-w-5xl mx-auto space-y-8">
-      <section class="bg-gray-800 border border-gray-700 rounded-2xl shadow-2xl p-6 sm:p-10">
-        <div class="flex flex-col gap-4 sm:gap-6">
-          <div class="space-y-2">
-            <p class="text-sm uppercase tracking-wide text-gray-400">Jogar multiplayer geral</p>
-            <h1 class="text-3xl sm:text-4xl font-bold text-green-400">Entra numa partida rapida</h1>
-            <p class="text-gray-300">Nao precisas criar sala: clica em jogar e vamos emparelhar-te automaticamente com o proximo jogador disponivel.</p>
-          </div>
-          <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-            <div class="text-sm text-gray-400 space-y-1">
-              <p>1) Clica em "Encontrar partida"</p>
-              <p>2) Espera enquanto procuramos outro jogador</p>
-              <p>3) Assim que emparelhado, entras direto no jogo</p>
-            </div>
-            <button id="quickPlayButton" class="bg-green-600 hover:bg-green-700 text-white font-semibold px-6 py-3 rounded-lg text-lg shadow-lg hover:shadow-xl transition">
-              Encontrar partida
-            </button>
-          </div>
-          <div id="quickStatus" class="text-gray-300 text-sm bg-gray-900 border border-gray-700 rounded-lg p-4">
-            Pronto para jogar. Clica em "Encontrar partida" para entrar na fila.
-          </div>
-        </div>
-      </section>
+	<main class="flex-1 px-4 py-12">
+		<div class="max-w-5xl mx-auto space-y-8">
+			<section class="bg-gray-800 border border-gray-700 rounded-2xl shadow-2xl p-6 sm:p-10">
+				<div class="flex flex-col gap-4 sm:gap-6">
+					<div class="space-y-2">
+						<p class="text-sm uppercase tracking-wide text-gray-400">Play quick multiplayer</p>
+						<h1 class="text-3xl sm:text-4xl font-bold text-green-400">Jump into a quick match</h1>
+						<p class="text-gray-300">No room setup needed: hit play and we will auto-pair you with the next
+							available player.</p>
+					</div>
+					<div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+						<div class="text-sm text-gray-400 space-y-1">
+							<p>1) Click "Find match"</p>
+							<p>2) Wait while we look for an opponent</p>
+							<p>3) Once paired, you drop straight into the match</p>
+						</div>
+						<button id="quickPlayButton"
+							class="bg-green-600 hover:bg-green-700 text-white font-semibold px-6 py-3 rounded-lg text-lg shadow-lg hover:shadow-xl transition">
+							Find match
+						</button>
+					</div>
+					<div id="quickStatus"
+						class="text-gray-300 text-sm bg-gray-900 border border-gray-700 rounded-lg p-4">
+						Ready to play. Click "Find match" to join the queue.
+					</div>
+				</div>
+			</section>
 
-      <section class="bg-gray-800 border border-gray-700 rounded-2xl shadow-xl p-6 sm:p-8">
-        <h2 class="text-2xl font-semibold text-gray-100 mb-3">Como funciona</h2>
-        <ul class="space-y-2 text-gray-300 text-sm list-disc list-inside">
-          <li>Emparelhamos sempre o proximo jogador que clicar no botao contigo.</li>
-          <li>Se ja houver alguem a espera, entras na partida imediatamente.</li>
-          <li>Enquanto aguardas o adversario, mostramos um aviso claro dentro do jogo.</li>
-          <li>Continua logado para manter o emparelhamento ativo.</li>
-        </ul>
-      </section>
-    </div>
-  </main>
+			<section class="bg-gray-800 border border-gray-700 rounded-2xl shadow-xl p-6 sm:p-8">
+				<h2 class="text-2xl font-semibold text-gray-100 mb-3">How it works</h2>
+				<ul class="space-y-2 text-gray-300 text-sm list-disc list-inside">
+					<li>We pair you with the next player who clicks the button.</li>
+					<li>If someone is already waiting, you jump into the match instantly.</li>
+					<li>While waiting, you will see a clear in-game notice.</li>
+					<li>Stay logged in to keep your matchmaking session active.</li>
+				</ul>
+			</section>
+		</div>
+	</main>
 
-  <div id="messageContainer" class="fixed bottom-4 right-4 max-w-md z-50 space-y-2"></div>
+	<div id="messageContainer" class="fixed bottom-4 right-4 max-w-md z-50 space-y-2"></div>
 
-  <script type="module" src="./multiplayer.js"></script>
+	<script type="module" src="./multiplayer.js"></script>
 </body>
 
 </html>

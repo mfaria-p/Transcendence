@@ -753,14 +753,14 @@ class TournamentMatchPage {
 		const playerScore = this.yourSide === 'left' ? payload.scores.left : payload.scores.right;
 		const opponentScore = this.yourSide === 'left' ? payload.scores.right : payload.scores.left;
 		const scoreLine = Number.isFinite(playerScore) && Number.isFinite(opponentScore)
-			? `Placar: ${playerScore} - ${opponentScore}`
-			: `Placar: ${payload.scores.left} - ${payload.scores.right}`;
+			? `Score: ${playerScore} - ${opponentScore}`
+			: `Score: ${payload.scores.left} - ${payload.scores.right}`;
 
-		this.resultTitleEl.textContent = isWinner ? 'Vitória!' : 'Derrota';
+		this.resultTitleEl.textContent = isWinner ? 'Victory!' : 'Defeat';
 		this.resultTitleEl.classList.toggle('text-green-300', isWinner);
 		this.resultTitleEl.classList.toggle('text-red-300', !isWinner);
 
-		const outcomeLine = isWinner ? 'Você venceu esta partida.' : 'Você perdeu desta vez.';
+		const outcomeLine = isWinner ? 'You won this match.' : 'You lost this time.';
 		this.resultTextEl.textContent = `${outcomeLine} ${scoreLine}.`;
 
 		overlay.classList.remove('hidden');
@@ -1406,9 +1406,9 @@ class TournamentMatchPage {
 			if (tournament.status !== 'finished') return;
 			if (normalizeId(tournament.winnerId) !== this.normalizedUser.id) return;
 			this.championShownFor.add(payload.tournamentId);
-			await this.showChampionOverlay(tournament.name ?? 'Torneio');
+			await this.showChampionOverlay(tournament.name ?? 'Tournament');
 		} catch (err) {
-			console.warn('Erro ao verificar campeão do torneio', err);
+			console.warn('Error while checking tournament champion', err);
 		}
 	}
 
@@ -1423,9 +1423,9 @@ class TournamentMatchPage {
 			// If tournament already has a winner and it's not the current user, show once.
 			if (normalizeId(tournament.winnerId) === this.normalizedUser.id) return;
 			this.loserShownFor.add(payload.tournamentId);
-			await this.showLoserOverlay(tournament.name ?? 'Torneio');
+			await this.showLoserOverlay(tournament.name ?? 'Tournament');
 		} catch (err) {
-			console.warn('Erro ao mostrar overlay de derrota', err);
+			console.warn('Failed to show loser overlay', err);
 		}
 	}
 
@@ -1464,9 +1464,9 @@ class TournamentMatchPage {
 	private async playChampionAnimation(container: HTMLElement): Promise<void> {
 		try {
 			const lottie = await this.loadLottie();
-			if (!lottie) throw new Error('lottie não disponível');
+			if (!lottie) throw new Error('lottie not available');
 			const animationData = await this.resolveLottieData('win');
-			if (!animationData) throw new Error('win.json não encontrado');
+			if (!animationData) throw new Error('win.json not found');
 
 			if (this.championAnimationInstance && typeof this.championAnimationInstance.destroy === 'function') {
 				this.championAnimationInstance.destroy();
@@ -1486,16 +1486,16 @@ class TournamentMatchPage {
 				this.championAnimationInstance.setSpeed(0.8);
 			}
 		} catch (err) {
-			console.warn('Não foi possível tocar animação de campeão', err);
+			console.warn('Could not play champion animation', err);
 		}
 	}
 
 	private async playLoserAnimation(container: HTMLElement): Promise<void> {
 		try {
 			const lottie = await this.loadLottie();
-			if (!lottie) throw new Error('lottie não disponível');
+			if (!lottie) throw new Error('lottie not available');
 			const animationData = await this.resolveLottieData('lose');
-			if (!animationData) throw new Error('lose.json não encontrado');
+			if (!animationData) throw new Error('lose.json not found');
 
 			if (this.loserAnimationInstance && typeof this.loserAnimationInstance.destroy === 'function') {
 				this.loserAnimationInstance.destroy();
@@ -1515,7 +1515,7 @@ class TournamentMatchPage {
 				this.loserAnimationInstance.setSpeed(0.8);
 			}
 		} catch (err) {
-			console.warn('Não foi possível tocar animação de derrota', err);
+			console.warn('Could not play loser animation', err);
 		}
 	}
 
