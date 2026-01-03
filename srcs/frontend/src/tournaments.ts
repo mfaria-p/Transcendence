@@ -25,6 +25,8 @@ interface Tournament {
   players: string[];
   matches: TournamentMatch[];
   winnerId?: string;
+  visibility?: 'public' | 'private';
+  joinCode?: string;
   createdAt: number;
   updatedAt: number;
 }
@@ -41,6 +43,7 @@ class TournamentsPage {
   private waitingInterval: number | null = null;
   private waitingTournamentId: string | null = null;
   private waitingOwnerAutoStartTriggered = false;
+  private privateCodeBanner: HTMLDivElement | null = null;
 
   constructor() {
     void this.init();
@@ -96,6 +99,12 @@ class TournamentsPage {
 
     document.getElementById('refreshButton')?.addEventListener('click', () => {
       void this.loadTournaments();
+    });
+
+    const privateJoinForm = document.getElementById('privateJoinForm') as HTMLFormElement | null;
+    privateJoinForm?.addEventListener('submit', (event) => {
+      event.preventDefault();
+      void this.joinPrivateTournament();
     });
   }
 
@@ -177,9 +186,12 @@ class TournamentsPage {
       const isOwner = tournament.ownerId === this.currentUser?.id;
       const isParticipant = tournament.players.includes(this.currentUser?.id ?? '');
       const hasOpenSlot = tournament.players.length < tournament.maxPlayers;
+      const isPrivate = tournament.visibility === 'private';
+      const joinCode = tournament.joinCode;
       const canJoin =
-        (tournament.status === 'waiting' && hasOpenSlot) ||
-        (tournament.status === 'running' && tournament.maxPlayers === 2 && hasOpenSlot);
+        !isPrivate &&
+        ((tournament.status === 'waiting' && hasOpenSlot) ||
+          (tournament.status === 'running' && tournament.maxPlayers === 2 && hasOpenSlot));
       const canStart = isOwner && tournament.status === 'waiting' && tournament.players.length >= 2;
       const activeMatch = this.getCurrentMatchForUser(tournament);
 
@@ -198,6 +210,7 @@ class TournamentsPage {
               <p class="text-sm text-gray-400">ID: <code>${tournament.id}</code></p>
             </div>
             <div class="flex items-center gap-2">
+              ${isPrivate ? '<span class="px-2 py-1 rounded-full text-xs bg-gray-800 border border-gray-600 text-gray-200">Private</span>' : ''}
               <span class="px-3 py-1 rounded-full text-sm ${statusClasses}">
                 ${this.getStatusLabel(tournament.status)}
               </span>
@@ -217,12 +230,21 @@ class TournamentsPage {
             </div>
           </div>
 
+          ${isPrivate && isOwner && joinCode ? `
+          <div class="bg-gray-900 border border-green-600/40 rounded-lg px-3 py-2 flex items-center justify-between gap-3">
+            <div class="text-xs text-gray-300">Private code</div>
+            <button data-copy-code="${tournament.id}" class="text-sm font-mono tracking-widest text-green-200 bg-gray-800 border border-green-500/40 rounded px-3 py-1 hover:bg-gray-700 transition" title="Click to copy">${joinCode}</button>
+          </div>
+          ` : ''}
+
           <div class="flex flex-wrap gap-3">
             ${canJoin ? '<button data-action="join" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg transition">Join</button>' : ''}
             ${canStart ? '<button data-action="start" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition">Start</button>' : ''}
             ${activeMatch ? `<a href="./match.html?roomId=${activeMatch.roomId}" data-action="enter-room" class="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg transition">Enter room</a>` : ''}
             <button data-action="details" class="bg-gray-700 hover:bg-gray-600 text-white px-4 py-2 rounded-lg transition">Details</button>
           </div>
+
+          ${isPrivate ? '<p class="text-xs text-gray-400">Invite-only. Use the join code in the form above.</p>' : ''}
 
           <div class="hidden" data-details>
             <h4 class="text-sm uppercase tracking-wide text-gray-400 mb-2">Matches</h4>
@@ -243,6 +265,16 @@ class TournamentsPage {
       const startButton = card.querySelector('[data-action="start"]') as HTMLButtonElement | null;
       startButton?.addEventListener('click', () => {
         void this.startTournament(tournament.id, startButton);
+      });
+
+      const copyBtn = card.querySelector(`[data-copy-code="${tournament.id}"]`) as HTMLButtonElement | null;
+      copyBtn?.addEventListener('click', async () => {
+        try {
+          await navigator.clipboard.writeText(joinCode ?? '');
+          this.showMessage('Code copied to clipboard.', 'success');
+        } catch {
+          this.showMessage('Unable to copy the code.', 'error');
+        }
       });
 
       const detailsButton = card.querySelector('[data-action="details"]') as HTMLButtonElement | null;
@@ -458,14 +490,19 @@ class TournamentsPage {
 
     const nameInput = document.getElementById('tournamentName') as HTMLInputElement | null;
     const sizeSelect = document.getElementById('tournamentSize') as HTMLSelectElement | null;
+    const privateCheckbox = document.getElementById('tournamentPrivate') as HTMLInputElement | null;
 
     const rawName = nameInput?.value.trim() ?? '';
     const rawSize = Number(sizeSelect?.value ?? 4);
     const maxPlayers = rawSize === 2 || rawSize === 4 ? rawSize : 4;
+    const isPrivate = Boolean(privateCheckbox?.checked);
 
-    const payload: { name?: string; maxPlayers: number } = { maxPlayers };
+    const payload: { name?: string; maxPlayers: number; isPrivate?: boolean } = { maxPlayers };
     if (rawName.length > 0) {
       payload.name = rawName;
+    }
+    if (isPrivate) {
+      payload.isPrivate = true;
     }
 
     try {
@@ -486,7 +523,14 @@ class TournamentsPage {
       const createdTournament: Tournament | null = data?.tournament ?? null;
 
       nameInput?.value && (nameInput.value = '');
+      if (privateCheckbox) {
+        privateCheckbox.checked = false;
+      }
       this.showMessage('Tournament created successfully!', 'success');
+
+      if (createdTournament?.joinCode) {
+        this.renderPrivateCode(createdTournament.joinCode, createdTournament.id);
+      }
 
       if (createdTournament?.id) {
         if (createdTournament.maxPlayers === 4) {
@@ -508,6 +552,95 @@ class TournamentsPage {
     } catch (error) {
       console.error('createTournament error:', error);
       this.showMessage((error as Error).message ?? 'Error creating tournament.', 'error');
+    }
+  }
+
+  private renderPrivateCode(code: string, tournamentId: string): void {
+    if (!code) return;
+    if (!this.privateCodeBanner) {
+      const el = document.getElementById('privateCodeBanner') as HTMLDivElement | null;
+      this.privateCodeBanner = el;
+    }
+    if (!this.privateCodeBanner) return;
+
+    this.privateCodeBanner.classList.remove('hidden');
+    this.privateCodeBanner.innerHTML = `
+      <div class="flex flex-col gap-2">
+        <p class="text-sm text-gray-200">Private tournament created. Share this code to invite players:</p>
+        <div class="flex items-center justify-between bg-gray-900 border border-green-500/50 rounded-lg px-3 py-2">
+          <span class="font-mono text-lg tracking-widest text-green-300">${code}</span>
+          <button id="copyPrivateCode" class="text-sm bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded">Copy</button>
+        </div>
+        <p class="text-xs text-gray-400">Players must enter the code below to join. Tournament ID: <code class="text-gray-300">${tournamentId}</code></p>
+      </div>
+    `;
+
+    const copyBtn = document.getElementById('copyPrivateCode');
+    copyBtn?.addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(code);
+        this.showMessage('Code copied to clipboard.', 'success');
+      } catch {
+        this.showMessage('Unable to copy the code.', 'error');
+      }
+    });
+  }
+
+  private async joinPrivateTournament(): Promise<void> {
+    if (!this.accessToken) return;
+
+    const input = document.getElementById('privateJoinCode') as HTMLInputElement | null;
+    const raw = input?.value.trim() ?? '';
+    if (raw.length === 0) {
+      this.showMessage('Please enter a join code.', 'error');
+      return;
+    }
+    const code = raw.toUpperCase();
+
+    const btn = document.getElementById('privateJoinButton') as HTMLButtonElement | null;
+    if (btn) {
+      btn.disabled = true;
+      btn.classList.add('opacity-50', 'cursor-not-allowed');
+    }
+
+    try {
+      const response = await fetch('/api/realtime/tournaments/join-by-code', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${this.accessToken}`,
+        },
+        body: JSON.stringify({ code }),
+      });
+
+      const data = await response.json().catch(() => null);
+      if (!response.ok) {
+        throw new Error(data?.error ?? 'Unable to join with this code');
+      }
+
+      const tournament: Tournament | null = data?.tournament ?? null;
+      this.showMessage('Joined private tournament!', 'success');
+
+      if (input) input.value = '';
+
+      if (tournament) {
+        if (tournament.status === 'running') {
+          await this.redirectToMatch(tournament);
+        } else if (tournament.maxPlayers > 2) {
+          const autoStartIfOwner = this.currentUser?.id === tournament.ownerId;
+          this.startWaitingPopup(tournament, { autoStartIfOwner });
+        }
+      }
+
+      await this.loadTournaments();
+    } catch (error) {
+      console.error('joinPrivateTournament error:', error);
+      this.showMessage((error as Error).message ?? 'Could not join.', 'error');
+    } finally {
+      if (btn) {
+        btn.disabled = false;
+        btn.classList.remove('opacity-50', 'cursor-not-allowed');
+      }
     }
   }
 

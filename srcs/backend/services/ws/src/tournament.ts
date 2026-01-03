@@ -24,6 +24,8 @@ export interface Tournament {
   players: string[];
   matches: TournamentMatch[];
   winnerId?: string;
+  visibility: 'public' | 'private';
+  joinCode?: string;
   createdAt: number;
   updatedAt: number;
 }
@@ -41,10 +43,22 @@ function genId(prefix: string): string {
   return `${prefix}_${crypto.randomUUID()}`;
 }
 
-export function listTournaments(): Tournament[] {
-  return Array.from(tournaments.values()).sort(
-    (a, b) => (b.updatedAt ?? b.createdAt) - (a.updatedAt ?? a.createdAt),
-  );
+function generateJoinCode(): string {
+  // 6-char uppercase hex code (easy to share/type)
+  return crypto.randomBytes(3).toString('hex').toUpperCase();
+}
+
+function codesMatch(a: string | undefined, b: string | undefined): boolean {
+  if (!a || !b) return false;
+  return a.trim().toUpperCase() === b.trim().toUpperCase();
+}
+
+export function listTournaments(viewerId?: string): Tournament[] {
+  const uid = viewerId ?? '';
+
+  return Array.from(tournaments.values())
+    .filter((t) => t.visibility === 'public' || t.ownerId === uid || t.players.includes(uid))
+    .sort((a, b) => (b.updatedAt ?? b.createdAt) - (a.updatedAt ?? a.createdAt));
 }
 
 export function getTournament(id: string): Tournament | undefined {
@@ -55,19 +69,27 @@ export function createTournament(input: {
   ownerId: string;
   name?: string;
   maxPlayers?: number;
+  isPrivate?: boolean;
 }): Tournament {
   const maxPlayers = input.maxPlayers && input.maxPlayers > 1 ? input.maxPlayers : 4;
+  const isPrivate = Boolean(input.isPrivate);
+  const visibility: 'public' | 'private' = isPrivate ? 'private' : 'public';
 
   const t: Tournament = {
     id: genId('t'),
     ownerId: input.ownerId,
     maxPlayers,
+    visibility,
     status: 'waiting',
     players: [input.ownerId],
     matches: [],
     createdAt: now(),
     updatedAt: now(),
   };
+
+  if (isPrivate) {
+    t.joinCode = generateJoinCode();
+  }
 
   if (input.name !== undefined) {
     t.name = input.name;
@@ -77,13 +99,19 @@ export function createTournament(input: {
   return t;
 }
 
-export function joinTournament(tournamentId: string, userId: string): Tournament {
+export function joinTournament(tournamentId: string, userId: string, joinCode?: string): Tournament {
   const t = tournaments.get(tournamentId);
   if (!t) {
     throw new Error('Tournament not found');
   }
   if (t.players.includes(userId)) {
     return t;
+  }
+
+  if (t.visibility === 'private' && t.ownerId !== userId) {
+    if (!codesMatch(t.joinCode, joinCode)) {
+      throw new Error('Invalid or missing join code');
+    }
   }
 
   // Cenário normal: torneio ainda não começou.
@@ -124,6 +152,21 @@ export function joinTournament(tournamentId: string, userId: string): Tournament
   }
 
   throw new Error('Tournament already started');
+}
+
+export function joinTournamentWithCode(tournamentId: string, userId: string, joinCode?: string): Tournament {
+  const t = tournaments.get(tournamentId);
+  if (!t) {
+    throw new Error('Tournament not found');
+  }
+
+  return joinTournament(tournamentId, userId, joinCode);
+}
+
+export function findTournamentByJoinCode(code: string): Tournament | undefined {
+  if (!code || code.trim().length === 0) return undefined;
+  const normalized = code.trim().toUpperCase();
+  return Array.from(tournaments.values()).find((t) => t.visibility === 'private' && t.joinCode && t.joinCode.toUpperCase() === normalized);
 }
 
 function createMatch(

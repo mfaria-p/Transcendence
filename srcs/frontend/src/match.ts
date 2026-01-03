@@ -93,6 +93,10 @@ interface TournamentSummary {
 	id: string;
 	status: 'waiting' | 'running' | 'finished';
 	winnerId?: string | null;
+	name?: string | null;
+	visibility?: 'public' | 'private';
+	joinCode?: string | null;
+	ownerId?: string;
 	matches: TournamentMatchSummary[];
 }
 
@@ -117,6 +121,7 @@ class TournamentMatchPage {
 	private lottieLoader: Promise<any> | null = null;
 	private championAnimationInstance: any | null = null;
 	private championShownFor = new Set<string>();
+	private privateCodeShown = false;
 	private loserAnimationInstance: any | null = null;
 	private loserShownFor = new Set<string>();
 	private countdownOverlay: HTMLElement | null = null;
@@ -172,10 +177,17 @@ class TournamentMatchPage {
 			if (!res.ok) return;
 			const data = await res.json();
 			const match = (data.tournament?.matches as any[] | undefined)?.find((m) => m.id === this.matchId);
+			const visibility = data.tournament?.visibility as TournamentSummary['visibility'];
+			const joinCode = data.tournament?.joinCode as string | undefined;
+			const ownerId = normalizeId((data.tournament as any)?.ownerId);
 			const tournamentName = data.tournament?.name as string | undefined;
 			if (tournamentName && tournamentName.trim().length > 0) {
 				this.tournamentName = tournamentName;
 				this.setRoomName(tournamentName);
+			}
+			if (!this.privateCodeShown && visibility === 'private' && joinCode && ownerId === this.normalizedUser.id) {
+				this.privateCodeShown = true;
+				this.showPrivateCodeOverlay(joinCode);
 			}
 			if (data.tournament?.status === 'finished') {
 				showMessage('This tournament has finished. Redirecting...', 'error');
@@ -827,6 +839,47 @@ class TournamentMatchPage {
 			console.warn('fetchTournament failed', err);
 			return null;
 		}
+	}
+
+	private showPrivateCodeOverlay(code: string): void {
+		if (!code || document.getElementById('privateCodeOverlay')) return;
+
+		const overlay = document.createElement('div');
+		overlay.id = 'privateCodeOverlay';
+		overlay.className = 'fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-[11500]';
+		overlay.innerHTML = `
+			<div class="bg-gray-900 border border-green-500/50 rounded-2xl p-6 shadow-2xl max-w-md w-11/12 text-center space-y-4">
+				<h3 class="text-2xl font-bold text-green-300">Private tournament</h3>
+				<p class="text-gray-200">Share this code with friends to invite them.</p>
+				<button id="privateCodeCopy" class="w-full bg-gray-800 border border-green-500/50 rounded-lg px-4 py-3 font-mono text-xl tracking-widest text-green-200 hover:bg-gray-700 transition">${code}</button>
+				<p class="text-xs text-gray-400">Click the code to copy.</p>
+				<button id="privateCodeClose" class="w-full bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg transition">Close</button>
+			</div>
+		`;
+
+		document.body.appendChild(overlay);
+
+		const copyBtn = overlay.querySelector('#privateCodeCopy') as HTMLButtonElement | null;
+		copyBtn?.addEventListener('click', async () => {
+			try {
+				await navigator.clipboard.writeText(code);
+				this.showInlineMessage('Invite code copied!', 'success');
+			} catch (err) {
+				console.warn('copy code failed', err);
+				this.showInlineMessage('Could not copy code.', 'error');
+			}
+		});
+
+		const closeBtn = overlay.querySelector('#privateCodeClose') as HTMLButtonElement | null;
+		closeBtn?.addEventListener('click', () => {
+			overlay.remove();
+		});
+
+		overlay.addEventListener('click', (event) => {
+			if (event.target === overlay) {
+				overlay.remove();
+			}
+		});
 	}
 
 	private startWaitingForNextMatch(tournament: TournamentSummary, currentMatchId: string): void {

@@ -12,9 +12,11 @@ import { handleGameMessage, handleDisconnect } from './game.js';
 import {
   createTournament,
   joinTournament,
+  joinTournamentWithCode,
   startTournament,
   getTournament,
   listTournaments,
+  findTournamentByJoinCode,
 } from './tournament.js';
 
 interface JwtPayload {
@@ -102,22 +104,23 @@ export default async function routes(app: FastifyInstance): Promise<void> {
 
   // ---------- TOURNAMENT HTTP API ----------
 
-  app.get('/tournaments', { preHandler: [app.authenticate] }, async () => {
+  app.get('/tournaments', { preHandler: [app.authenticate] }, async (req) => {
+    const userId: string = req.jwtPayload!.id;
     return {
       success: true,
-      tournaments: listTournaments(),
+      tournaments: listTournaments(userId),
     };
   });
 
   app.post<{
-    Body: { name?: string; maxPlayers?: number };
+    Body: { name?: string; maxPlayers?: number; isPrivate?: boolean };
   }>('/tournaments', { preHandler: [app.authenticate] }, async (req, reply) => {
     const userId: string = req.jwtPayload!.id;
 
     try {
-      const { name, maxPlayers } = req.body ?? {};
+      const { name, maxPlayers, isPrivate } = req.body ?? {};
 
-      const input: { ownerId: string; name?: string; maxPlayers?: number } = {
+      const input: { ownerId: string; name?: string; maxPlayers?: number; isPrivate?: boolean } = {
         ownerId: userId,
       };
 
@@ -126,6 +129,9 @@ export default async function routes(app: FastifyInstance): Promise<void> {
       }
       if (typeof maxPlayers === 'number') {
         input.maxPlayers = maxPlayers;
+      }
+      if (typeof isPrivate === 'boolean') {
+        input.isPrivate = isPrivate;
       }
 
       const tournament = createTournament(input);
@@ -140,13 +146,46 @@ export default async function routes(app: FastifyInstance): Promise<void> {
   });
 
   app.post<{
+    Body: { code: string };
+  }>('/tournaments/join-by-code', { preHandler: [app.authenticate] }, async (req, reply) => {
+    const userId: string = req.jwtPayload!.id;
+    const { code } = req.body ?? {};
+
+    if (typeof code !== 'string' || code.trim().length === 0) {
+      return reply.code(400).send({ success: false, error: 'Join code is required' });
+    }
+
+    const t = findTournamentByJoinCode(code);
+    if (!t) {
+      return reply.code(404).send({ success: false, error: 'No tournament found for this code' });
+    }
+
+    if (t.status === 'finished') {
+      return reply.code(400).send({ success: false, error: 'Tournament already finished' });
+    }
+
+    try {
+      const tournament = joinTournamentWithCode(t.id, userId, code);
+      return { success: true, tournament };
+    } catch (err) {
+      req.log.error({ err }, 'joinTournamentByCode failed');
+      return reply.code(400).send({
+        success: false,
+        error: (err as Error).message,
+      });
+    }
+  });
+
+  app.post<{
     Params: { id: string };
+    Body: { joinCode?: string };
   }>('/tournaments/:id/join', { preHandler: [app.authenticate] }, async (req, reply) => {
     const userId: string = req.jwtPayload!.id;
     const { id } = req.params;
+    const { joinCode } = req.body ?? {};
 
     try {
-      const tournament = joinTournament(id, userId);
+      const tournament = joinTournament(id, userId, joinCode);
       return { success: true, tournament };
     } catch (err) {
       req.log.error({ err }, 'joinTournament failed');
@@ -186,10 +225,19 @@ export default async function routes(app: FastifyInstance): Promise<void> {
   app.get<{
     Params: { id: string };
   }>('/tournaments/:id', { preHandler: [app.authenticate] }, async (req, reply) => {
+    const userId: string = req.jwtPayload!.id;
     const { id } = req.params;
     const tournament = getTournament(id);
     if (!tournament) {
       return reply.code(404).send({ success: false, error: 'Tournament not found' });
+    }
+    const canView =
+      tournament.visibility === 'public' ||
+      tournament.ownerId === userId ||
+      tournament.players.includes(userId);
+
+    if (!canView) {
+      return reply.code(403).send({ success: false, error: 'This tournament is private' });
     }
     return { success: true, tournament };
   });
