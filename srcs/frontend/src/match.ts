@@ -726,10 +726,10 @@ class TournamentMatchPage {
 
 		this.resultRematchBtn?.addEventListener('click', () => this.handleRematch());
 		this.resultFindNewBtn?.addEventListener('click', () => this.handleFindNew());
-		this.resultCloseBtn?.addEventListener('click', () => this.hideResultOverlay());
+		this.resultCloseBtn?.addEventListener('click', () => this.handleResultClose());
 
 		this.resultOverlay?.addEventListener('click', (ev) => {
-			if (ev.target === this.resultOverlay) this.hideResultOverlay();
+			if (ev.target === this.resultOverlay) this.handleResultClose();
 		});
 	}
 
@@ -814,6 +814,14 @@ class TournamentMatchPage {
 			return;
 		}
 		this.handleFindNew();
+	}
+
+	private handleResultClose(): void {
+		if (this.isQuickMatch) {
+			window.location.href = './multiplayer.html';
+			return;
+		}
+		this.hideResultOverlay();
 	}
 
 	private handleFindNew(): void {
