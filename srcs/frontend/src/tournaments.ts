@@ -1,3 +1,5 @@
+import { initHeader } from './shared/header.js';
+
 interface User {
   id: string;
   username: string;
@@ -67,29 +69,9 @@ class TournamentsPage {
       return;
     }
 
-    this.setupAuthContainer();
+    initHeader({ active: 'tournaments' });
     this.setupEventListeners();
     await this.loadTournaments();
-  }
-
-  private setupAuthContainer(): void {
-    const authContainer = document.getElementById('authContainer');
-    if (!authContainer || !this.currentUser) return;
-
-    authContainer.innerHTML = `
-      <a href="./index.html" class="text-gray-300 hover:text-white transition">Game</a>
-      <span class="text-gray-400">|</span>
-      <a href="./multiplayer.html" class="text-gray-300 hover:text-white transition">Quick match</a>
-      <span class="text-gray-400">|</span>
-      <a href="./tournaments.html" class="text-green-400">Tournaments</a>
-      <span class="text-gray-400">|</span>
-      <span class="text-gray-300">Hello, <a href="./profile.html" class="text-green-300 hover:text-green-200 font-semibold underline transition duration-200">${this.currentUser.username}</a></span>
-      <button id="logoutButton" class="bg-red-600 hover:bg-red-700 text-white text-sm py-1.5 px-4 rounded transition duration-200">
-        Logout
-      </button>
-    `;
-
-    document.getElementById('logoutButton')?.addEventListener('click', () => this.handleLogout());
   }
 
   private setupEventListeners(): void {

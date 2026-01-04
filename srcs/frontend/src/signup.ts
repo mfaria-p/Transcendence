@@ -1,3 +1,5 @@
+import { initHeader } from './shared/header.js';
+
 interface SignupCredentials {
   username: string;
   email: string;
@@ -384,5 +386,6 @@ class SignupManager {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+  initHeader({ active: 'auth' });
   new SignupManager();
 });

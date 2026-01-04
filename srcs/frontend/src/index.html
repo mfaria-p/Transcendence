@@ -7,25 +7,26 @@
 	<link href="./output.css" rel="stylesheet">
 </head>
 
-<body class="bg-gray-900 text-white flex flex-col items-center justify-center min-h-screen">
-	<div id="authContainer" style="position: fixed; top: 1rem; right: 1rem; display: flex; gap: 0.5rem; z-index: 50;">
-		<!-- Content will be dynamically inserted by index.js -->
-	</div>
+<body class="bg-gray-900 text-white min-h-screen flex flex-col">
+	<div id="globalHeader"></div>
 
-	<div id="app" class="text-center">
-		<h1 class="text-4xl font-bold mb-8 text-green-400">PONG</h1>
+	<main class="flex-1 flex flex-col items-center justify-center px-4">
+		<div id="app" class="text-center">
+			<h1 class="text-4xl font-bold mb-8 text-green-400">PONG</h1>
 
-		<div class="bg-black p-4 rounded-lg shadow-2xl">
-			<canvas id="gameCanvas" data-mode="freeplay" width="800" height="400" class="border border-white"></canvas>
+			<div class="bg-black p-4 rounded-lg shadow-2xl">
+				<canvas id="gameCanvas" data-mode="freeplay" width="800" height="400"
+					class="border border-white"></canvas>
+			</div>
+			<div class="mt-4 text-sm text-gray-400">
+				<p>Player 1: W/S keys | Player 2: ↑/↓ keys</p>
+				<p>Press SPACE to start</p>
+			</div>
+			<div id="score" class="mt-4 text-2xl font-mono">
+				<span id="player1Score">0</span> - <span id="player2Score">0</span>
+			</div>
 		</div>
-		<div class="mt-4 text-sm text-gray-400">
-			<p>Player 1: W/S keys | Player 2: ↑/↓ keys</p>
-			<p>Press SPACE to start</p>
-		</div>
-		<div id="score" class="mt-4 text-2xl font-mono">
-			<span id="player1Score">0</span> - <span id="player2Score">0</span>
-		</div>
-	</div>
+	</main>
 	<script type="module" src="./index.js"></script>
 	<script type="module" src="./pong.js"></script>
 </body>

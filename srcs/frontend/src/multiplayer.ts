@@ -1,3 +1,5 @@
+import { initHeader } from './shared/header.js';
+
 interface User {
   id: string;
   username: string;
@@ -35,30 +37,8 @@ class QuickMatchPage {
 
     this.quickButton = document.getElementById('quickPlayButton') as HTMLButtonElement | null;
     this.statusEl = document.getElementById('quickStatus');
-    this.setupAuth();
+    initHeader({ active: 'quick' });
     this.bindEvents();
-  }
-
-  private setupAuth(): void {
-    const container = document.getElementById('authContainer');
-    if (!container || !this.currentUser) return;
-
-    container.innerHTML = `
-      <span class="text-gray-300">Hi, <a href="./profile.html" class="text-green-400 hover:text-green-300 font-semibold underline transition">${this.currentUser.username}</a></span>
-      <button id="logoutButton" class="bg-red-600 hover:bg-red-700 text-white text-sm py-1.5 px-4 rounded transition">Logout</button>
-    `;
-
-    document.getElementById('logoutButton')?.addEventListener('click', async () => {
-      try {
-        await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' });
-      } catch (err) {
-        console.error('logout error', err);
-      } finally {
-        localStorage.removeItem('access_token');
-        localStorage.removeItem('user');
-        window.location.href = './login.html';
-      }
-    });
   }
 
   private bindEvents(): void {

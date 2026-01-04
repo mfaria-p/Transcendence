@@ -1,3 +1,5 @@
+import { initHeader } from './shared/header.js';
+
 interface User {
 	id: string;
 	username: string;
@@ -1642,10 +1644,7 @@ document.addEventListener('DOMContentLoaded', () => {
 		return;
 	}
 
-	const authContainer = document.getElementById('authContainer');
-	if (authContainer) {
-		renderAuth(authContainer, user);
-	}
+	initHeader({ active: isQuickMatch ? 'quick' : 'tournaments' });
 
 	const normalizedUser = normalizeUser(user);
 	console.log('[match] DOMContentLoaded - creating TournamentMatchPage');

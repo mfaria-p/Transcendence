@@ -25,34 +25,6 @@ export default async function (app: FastifyInstance): Promise<void> {
     };
   });
 
-  app.get('/', {schema: schemas.getProfilesOpts}, async (req: FastifyRequest, reply: FastifyReply) => {
-    const profiles: Profile[] = await utils.profileFindAll(app.prisma);
-
-    return {
-      success: true,
-      message: "Public Profiles List",
-      profiles: profiles,
-    };
-  });
-
-  app.get('/:userId', {schema: schemas.getProfileByIdOpts}, async (req: FastifyRequest, reply: FastifyReply) => {
-    const {userId} = req.params as {userId: string};
-
-    const profile = await utils.profileFindByUserId(app.prisma, userId);
-    if (!profile) return reply.code(404).send({
-      sucess: false,
-      message: 'Nonexistent User Profile',
-      profile: null,
-    });
-
-    return {
-      success: true,
-      message: "Public User Profile",
-      profile: profile,
-    };
-  });
-
-  // useless for now
   app.get('/me', {schema: schemas.getMeOpts, preHandler: [app.authenticate]}, async (req: FastifyRequest, reply: FastifyReply) => {
     const userId: string = req.jwtPayload!.id;
     const profile: Profile | null = await utils.profileFindByUserId(app.prisma, userId);
@@ -78,6 +50,33 @@ export default async function (app: FastifyInstance): Promise<void> {
     return {
       success: true,
       message: "Logged In User Profile",
+      profile: profile,
+    };
+  });
+
+  app.get('/', {schema: schemas.getProfilesOpts}, async (req: FastifyRequest, reply: FastifyReply) => {
+    const profiles: Profile[] = await utils.profileFindAll(app.prisma);
+
+    return {
+      success: true,
+      message: "Public Profiles List",
+      profiles: profiles,
+    };
+  });
+
+  app.get('/:userId', {schema: schemas.getProfileByIdOpts}, async (req: FastifyRequest, reply: FastifyReply) => {
+    const {userId} = req.params as {userId: string};
+
+    const profile = await utils.profileFindByUserId(app.prisma, userId);
+    if (!profile) return reply.code(404).send({
+      sucess: false,
+      message: 'Nonexistent User Profile',
+      profile: null,
+    });
+
+    return {
+      success: true,
+      message: "Public User Profile",
       profile: profile,
     };
   });

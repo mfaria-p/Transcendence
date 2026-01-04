@@ -1,3 +1,5 @@
+import { initHeader } from './shared/header.js';
+
 interface LoginResponse {
   success: boolean;
   message: string;
@@ -6,6 +8,8 @@ interface LoginResponse {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+  initHeader({ active: 'auth' });
+
   const loginForm = document.getElementById('loginForm') as HTMLFormElement;
   const emailInput = document.getElementById('email') as HTMLInputElement;
   const passwordInput = document.getElementById('password') as HTMLInputElement;
