@@ -237,7 +237,9 @@ describe('Signup => Login => Me => Logout', () => {
       },
     });
     expect(r1.statusCode).toBe(200);
-    const account = r1.json().account;
+    const res = r1.json();
+    expect(res.isOAuthAccount).toBe(false);
+    const account = res.account;
     expect(account).toMatchObject({username: "test1", email: "test@example.com"})
     expect(account).not.toHaveProperty("passwordHash");
   })
