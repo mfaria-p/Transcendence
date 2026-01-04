@@ -47,14 +47,28 @@ interface GameRoom {
   status: GameStatus;
   left?: PlayerState;
   right?: PlayerState;
+  ready: { left: boolean; right: boolean };
   state: GameState;
   scores: { left: number; right: number };
   maxScore: number;
   loop?: NodeJS.Timeout;
+  countdownTimeout?: NodeJS.Timeout;
+  countdownEndsAt?: number;
   // tournament integration (opcional)
   isTournament: boolean;
   tournamentId?: string;
   matchId?: string;
+}
+
+function sendReadyUpdate(room: GameRoom): void {
+  const payload = {
+    type: 'game:ready:ack' as const,
+    roomId: room.id,
+    ready: { ...room.ready },
+  };
+
+  if (room.left) sendToUser(room.left.userId, payload);
+  if (room.right) sendToUser(room.right.userId, payload);
 }
 
 const TICK_RATE = 60; // 60 updates por segundo
@@ -62,10 +76,29 @@ const TICK_MS = 1000 / TICK_RATE;
 const PADDLE_SPEED = 400; // px/s
 const BALL_SPEED = 550; // velocidade base da bola
 const MAX_SCORE_DEFAULT = 5;
+// Frontend: 3,2,1,Start! (1s cada) + 600ms para esconder
+const TOURNAMENT_COUNTDOWN_TOTAL_MS = 3600;
 
 // rooms em memória e mapping user -> room
 const rooms = new Map<string, GameRoom>();
 const userToRoom = new Map<string, string>();
+
+function normalizeId(value: unknown): string | null {
+  if (value === null || value === undefined) return null;
+  return String(value);
+}
+
+function parseTournamentRoomId(roomId: string): { tournamentId: string; matchId: string } | null {
+  if (!roomId.startsWith('room_')) return null;
+  const payload = roomId.slice('room_'.length);
+  const marker = '_m_';
+  const idx = payload.indexOf(marker);
+  if (idx === -1) return null;
+  const tournamentId = payload.slice(0, idx);
+  const matchId = payload.slice(idx + 1);
+  if (!tournamentId || !matchId.startsWith('m_')) return null;
+  return { tournamentId, matchId };
+}
 
 function createInitialState(): GameState {
   const width = 800;
@@ -110,6 +143,16 @@ function sendToUser(userId: string, payload: unknown): void {
   });
 }
 
+function debugToUser(userId: string, event: string, data?: Record<string, unknown>): void {
+  sendToUser(userId, {
+    type: 'debug',
+    scope: 'game',
+    event,
+    ...(data ? { data } : {}),
+    ts: Date.now(),
+  });
+}
+
 function broadcastRoomState(room: GameRoom): void {
   const base = {
     type: 'game:state' as const,
@@ -121,6 +164,7 @@ function broadcastRoomState(room: GameRoom): void {
       left: room.left?.userId ?? null,
       right: room.right?.userId ?? null,
     },
+    ready: { ...room.ready },
     isTournament: room.isTournament,
     tournamentId: room.tournamentId ?? null,
     matchId: room.matchId ?? null,
@@ -134,19 +178,76 @@ function broadcastRoomState(room: GameRoom): void {
   }
 }
 
-function startLoopIfReady(room: GameRoom): void {
+function clearTournamentCountdown(room: GameRoom): void {
+  if (room.countdownTimeout) {
+    clearTimeout(room.countdownTimeout);
+    delete room.countdownTimeout;
+  }
+  delete room.countdownEndsAt;
+}
+
+function beginReadyCountdownIfNeeded(room: GameRoom): boolean {
+  if (room.status !== 'waiting') return false;
+  if (!room.left || !room.right) return false;
+  if (!room.ready.left || !room.ready.right) return false;
+  if (room.countdownTimeout) return true;
+
+  room.countdownEndsAt = Date.now() + TOURNAMENT_COUNTDOWN_TOTAL_MS;
+  room.countdownTimeout = setTimeout(() => {
+    if (room.status !== 'waiting') return;
+    if (!room.left || !room.right) return;
+    if (!room.ready.left || !room.ready.right) return;
+    clearTournamentCountdown(room);
+    startGame(room);
+  }, TOURNAMENT_COUNTDOWN_TOTAL_MS);
+
+  return true;
+}
+
+function startGame(room: GameRoom): void {
   if (room.status === 'playing') return;
   if (!room.left || !room.right) return;
 
   room.status = 'playing';
+  // reset flags para não interferir em futuros reusos
+  room.ready.left = false;
+  room.ready.right = false;
   resetBall(room, Math.random() < 0.5 ? 'left' : 'right');
+
+  // envia já o estado em playing (sem esperar pelo primeiro tick)
+  broadcastRoomState(room);
 
   room.loop = setInterval(() => {
     stepRoom(room);
   }, TICK_MS);
 }
 
+function startLoopIfReady(room: GameRoom): void {
+  if (room.status === 'playing') return;
+  if (!room.left || !room.right) return;
+
+  const requiresReady = room.isTournament || room.id.startsWith('match_');
+
+  // Defensive: se o id parece de torneio, garante flag e metadados
+  if (!room.isTournament) {
+    const parsed = parseTournamentRoomId(room.id);
+    if (parsed) {
+      room.isTournament = true;
+      room.tournamentId = room.tournamentId ?? parsed.tournamentId;
+      room.matchId = room.matchId ?? parsed.matchId;
+    }
+  }
+
+  if (requiresReady && (!room.ready.left || !room.ready.right)) return;
+
+  // Defer real start until countdown when readiness is required.
+  if (requiresReady && beginReadyCountdownIfNeeded(room)) return;
+
+  startGame(room);
+}
+
 function stopLoop(room: GameRoom): void {
+  clearTournamentCountdown(room);
   if (room.loop) {
     clearInterval(room.loop);
     delete room.loop; // em vez de room.loop = undefined
@@ -321,17 +422,23 @@ function finishGame(room: GameRoom, forfeitLoserId?: string): void {
 }
 
 function ensureRoomForJoin(userId: string, msg: GameMessage): GameRoom | null {
+  const uid = normalizeId(userId);
+  if (!uid) return null;
+
   const requestedRoomId =
     typeof (msg as any).roomId === 'string'
       ? ((msg as any).roomId as string)
       : undefined;
 
   // Se já estiver numa sala, devolvemos essa
-  const existingRoomId = userToRoom.get(userId);
+  const existingRoomId = userToRoom.get(uid);
   if (existingRoomId) {
     const r = rooms.get(existingRoomId);
-    if (r) return r;
-    userToRoom.delete(userId);
+    if (r) {
+      if (!r.ready) r.ready = { left: false, right: false };
+      return r;
+    }
+    userToRoom.delete(uid);
   }
 
   // Caso venha com roomId, tentamos ver se é match de torneio
@@ -340,7 +447,9 @@ function ensureRoomForJoin(userId: string, msg: GameMessage): GameRoom | null {
     if (matchInfo) {
       const { tournament, match } = matchInfo;
       // check se o jogador pertence ao match
-      if (match.player1Id !== userId && match.player2Id !== userId) {
+      const p1 = normalizeId(match.player1Id);
+      const p2 = normalizeId(match.player2Id);
+      if (p1 !== uid && p2 !== uid) {
         // não é jogador legítimo deste match
         return null;
       }
@@ -352,6 +461,7 @@ function ensureRoomForJoin(userId: string, msg: GameMessage): GameRoom | null {
           status: 'waiting',
           state: createInitialState(),
           scores: { left: 0, right: 0 },
+          ready: { left: false, right: false },
           maxScore: MAX_SCORE_DEFAULT,
           isTournament: true,
           tournamentId: tournament.id,
@@ -359,6 +469,29 @@ function ensureRoomForJoin(userId: string, msg: GameMessage): GameRoom | null {
         };
         rooms.set(room.id, room);
       }
+      if (!room.ready) room.ready = { left: false, right: false };
+      return room;
+    }
+
+    // fallback: se parecer room de torneio, marcar como tal mesmo sem mapping
+    const parsedTournament = parseTournamentRoomId(requestedRoomId);
+    if (parsedTournament) {
+      let room = rooms.get(requestedRoomId);
+      if (!room) {
+        room = {
+          id: requestedRoomId,
+          status: 'waiting',
+          state: createInitialState(),
+          scores: { left: 0, right: 0 },
+          ready: { left: false, right: false },
+          maxScore: MAX_SCORE_DEFAULT,
+          isTournament: true,
+          tournamentId: parsedTournament.tournamentId,
+          matchId: parsedTournament.matchId,
+        };
+        rooms.set(room.id, room);
+      }
+      if (!room.ready) room.ready = { left: false, right: false };
       return room;
     }
 
@@ -370,11 +503,13 @@ function ensureRoomForJoin(userId: string, msg: GameMessage): GameRoom | null {
         status: 'waiting',
         state: createInitialState(),
         scores: { left: 0, right: 0 },
+        ready: { left: false, right: false },
         maxScore: MAX_SCORE_DEFAULT,
         isTournament: false,
       };
       rooms.set(room.id, room);
     }
+    if (!room.ready) room.ready = { left: false, right: false };
     return room;
   }
 
@@ -399,6 +534,7 @@ function ensureRoomForJoin(userId: string, msg: GameMessage): GameRoom | null {
     status: 'waiting',
     state: createInitialState(),
     scores: { left: 0, right: 0 },
+    ready: { left: false, right: false },
     maxScore: MAX_SCORE_DEFAULT,
     isTournament: false,
   };
@@ -407,17 +543,22 @@ function ensureRoomForJoin(userId: string, msg: GameMessage): GameRoom | null {
 }
 
 function setPlayerInRoom(room: GameRoom, userId: string): Side | null {
-  if (room.left && room.left.userId === userId) return 'left';
-  if (room.right && room.right.userId === userId) return 'right';
+  const uid = normalizeId(userId);
+  if (!uid) return null;
+
+  if (room.left && room.left.userId === uid) return 'left';
+  if (room.right && room.right.userId === uid) return 'right';
 
   if (!room.left) {
-    room.left = { userId, side: 'left', input: 'none' };
-    userToRoom.set(userId, room.id);
+    room.left = { userId: uid, side: 'left', input: 'none' };
+    room.ready.left = false;
+    userToRoom.set(uid, room.id);
     return 'left';
   }
-  if (!room.right && room.left.userId !== userId) {
-    room.right = { userId, side: 'right', input: 'none' };
-    userToRoom.set(userId, room.id);
+  if (!room.right && room.left.userId !== uid) {
+    room.right = { userId: uid, side: 'right', input: 'none' };
+    room.ready.right = false;
+    userToRoom.set(uid, room.id);
     return 'right';
   }
   return null;
@@ -451,12 +592,86 @@ function handleJoin(userId: string, socket: WebSocket, msg: GameMessage): void {
   }
 
   // enviar snapshot inicial
+  debugToUser(String(userId), 'join', {
+    roomId: room.id,
+    isTournament: room.isTournament,
+    left: room.left?.userId ?? null,
+    right: room.right?.userId ?? null,
+  });
+  broadcastRoomState(room);
+  // Envia um ACK explícito de join para já fixar o lado no cliente e espelhar o estado atual
+  sendToUser(String(userId), {
+    type: 'game:joined',
+    roomId: room.id,
+    yourSide: side,
+    ready: { ...room.ready },
+    players: {
+      left: room.left?.userId ?? null,
+      right: room.right?.userId ?? null,
+    },
+    status: room.status,
+  });
+  startLoopIfReady(room);
+}
+
+function handleReady(userId: string): void {
+  const uid = normalizeId(userId);
+  if (!uid) return;
+  const roomId = userToRoom.get(uid);
+  if (!roomId) return;
+  const room = rooms.get(roomId);
+  if (!room || room.status !== 'waiting') return;
+
+  if (room.left && room.left.userId === uid) {
+    room.ready.left = true;
+  } else if (room.right && room.right.userId === uid) {
+    room.ready.right = true;
+  }
+
+  sendReadyUpdate(room);
+
+  debugToUser(uid, 'ready', {
+    roomId: room.id,
+    readyLeft: room.ready.left,
+    readyRight: room.ready.right,
+  });
+
+  broadcastRoomState(room);
+  startLoopIfReady(room);
+}
+
+function handleStart(userId: string): void {
+  const uid = normalizeId(userId);
+  if (!uid) return;
+  const roomId = userToRoom.get(uid);
+  if (!roomId) return;
+  const room = rooms.get(roomId);
+  if (!room || room.status !== 'waiting') return;
+  if (!room.left || !room.right) {
+    sendToUser(uid, {
+      type: 'game:error',
+      message: 'Both players must be in the room to start.',
+    });
+    return;
+  }
+
+  debugToUser(uid, 'start', {
+    roomId: room.id,
+    left: room.left?.userId ?? null,
+    right: room.right?.userId ?? null,
+  });
+
+  // força ambos como prontos e inicia
+  room.ready.left = true;
+  room.ready.right = true;
   broadcastRoomState(room);
   startLoopIfReady(room);
 }
 
 function handleInput(userId: string, msg: GameMessage): void {
-  const roomId = userToRoom.get(userId);
+  const uid = normalizeId(userId);
+  if (!uid) return;
+  const roomId = userToRoom.get(uid);
   if (!roomId) return;
   const room = rooms.get(roomId);
   if (!room) return;
@@ -467,23 +682,25 @@ function handleInput(userId: string, msg: GameMessage): void {
     dir = direction;
   }
 
-  if (room.left && room.left.userId === userId) {
+  if (room.left && room.left.userId === uid) {
     room.left.input = dir;
-  } else if (room.right && room.right.userId === userId) {
+  } else if (room.right && room.right.userId === uid) {
     room.right.input = dir;
   }
 }
 
 function handleLeave(userId: string): void {
-  const roomId = userToRoom.get(userId);
+  const uid = normalizeId(userId);
+  if (!uid) return;
+  const roomId = userToRoom.get(uid);
   if (!roomId) return;
   const room = rooms.get(roomId);
   if (!room) {
-    userToRoom.delete(userId);
+    userToRoom.delete(uid);
     return;
   }
 
-  finishGame(room, userId);
+  finishGame(room, uid);
 }
 
 export function handleDisconnect(userId: string): void {
@@ -503,6 +720,12 @@ export function handleGameMessage(
       break;
     case 'game:input':
       handleInput(userId, msg);
+      break;
+    case 'game:ready':
+      handleReady(userId);
+      break;
+    case 'game:start':
+      handleStart(userId);
       break;
     case 'game:leave':
       handleLeave(userId);

@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link href="./output.css" rel="stylesheet">
+	<title>PHONG - Quick Match</title>
+</head>
+
+<body class="bg-gray-900 text-white min-h-screen flex flex-col">
+	<div id="globalHeader"></div>
+
+	<main class="flex-1 px-4 py-12">
+		<div class="max-w-5xl mx-auto space-y-8">
+			<section class="bg-gray-800 border border-gray-700 rounded-2xl shadow-2xl p-6 sm:p-10">
+				<div class="flex flex-col gap-4 sm:gap-6">
+					<div class="space-y-2">
+						<p class="text-sm uppercase tracking-wide text-gray-400">Play quick multiplayer</p>
+						<h1 class="text-3xl sm:text-4xl font-bold text-green-400">Jump into a quick match</h1>
+						<p class="text-gray-300">No room setup needed: hit play and we will auto-pair you with the next
+							available player.</p>
+					</div>
+					<div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+						<div class="text-sm text-gray-400 space-y-1">
+							<p>1) Click "Find match"</p>
+							<p>2) Wait while we look for an opponent</p>
+							<p>3) Once paired, you drop straight into the match</p>
+						</div>
+						<button id="quickPlayButton"
+							class="bg-green-600 hover:bg-green-700 text-white font-semibold px-6 py-3 rounded-lg text-lg shadow-lg hover:shadow-xl transition">
+							Find match
+						</button>
+					</div>
+					<div id="quickStatus"
+						class="text-gray-300 text-sm bg-gray-900 border border-gray-700 rounded-lg p-4">
+						Ready to play. Click "Find match" to join the queue.
+					</div>
+				</div>
+			</section>
+
+			<section class="bg-gray-800 border border-gray-700 rounded-2xl shadow-xl p-6 sm:p-8">
+				<h2 class="text-2xl font-semibold text-gray-100 mb-3">How it works</h2>
+				<ul class="space-y-2 text-gray-300 text-sm list-disc list-inside">
+					<li>We pair you with the next player who clicks the button.</li>
+					<li>If someone is already waiting, you jump into the match instantly.</li>
+					<li>While waiting, you will see a clear in-game notice.</li>
+					<li>Stay logged in to keep your matchmaking session active.</li>
+				</ul>
+			</section>
+		</div>
+	</main>
+
+	<div id="messageContainer" class="fixed bottom-4 right-4 max-w-md z-50 space-y-2"></div>
+
+	<script type="module" src="./multiplayer.js"></script>
+</body>
+
+</html>
