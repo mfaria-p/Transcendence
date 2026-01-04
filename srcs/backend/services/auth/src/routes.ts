@@ -227,7 +227,21 @@ app.get('/google/callback', {}, async (req: FastifyRequest, reply: FastifyReply)
       return reply.redirect(`/google-callback.html?error=${encodeURIComponent('Email already registered with a different login method')}`);
     }    
     if (!account) {
-      account = await utils.accountCreate(app.prisma, {username: payload.name, email: payload.email});
+      let username = payload.name
+        .replace(/[^a-zA-Z0-9_]/g, '_')  // Remove invalid characters
+        .substring(0, 20);                 // Max 20 chars
+      
+      if (username.length < 3) {
+        username = `user_${username}`;
+      }
+      
+      let finalUsername = username;
+      let counter = 1;
+      while (await utils.accountFindByUsername(app.prisma, finalUsername)) {
+        finalUsername = `${username.substring(0, 17)}_${counter}`;
+        counter++;
+      }
+      account = await utils.accountCreate(app.prisma, {username: finalUsername, email: payload.email});
       oauthAccount = await utils.oauthAccountCreate(app.prisma, account.id, {sub: payload.sub, provider: OAuthProvider.google});
     }
 
