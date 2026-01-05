@@ -24,6 +24,8 @@ export interface Tournament {
   players: string[];
   matches: TournamentMatch[];
   winnerId?: string;
+  visibility: 'public' | 'private';
+  joinCode?: string;
   createdAt: number;
   updatedAt: number;
 }
@@ -41,8 +43,22 @@ function genId(prefix: string): string {
   return `${prefix}_${crypto.randomUUID()}`;
 }
 
-export function listTournaments(): Tournament[] {
-  return Array.from(tournaments.values());
+function generateJoinCode(): string {
+  // 6-char uppercase hex code (easy to share/type)
+  return crypto.randomBytes(3).toString('hex').toUpperCase();
+}
+
+function codesMatch(a: string | undefined, b: string | undefined): boolean {
+  if (!a || !b) return false;
+  return a.trim().toUpperCase() === b.trim().toUpperCase();
+}
+
+export function listTournaments(viewerId?: string): Tournament[] {
+  const uid = viewerId ?? '';
+
+  return Array.from(tournaments.values())
+    .filter((t) => t.visibility === 'public' || t.ownerId === uid || t.players.includes(uid))
+    .sort((a, b) => (b.updatedAt ?? b.createdAt) - (a.updatedAt ?? a.createdAt));
 }
 
 export function getTournament(id: string): Tournament | undefined {
@@ -53,19 +69,27 @@ export function createTournament(input: {
   ownerId: string;
   name?: string;
   maxPlayers?: number;
+  isPrivate?: boolean;
 }): Tournament {
   const maxPlayers = input.maxPlayers && input.maxPlayers > 1 ? input.maxPlayers : 4;
+  const isPrivate = Boolean(input.isPrivate);
+  const visibility: 'public' | 'private' = isPrivate ? 'private' : 'public';
 
   const t: Tournament = {
     id: genId('t'),
     ownerId: input.ownerId,
     maxPlayers,
+    visibility,
     status: 'waiting',
     players: [input.ownerId],
     matches: [],
     createdAt: now(),
     updatedAt: now(),
   };
+
+  if (isPrivate) {
+    t.joinCode = generateJoinCode();
+  }
 
   if (input.name !== undefined) {
     t.name = input.name;
@@ -75,24 +99,74 @@ export function createTournament(input: {
   return t;
 }
 
-export function joinTournament(tournamentId: string, userId: string): Tournament {
+export function joinTournament(tournamentId: string, userId: string, joinCode?: string): Tournament {
   const t = tournaments.get(tournamentId);
   if (!t) {
     throw new Error('Tournament not found');
   }
-  if (t.status !== 'waiting') {
-    throw new Error('Tournament already started');
-  }
   if (t.players.includes(userId)) {
     return t;
   }
-  if (t.players.length >= t.maxPlayers) {
-    throw new Error('Tournament full');
+
+  if (t.visibility === 'private' && t.ownerId !== userId) {
+    if (!codesMatch(t.joinCode, joinCode)) {
+      throw new Error('Invalid or missing join code');
+    }
   }
 
-  t.players.push(userId);
-  t.updatedAt = now();
-  return t;
+  // Cenário normal: torneio ainda não começou.
+  if (t.status === 'waiting') {
+    if (t.players.length >= t.maxPlayers) {
+      throw new Error('Tournament full');
+    }
+
+    t.players.push(userId);
+    t.updatedAt = now();
+    return t;
+  }
+
+  // Permitir join tardio apenas para torneios 1v1 já iniciados que têm vaga aberta.
+  if (t.status === 'running' && t.maxPlayers === 2) {
+    if (t.players.length >= t.maxPlayers) {
+      throw new Error('Tournament full');
+    }
+
+    const pendingWithSlot = t.matches.find(
+      (m) =>
+        m.status === 'pending' &&
+        (m.player1Id === null || m.player1Id === undefined || m.player2Id === null || m.player2Id === undefined),
+    );
+
+    if (!pendingWithSlot) {
+      throw new Error('No available match to join');
+    }
+
+    t.players.push(userId);
+    if (!pendingWithSlot.player1Id) {
+      pendingWithSlot.player1Id = userId;
+    } else {
+      pendingWithSlot.player2Id = userId;
+    }
+    t.updatedAt = now();
+    return t;
+  }
+
+  throw new Error('Tournament already started');
+}
+
+export function joinTournamentWithCode(tournamentId: string, userId: string, joinCode?: string): Tournament {
+  const t = tournaments.get(tournamentId);
+  if (!t) {
+    throw new Error('Tournament not found');
+  }
+
+  return joinTournament(tournamentId, userId, joinCode);
+}
+
+export function findTournamentByJoinCode(code: string): Tournament | undefined {
+  if (!code || code.trim().length === 0) return undefined;
+  const normalized = code.trim().toUpperCase();
+  return Array.from(tournaments.values()).find((t) => t.visibility === 'private' && t.joinCode && t.joinCode.toUpperCase() === normalized);
 }
 
 function createMatch(
@@ -145,6 +219,35 @@ export function startTournament(tournamentId: string): Tournament {
     throw new Error('Tournament already started');
   }
 
+  // Caminho 1v1: podemos iniciar com apenas um jogador (host entra na sala e espera oponente).
+  if (t.maxPlayers === 2) {
+    if (t.players.length < 1) {
+      throw new Error('Not enough players (need at least 1)');
+    }
+    if (t.players.length > t.maxPlayers) {
+      throw new Error('Tournament full');
+    }
+
+    const players = [...t.players];
+    const matches: TournamentMatch[] = [];
+
+    createMatch(
+      t,
+      {
+        player1Id: players[0] ?? null,
+        player2Id: players[1] ?? null,
+        isFinal: true,
+      },
+      matches,
+    );
+
+    t.matches = matches;
+    t.status = 'running';
+    t.updatedAt = now();
+    return t;
+  }
+
+  // Caminho 4 jogadores mantém a lógica original.
   if (t.players.length < 2) {
     throw new Error('Not enough players (need at least 2)');
   }
