@@ -5,12 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link href="./output.css" rel="stylesheet">
 </head>
-<body class="bg-gray-900 text-white flex flex-col items-center justify-center min-h-screen">
-  <div id="authContainer" style="position: fixed; top: 1rem; right: 1rem; display: flex; gap: 0.5rem; z-index: 50;">
-    <!-- Content will be dynamically inserted by index.js -->
-  </div>
+<body class="bg-gray-900 text-white min-h-screen">
+  <div id="globalHeader"></div>
 
-  <div id="app" class="text-center">
+  <div id="app" class="text-center flex flex-col items-center justify-center" style="min-height: calc(100vh - 4rem);">
     <h1 class="text-4xl font-bold mb-8 text-green-400">PONG</h1>
 
     <div class="bg-black p-4 rounded-lg shadow-2xl">

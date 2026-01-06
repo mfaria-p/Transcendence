@@ -1,3 +1,5 @@
+import { handleLogout } from '../utils-api.js';
+
 interface StoredUser {
   id: string;
   username: string;
@@ -59,17 +61,7 @@ export function initHeader(options: InitHeaderOptions = {}): void {
 
   const logoutButton = document.getElementById('globalLogoutButton');
   if (logoutButton) {
-    logoutButton.addEventListener('click', async () => {
-      try {
-        await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' });
-      } catch (err) {
-        console.error('Logout error', err);
-      } finally {
-        localStorage.removeItem('access_token');
-        localStorage.removeItem('user');
-        window.location.href = './login.html';
-      }
-    });
+    logoutButton.addEventListener('click', () => handleLogout());
   }
 }
 
