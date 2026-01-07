@@ -26,7 +26,10 @@ class PongGame {
   private gameRunning = false;
   private player1Score = 0;
   private player2Score = 0;
+  private lastTime = 0;
 
+  private readonly PADDLE_SPEED = 400; // px/s 
+  private readonly BALL_SPEED = 550; 
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -38,9 +41,9 @@ class PongGame {
       y: this.canvas.height / 2,
       width: 10,
       height: 10,
-      dx: 15,
-      dy: 3,
-      speed: 15
+      dx: this.BALL_SPEED,
+      dy: this.BALL_SPEED * 0.3,
+      speed: this.BALL_SPEED
     };
 
     // Left paddle
@@ -50,7 +53,7 @@ class PongGame {
       width: 10,
       height: 100,
       dy: 0,
-      speed: 8
+      speed: this.PADDLE_SPEED
     };
 
     // Right paddle
@@ -60,7 +63,7 @@ class PongGame {
       width: 10,
       height: 100,
       dy: 0,
-      speed: 8
+      speed: this.PADDLE_SPEED
     };
 
     this.setupEventListeners();
@@ -88,32 +91,37 @@ class PongGame {
 
   private startGame(): void {
     this.gameRunning = true;
+    this.lastTime = performance.now();
     this.gameLoop();
   }
 
   private gameLoop(): void {
     if (!this.gameRunning) return;
 
-    this.update();
+    const currentTime = performance.now();
+    const deltaTime = (currentTime - this.lastTime) / 1000; // Convert to seconds
+    this.lastTime = currentTime;
+
+    this.update(deltaTime);
     this.draw();
     requestAnimationFrame(() => this.gameLoop());
   }
 
-  private update(): void {
+  private update(dt: number): void {
     // Move player1 (W/S)
     if (this.keys["w"] || this.keys["W"]) {
-      this.player1.y -= this.player1.speed;
+      this.player1.y -= this.player1.speed * dt;
     }
     if (this.keys["s"] || this.keys["S"]) {
-      this.player1.y += this.player1.speed;
+      this.player1.y += this.player1.speed * dt;
     }
 
     // Move player2 (Arrow keys)
     if (this.keys["ArrowUp"]) {
-      this.player2.y -= this.player2.speed;
+      this.player2.y -= this.player2.speed * dt;
     }
     if (this.keys["ArrowDown"]) {
-      this.player2.y += this.player2.speed;
+      this.player2.y += this.player2.speed * dt;
     }
 
     // Keep paddles inside the canvas
@@ -121,17 +129,20 @@ class PongGame {
     this.player2.y = Math.max(0, Math.min(this.canvas.height - this.player2.height, this.player2.y));
 
     // Move ball
-    this.ball.x += this.ball.dx;
-    this.ball.y += this.ball.dy;
+    this.ball.x += this.ball.dx * dt;
+    this.ball.y += this.ball.dy * dt;
 
     // Ball collision with top/bottom walls
-    if (this.ball.y <= 0 || this.ball.y >= this.canvas.height - this.ball.height) {
-      this.ball.dy = -this.ball.dy; // reverse vertical direction
-      this.ball.dx *= 1.05; // gradually increase ball speed  
+    if (this.ball.y <= 0 && this.ball.dy < 0) {
+      this.ball.y = 0;
+      this.ball.dy = -this.ball.dy;
+    } else if (this.ball.y + this.ball.height >= this.canvas.height && this.ball.dy > 0) {
+      this.ball.y = this.canvas.height - this.ball.height;
+      this.ball.dy = -this.ball.dy;
     }
 
     // Ball collision with left paddle
-    if (this.checkCollision(this.ball, this.player1)) {
+    if (this.checkCollision(this.ball, this.player1) && this.ball.dx < 0) {
       this.ball.dx = Math.abs(this.ball.dx); // always move right
       this.ball.x = this.player1.x + this.player1.width; // push ball out so it doesn't stick
       this.ball.dx *= 1.05; // gradually increase ball speed  
@@ -139,7 +150,7 @@ class PongGame {
     }
 
     // Ball collision with right paddle
-    if (this.checkCollision(this.ball, this.player2)) {
+    if (this.checkCollision(this.ball, this.player2) && this.ball.dx > 0) {
       this.ball.dx = -Math.abs(this.ball.dx); // always move left
       this.ball.x = this.player2.x - this.ball.width; // push ball out
       this.ball.dx *= 1.05; // gradually increase ball speed  
@@ -171,13 +182,20 @@ class PongGame {
   }
 
   private resetBall(): void {
-    this.ball.x = this.canvas.width / 2;
-    this.ball.y = this.canvas.height / 2;
-    // Ball goes in opposite direction depending on who scored
-    this.ball.dx = this.ball.dx > 0 ? -this.ball.speed : this.ball.speed;
-    // Give ball a random vertical angle
-    this.ball.dy = (Math.random() - 0.5) * 8;
-    this.gameRunning = false; // pause game until space is pressed
+    this.ball.x = this.canvas.width / 2 - this.ball.width / 2;
+    this.ball.y = this.canvas.height / 2 - this.ball.height / 2;
+    
+    // Random angle between -30° and +30°, like in game.ts
+    const angle = (Math.random() * Math.PI) / 3 - Math.PI / 6;
+    const sign = Math.random() < 0.5 ? 1 : -1;
+    
+    this.ball.dx = Math.cos(angle) * this.BALL_SPEED * sign;
+    this.ball.dy = Math.sin(angle) * this.BALL_SPEED;
+
+    this.player1.y = this.canvas.height / 2 - this.player1.height / 2;
+    this.player2.y = this.canvas.height / 2 - this.player2.height / 2;
+    
+    this.gameRunning = false;
   }
 
   private updateScore(): void {
