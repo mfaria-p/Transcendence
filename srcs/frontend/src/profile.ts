@@ -17,7 +17,8 @@ class ProfileManager {
   private currentUser: User | null = null;
   private currentProfile: Profile | null = null;
   private accessToken: string | null = null;
-  private friendOnlineStatus: Map<string, boolean> = new Map(); 
+  private friendOnlineStatus: Map<string, boolean> = new Map();
+  private isOAuthAccount: boolean = false;
 
   constructor() {
     this.init();
@@ -95,6 +96,13 @@ class ProfileManager {
 
   private async loadProfile(): Promise<void> {
     try {
+      const accountResponse = await handleApiCall(this.accessToken, '/api/auth/me');
+      if (accountResponse.ok) {
+        const data = await accountResponse.json();
+        this.isOAuthAccount = data.isOAuthAccount || false;
+        console.log('Is OAuth account:', this.isOAuthAccount);
+        console.log('Account data:', data);
+      }
       const response = await handleApiCall(this.accessToken, '/api/user/me');
 
       if (response.ok) {
@@ -134,6 +142,31 @@ class ProfileManager {
       avatarImg?.classList.add('hidden');
       avatarEl.classList.remove('hidden');
       avatarEl.textContent = this.currentUser.username.charAt(0).toUpperCase();
+    }
+
+    if (this.isOAuthAccount) {
+      // Hide email edit button
+      const editEmailBtn = document.getElementById('editEmailBtn');
+      console.log('editEmailBtn found:', !!editEmailBtn);
+      if (editEmailBtn) {
+        editEmailBtn.style.display = 'none';
+        console.log('Hidden email edit button');
+      }
+      
+      // Hide entire password section - find the parent div
+      const editPasswordBtn = document.getElementById('editPasswordBtn');
+      console.log('editPasswordBtn found:', !!editPasswordBtn);
+      
+      if (editPasswordBtn) {
+        // Find the closest parent with bg-gray-700 class (the password section container)
+        const passwordSection = editPasswordBtn.closest('.bg-gray-700') as HTMLElement;
+        console.log('passwordSection found:', !!passwordSection);
+        
+        if (passwordSection) {
+          passwordSection.style.display = 'none';
+          console.log('Hidden password section');
+        }
+      }
     }
   }
 
