@@ -7,19 +7,8 @@
   <title>Transcendence - User Profile</title>
 </head>
 <body class="bg-gray-900 text-white min-h-screen flex flex-col">
-  <!-- Navigation -->
-  <nav class="bg-gray-800 border-b border-gray-700">
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-      <div class="flex justify-between h-16">
-        <div class="flex items-center">
-          <a href="./index.html" class="text-2xl font-bold text-green-400">TRANSCENDENCE</a>
-        </div>
-        <div id="authContainer" class="flex items-center gap-3">
-          <!-- Populated by JavaScript -->
-        </div>
-      </div>
-    </div>
-  </nav>
+  <!-- Global Header -->
+  <div id="globalHeader"></div>
 
   <!-- Message Container -->
   <div id="messageContainer" class="fixed top-20 right-4 z-50 space-y-2"></div>
@@ -46,7 +35,7 @@
           <div class="w-32 h-32 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center text-6xl font-bold text-white shadow-lg" id="userAvatarPlaceholder">
             <!-- First letter of username -->
           </div>
-          <!-- Status badge - bottom left -->
+          <!-- Status badge - bottom right -->
           <div id="statusBadge" class="absolute bottom-1 right-1 w-6 h-6 rounded-full border-2 bg-gray-500 hidden"></div>
         </div>
       </div>
