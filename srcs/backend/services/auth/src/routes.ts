@@ -135,11 +135,14 @@ export default async function (app: FastifyInstance): Promise<void> {
     const accountId: string = req.jwtPayload!.id;
     const account: Account | null = await utils.accountFindById(app.prisma, accountId);
     if (!account) return reply.code(401).send({success: false, message: 'Nonexisting account'});
+    const oauthAccount: OAuthAccount | null = await utils.oauthAccountFindByAccountId(app.prisma, accountId);
+    const isOAuth = (!oauthAccount) ? false : true;
 
     return {
       success: true,
       message: 'Account info',
       account: account,
+      isOAuthAccount: isOAuth,
     };
   });
 
