@@ -16,6 +16,17 @@ interface Ball extends GameObject {
   speed: number;
 }
 
+interface Particle {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  life: number;
+  maxLife: number;
+  color: string;
+  size: number;
+}
+
 class PongGame {
   private canvas: HTMLCanvasElement;
   private ctx: CanvasRenderingContext2D;
@@ -27,6 +38,8 @@ class PongGame {
   private player1Score = 0;
   private player2Score = 0;
   private lastTime = 0;
+  private particles: Particle[] = [];
+  private animationFrame: number | null = null;
 
   private readonly PADDLE_SPEED = 400; // px/s 
   private readonly BALL_SPEED = 550; 
@@ -67,9 +80,8 @@ class PongGame {
     };
 
     this.setupEventListeners();
-
-    // Only draw once at first
-    this.draw();
+    this.lastTime = performance.now();
+    this.gameLoop(); 
   }
 
   private setupEventListeners(): void {
@@ -96,15 +108,25 @@ class PongGame {
   }
 
   private gameLoop(): void {
-    if (!this.gameRunning) return;
-
     const currentTime = performance.now();
     const deltaTime = (currentTime - this.lastTime) / 1000; // Convert to seconds
     this.lastTime = currentTime;
 
-    this.update(deltaTime);
+    this.updateParticles(deltaTime);
+
+    // Only update game physics when running
+    if (this.gameRunning) {
+      this.update(deltaTime);
+    }
     this.draw();
-    requestAnimationFrame(() => this.gameLoop());
+    this.animationFrame = requestAnimationFrame(() => this.gameLoop());
+  }
+
+  public destroy(): void {
+    if (this.animationFrame !== null) {
+      cancelAnimationFrame(this.animationFrame);
+      this.animationFrame = null;
+    }
   }
 
   private update(dt: number): void {
@@ -161,15 +183,48 @@ class PongGame {
     if (this.ball.x < 0) {
       // Player 2 scores
       this.player2Score++;
+      this.createGoalExplosion(0, this.ball.y + this.ball.height / 2);
       this.resetBall();
     } else if (this.ball.x > this.canvas.width) {
       // Player 1 scores
       this.player1Score++;
+      this.createGoalExplosion(this.canvas.width, this.ball.y + this.ball.height / 2);
       this.resetBall();
     }
 
     this.updateScore();
 
+  }
+
+  private createGoalExplosion(x: number, y: number): void {
+    const colors = ['#ef4444', '#f97316', '#facc15', '#ffffff', '#22d3ee'];
+    const particleCount = 30;
+
+    for (let i = 0; i < particleCount; i++) {
+      const angle = (Math.PI * 2 * i) / particleCount + (Math.random() - 0.5) * 0.5;
+      const speed = 150 + Math.random() * 100;
+      
+      this.particles.push({
+        x,
+        y,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed - 50, // slight upward bias
+        life: 0.8 + Math.random() * 0.4,
+        maxLife: 1.2,
+        color: colors[Math.floor(Math.random() * colors.length)],
+        size: 3 + Math.random() * 4,
+      });
+    }
+  }
+
+  private updateParticles(dt: number): void {
+    this.particles = this.particles.filter(p => {
+      p.x += p.vx * dt;
+      p.y += p.vy * dt;
+      p.vy += 200 * dt; // gravity
+      p.life -= dt;
+      return p.life > 0;
+    });
   }
 
   private checkCollision(rect1: GameObject, rect2: GameObject): boolean {
@@ -227,6 +282,15 @@ class PongGame {
     // Draw ball
     this.ctx.fillRect(this.ball.x, this.ball.y, this.ball.width, this.ball.height);
 
+    for (const p of this.particles) {
+      const alpha = p.life / p.maxLife;
+      this.ctx.globalAlpha = alpha;
+      this.ctx.fillStyle = p.color;
+      this.ctx.beginPath();
+      this.ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+      this.ctx.fill();
+    }
+    this.ctx.globalAlpha = 1;
 
     // If not started yet, show text
     if (!this.gameRunning) {
@@ -244,6 +308,11 @@ document.addEventListener("DOMContentLoaded", () => {
   const canvas = document.getElementById('gameCanvas') as HTMLCanvasElement;
 
   if (canvas) {
-    new PongGame(canvas); // start the game
+    const game = new PongGame(canvas);
+    
+    // Cleanup when leaving the page
+    window.addEventListener('beforeunload', () => {
+      game.destroy();
+    });
   }
 });
