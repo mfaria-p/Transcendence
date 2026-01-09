@@ -1,8 +1,8 @@
 // src/utils.ts
 
 import type {FastifyInstance} from 'fastify';
-import type {Account, RefreshToken, OAuthAccount} from './generated/prisma/client.js';
-import {Prisma, OAuthProvider} from './generated/prisma/client.js';
+import type {Account, RefreshToken, OAuthAccount} from '@prisma/client';
+import {Prisma, OAuthProvider} from '@prisma/client';
 import createError from '@fastify/error';
 import { OAuth2Client } from 'google-auth-library';
 import * as argon from 'argon2';
@@ -17,17 +17,20 @@ const DatabaseError = createError('DB_ERROR', 'Database error', 500);
 
 function handlePrismaError(error: unknown): never {
   if (error instanceof Prisma.PrismaClientKnownRequestError) {
-    const fields = error.meta?.target ?? [];
     switch (error.code) {
-      case 'P2002':
-        const fields = (error.meta?.target as string[]) || [];
-        const fieldList = fields.join(', ') || 'unknown field';
+      case 'P2002': {
+        const targetFields = (error.meta?.target as string[]) || [];
+        const fieldList = targetFields.join(', ') || 'unknown field';
         throw new AlreadyExistsError(`${fieldList} already exists`);
+      }
       case 'P2003':
-      case 'P2014': throw new InvalidRelationError();
+      case 'P2014':
+        throw new InvalidRelationError();
       case 'P2001':
-      case 'P2025': throw new NotFoundError();
-      default: throw new DatabaseError(`Unhandled Prisma error: ${error.code}`);
+      case 'P2025':
+        throw new NotFoundError();
+      default:
+        throw new DatabaseError(`Unhandled Prisma error: ${error.code}`);
     }
   }
   if (error instanceof Prisma.PrismaClientRustPanicError || error instanceof Prisma.PrismaClientInitializationError) {

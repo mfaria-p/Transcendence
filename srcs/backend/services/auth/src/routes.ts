@@ -3,8 +3,8 @@
 // oauth2
 
 import type {FastifyInstance, FastifyRequest, FastifyReply} from 'fastify';
-import type {Account, RefreshToken, OAuthAccount} from './generated/prisma/client.js';
-import {OAuthProvider} from './generated/prisma/client.js';
+import type {Account, RefreshToken, OAuthAccount} from '@prisma/client';
+import {OAuthProvider} from '@prisma/client';
 import {randomBytes} from 'crypto';
 import * as schemas from './schemas.js';
 import * as utils from './utils.js';

@@ -1,8 +1,8 @@
 // src/utils.ts
 
 import type {FastifyInstance} from 'fastify';
-import type {Profile, FriendRequest, FriendRequestStatus, Friendship} from './generated/prisma/client.js';
-import {Prisma} from './generated/prisma/client.js';
+import type {Profile, FriendRequest, FriendRequestStatus, Friendship} from '@prisma/client';
+import {Prisma} from '@prisma/client';
 import createError from '@fastify/error';
 
 const AlreadyExistsError = createError('ALREADY_EXISTS', 'Record already exists', 409);
@@ -14,9 +14,11 @@ function handlePrismaError(error: unknown): never {
   if (error instanceof Prisma.PrismaClientKnownRequestError) {
     switch (error.code) {
       case 'P2002':
-        const fields = (error.meta?.target as string[]) || [];
-        const fieldList = fields.join(', ') || 'unknown field';
-        throw new AlreadyExistsError(`${fieldList} already exists`);
+        {
+          const targetFields = (error.meta?.target as string[]) || [];
+          const fieldList = targetFields.join(', ') || 'unknown field';
+          throw new AlreadyExistsError(`${fieldList} already exists`);
+        }
       case 'P2003':
       case 'P2014': throw new InvalidRelationError();
       case 'P2001':

@@ -1,7 +1,7 @@
 // src/routes.ts
 
 import type {FastifyInstance, FastifyRequest, FastifyReply} from 'fastify';
-import type {Profile, FriendRequest, FriendRequestStatus, Friendship} from './generated/prisma/client.js';
+import type {Profile, FriendRequest, FriendRequestStatus, Friendship} from '@prisma/client';
 import * as schemas from './schemas.js';
 import * as utils from './utils.js';
 
