@@ -38,4 +38,15 @@
 - Estatistica: jogos
 - Gamification e espectadores
 
+1. web
+    - m framework
+        - backend
+            - typescript
+            - fastify
+            - node.js
+    - M websockets
+        - @fastify/ws
+    - m database ORM
+        - sqlite
+        - prisma
 

@@ -1,3 +1,5 @@
+import { connectPresenceSocket, disconnectPresenceSocket, addPresenceListener } from './utils-ws.js';
+import { verifySession, clearSessionAndRedirect, handleApiCall, showMessage, handleLogout } from './utils-api.js';
 import { initHeader } from './shared/header.js';
 
 interface User {
@@ -8,8 +10,6 @@ interface User {
 
 interface Profile {
   id: string;
-  name: string;
-  email: string;
   avatarUrl?: string;
 }
 
@@ -17,13 +17,14 @@ class ProfileManager {
   private currentUser: User | null = null;
   private currentProfile: Profile | null = null;
   private accessToken: string | null = null;
+  private friendOnlineStatus: Map<string, boolean> = new Map();
+  private isOAuthAccount: boolean = false;
 
   constructor() {
     this.init();
   }
 
   private async init(): Promise<void> {
-    // Check authentication
     const userStr = localStorage.getItem('user');
     this.accessToken = localStorage.getItem('access_token');
 
@@ -34,78 +35,142 @@ class ProfileManager {
 
     try {
       this.currentUser = JSON.parse(userStr);
+      await verifySession(this.accessToken);
+      
+      // Initialize global header
       initHeader({ active: 'profile' });
       
-      // Load profile from backend (required)
-      await this.loadProfile();
+      connectPresenceSocket();
+
+      this.setupPresenceListener();
       
+      await this.loadProfile();
       this.setupEventListeners();
       this.loadFriendRequests();
       this.loadFriends();
     } catch (error) {
       console.error('Init error:', error);
-      this.showMessage('Session expired or profile not found. Redirecting to login...', 'error');
+      showMessage('Session expired. Redirecting to login...', 'error');
       
-      // Clear local storage and redirect to login after 2 seconds
       setTimeout(() => {
-        localStorage.removeItem('access_token');
-        localStorage.removeItem('user');
-        window.location.href = './login.html';
+        clearSessionAndRedirect();
       }, 2000);
+    }
+  }
+
+  private setupPresenceListener(): void {
+    addPresenceListener((event, userId) => {
+      console.log(`[Profile] Presence update: ${userId} is now ${event}`);
+      
+      // Update the status in our map
+      this.friendOnlineStatus.set(userId, event === 'online');
+      
+      // Update the badge in the UI
+      this.updateFriendStatusBadge(userId, event === 'online');
+    });
+  }
+
+  private updateFriendStatusBadge(friendId: string, isOnline: boolean): void {
+    // Find ALL elements with this friend ID (there might be multiple contexts)
+    const friendElement = document.querySelector(`[data-friend-id="${friendId}"]`);
+    
+    if (!friendElement) {
+      console.warn(`Could not find friend element for ${friendId}`);
+      return;
+    }
+
+    // Look for status badge within this element
+    const statusBadge = friendElement.querySelector('.status-badge') as HTMLElement;
+    
+    if (statusBadge) {
+      // Update badge color
+      statusBadge.classList.remove('bg-green-500', 'bg-gray-500');
+      statusBadge.classList.add(isOnline ? 'bg-green-500' : 'bg-gray-500');
+      statusBadge.title = isOnline ? 'Online' : 'Offline';
+      
+      console.log(`Updated ${friendId} badge to ${isOnline ? 'ONLINE (green)' : 'OFFLINE (gray)'}`);
+    } else {
+      console.warn(`Could not find status-badge for friend ${friendId}`);
     }
   }
 
   private async loadProfile(): Promise<void> {
     try {
-      const response = await fetch('/api/user/me', {
-        headers: {
-          'Authorization': `Bearer ${this.accessToken}`,
-        },
-      });
+      const accountResponse = await handleApiCall(this.accessToken, '/api/auth/me');
+      if (accountResponse.ok) {
+        const data = await accountResponse.json();
+        this.isOAuthAccount = data.isOAuthAccount || false;
+        console.log('Is OAuth account:', this.isOAuthAccount);
+        console.log('Account data:', data);
+      }
+      const response = await handleApiCall(this.accessToken, '/api/user/me');
 
       if (response.ok) {
         const data = await response.json();
         this.currentProfile = data.profile;
         this.displayProfile();
-        console.log('Profile loaded from backend:', this.currentProfile);
       } else if (response.status === 404) {
-        // Profile doesn't exist - this shouldn't happen if provision works
-        throw new Error('Profile not found. Please log out and log in again.');
+        throw new Error('Profile not found');
       } else {
         throw new Error(`Failed to load profile: ${response.status}`);
       }
     } catch (error) {
+      if (error instanceof Error && error.message === 'Session expired') {
+        return;
+      }
       console.error('Load profile error:', error);
-      throw error; // Propagate error to init()
+      throw error;
     }
   }
 
   private displayProfile(): void {
-    if (!this.currentProfile) return;
+    if (!this.currentUser) return;
 
     const usernameEl = document.getElementById('profileUsername');
     const emailEl = document.getElementById('profileEmail');
     const avatarEl = document.getElementById('avatarPlaceholder');
     const avatarImg = document.getElementById('avatarImage') as HTMLImageElement;
 
-    if (usernameEl) usernameEl.textContent = this.currentProfile.name;
-    if (emailEl) emailEl.textContent = this.currentProfile.email;
+    if (usernameEl) usernameEl.textContent = this.currentUser.username;
+    if (emailEl) emailEl.textContent = this.currentUser.email;
     
-    // Display avatar image if URL exists, otherwise show initials
-    if (this.currentProfile.avatarUrl && avatarImg) {
+    if (this.currentProfile?.avatarUrl && avatarImg) {
       avatarImg.src = this.currentProfile.avatarUrl;
       avatarImg.classList.remove('hidden');
       avatarEl?.classList.add('hidden');
     } else if (avatarEl) {
       avatarImg?.classList.add('hidden');
       avatarEl.classList.remove('hidden');
-      const displayName = this.currentProfile.name || this.currentUser?.username || '?';
-      avatarEl.textContent = displayName.charAt(0).toUpperCase();
+      avatarEl.textContent = this.currentUser.username.charAt(0).toUpperCase();
+    }
+
+    if (this.isOAuthAccount) {
+      // Hide email edit button
+      const editEmailBtn = document.getElementById('editEmailBtn');
+      console.log('editEmailBtn found:', !!editEmailBtn);
+      if (editEmailBtn) {
+        editEmailBtn.style.display = 'none';
+        console.log('Hidden email edit button');
+      }
+      
+      // Hide entire password section - find the parent div
+      const editPasswordBtn = document.getElementById('editPasswordBtn');
+      console.log('editPasswordBtn found:', !!editPasswordBtn);
+      
+      if (editPasswordBtn) {
+        // Find the closest parent with bg-gray-700 class (the password section container)
+        const passwordSection = editPasswordBtn.closest('.bg-gray-700') as HTMLElement;
+        console.log('passwordSection found:', !!passwordSection);
+        
+        if (passwordSection) {
+          passwordSection.style.display = 'none';
+          console.log('Hidden password section');
+        }
+      }
     }
   }
 
   private setupEventListeners(): void {
-    // Avatar change button
     document.getElementById('changePhotoBtn')?.addEventListener('click', () => this.openAvatarModal());
     document.getElementById('cancelAvatarBtn')?.addEventListener('click', () => this.closeAvatarModal());
     document.getElementById('avatarForm')?.addEventListener('submit', (e) => {
@@ -113,43 +178,32 @@ class ProfileManager {
       this.saveAvatar();
     });
 
-    // Preview avatar as user types
-    const avatarUrlInput = document.getElementById('avatarUrlInput') as HTMLInputElement;
-    avatarUrlInput?.addEventListener('input', () => {
-      const url = avatarUrlInput.value.trim();
+    document.getElementById('avatarUrlInput')?.addEventListener('input', (e) => {
+      const input = e.target as HTMLInputElement;
+      const url = input.value.trim();
       if (url) {
         this.previewAvatar(url);
-      } else {
-        document.getElementById('avatarPreview')?.classList.add('hidden');
       }
     });
 
-    // Username edit buttons
     document.getElementById('editUsernameBtn')?.addEventListener('click', () => this.startEditUsername());
-    document.getElementById('saveUsernameBtn')?.addEventListener('click', () => this.saveUsername());
     document.getElementById('cancelUsernameBtn')?.addEventListener('click', () => this.cancelEditUsername());
+    document.getElementById('saveUsernameBtn')?.addEventListener('click', () => this.saveUsername());
 
-    // Email edit buttons
     document.getElementById('editEmailBtn')?.addEventListener('click', () => this.startEditEmail());
-    document.getElementById('saveEmailBtn')?.addEventListener('click', () => this.saveEmail());
     document.getElementById('cancelEmailBtn')?.addEventListener('click', () => this.cancelEditEmail());
+    document.getElementById('saveEmailBtn')?.addEventListener('click', () => this.saveEmail());
 
-    // Password edit buttons
     document.getElementById('editPasswordBtn')?.addEventListener('click', () => this.startEditPassword());
-    document.getElementById('savePasswordBtn')?.addEventListener('click', () => this.savePassword());
     document.getElementById('cancelPasswordBtn')?.addEventListener('click', () => this.cancelEditPassword());
-    
-    // Real-time password validation
-    const newPasswordInput = document.getElementById('newPasswordInput') as HTMLInputElement;
-    newPasswordInput?.addEventListener('input', () => this.updatePasswordRequirements());
+    document.getElementById('savePasswordBtn')?.addEventListener('click', () => this.savePassword());
 
-    // Real-time user search
-    const searchInput = document.getElementById('searchUserInput') as HTMLInputElement;
-    let searchTimeout: number;
-    searchInput?.addEventListener('input', () => {
-      clearTimeout(searchTimeout);
-      searchTimeout = window.setTimeout(() => this.searchUsers(), 300);
-    });
+    document.getElementById('newPasswordInput')?.addEventListener('input', () => this.updatePasswordRequirements());
+
+    const searchInput = document.getElementById('searchUserInput');
+    searchInput?.addEventListener('input', () => this.searchUsers());
+
+    document.getElementById('deleteAccountBtn')?.addEventListener('click', () => this.deleteAccount());
   }
 
   private openAvatarModal(): void {
@@ -196,7 +250,7 @@ class ProfileManager {
     };
     testImg.onerror = () => {
       preview?.classList.add('hidden');
-      this.showMessage('Invalid image URL', 'error');
+      showMessage('Invalid image URL', 'error');
     };
     testImg.src = url;
   }
@@ -206,65 +260,37 @@ class ProfileManager {
     const url = avatarUrlInput?.value.trim();
 
     if (!url) {
-      this.showMessage('Please enter an image URL', 'error');
+      showMessage('Please enter an image URL', 'error');
       return;
     }
 
-    console.log('Saving avatar with data:', {
-      username: this.currentProfile?.name || this.currentUser?.username || '',
-      email: this.currentProfile?.email || this.currentUser?.email || '',
-      avatarUrl: url,
-    });
-
     try {
-      const response = await fetch('/api/user/provision', {
+      const response = await handleApiCall(this.accessToken, '/api/user/provision', {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${this.accessToken}`,
         },
         body: JSON.stringify({
-          username: this.currentProfile?.name || this.currentUser?.username || '',
-          email: this.currentProfile?.email || this.currentUser?.email || '',
           avatarUrl: url,
         }),
       });
-
-      console.log('Response status:', response.status);
       
       if (response.ok) {
         const data = await response.json();
-        console.log('Response data:', data);
         this.currentProfile = data.profile;
         this.displayProfile();
         this.closeAvatarModal();
-        this.showMessage('Profile picture updated!', 'success');
+        showMessage('Profile picture updated!', 'success');
       } else {
         const data = await response.json();
-        console.error('Error response:', data);
-        this.showMessage(data.message || 'Failed to update avatar', 'error');
+        showMessage(data.message || 'Failed to update profile picture', 'error');
       }
     } catch (error) {
-      console.error('Save avatar error:', error);
-      this.showMessage('Failed to update avatar', 'error');
+      if (error instanceof Error && error.message !== 'Session expired') {
+        console.error('Save avatar error:', error);
+        showMessage('Failed to update profile picture', 'error');
+      }
     }
-  }
-
-  private showMessage(message: string, type: 'success' | 'error'): void {
-    const container = document.getElementById('messageContainer');
-    if (!container) return;
-
-    const bgColor = type === 'success' ? 'bg-green-600' : 'bg-red-600';
-    const messageEl = document.createElement('div');
-    messageEl.className = `${bgColor} text-white px-4 py-3 rounded shadow-lg mb-2 transition-opacity`;
-    messageEl.textContent = message;
-
-    container.appendChild(messageEl);
-
-    setTimeout(() => {
-      messageEl.style.opacity = '0';
-      setTimeout(() => messageEl.remove(), 300);
-    }, 3000);
   }
 
   // Username edit methods
@@ -273,8 +299,8 @@ class ProfileManager {
     const usernameForm = document.getElementById('usernameEditForm');
     const usernameInput = document.getElementById('usernameInput') as HTMLInputElement;
     
-    if (usernameInput && this.currentProfile) {
-      usernameInput.value = this.currentProfile.name;
+    if (usernameInput && this.currentUser) {
+      usernameInput.value = this.currentUser.username;
     }
     
     usernameDisplay?.classList.add('hidden');
@@ -294,47 +320,56 @@ class ProfileManager {
     const newUsername = usernameInput?.value.trim();
 
     if (!newUsername) {
-      this.showMessage('Username cannot be empty', 'error');
+      showMessage('Username cannot be empty', 'error');
       return;
     }
 
     if (newUsername.length < 3 || newUsername.length > 20) {
-      this.showMessage('Username must be between 3 and 20 characters', 'error');
+      showMessage('Username must be between 3 and 20 characters', 'error');
       return;
     }
 
     if (!/^[a-zA-Z0-9_]+$/.test(newUsername)) {
-      this.showMessage('Username can only contain letters, numbers, and underscores', 'error');
+      showMessage('Username can only contain letters, numbers, and underscores', 'error');
       return;
     }
 
     try {
-      const response = await fetch('/api/user/provision', {
+      const response = await handleApiCall(this.accessToken, '/api/auth/me', {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${this.accessToken}`,
         },
         body: JSON.stringify({
           username: newUsername,
-          email: this.currentProfile?.email || this.currentUser?.email || '',
-          avatarUrl: this.currentProfile?.avatarUrl,
+          email: this.currentUser?.email,
         }),
       });
 
       if (response.ok) {
         const data = await response.json();
-        this.currentProfile = data.profile;
+        
+        if (this.currentUser) {
+          this.currentUser.username = data.account.username;
+          localStorage.setItem('user', JSON.stringify(this.currentUser));
+        }
+        
         this.displayProfile();
         this.cancelEditUsername();
-        this.showMessage('Username updated successfully!', 'success');
+        showMessage('Username updated successfully!', 'success');
+        initHeader({ active: 'profile' });
       } else {
         const data = await response.json();
-        this.showMessage(data.message || 'Failed to update username', 'error');
+        const message = response.status === 409 
+          ? 'Username already taken' 
+          : (data.message || 'Failed to update username');
+        showMessage(message, 'error');
       }
     } catch (error) {
-      console.error('Save username error:', error);
-      this.showMessage('Failed to update username', 'error');
+      if (error instanceof Error && error.message !== 'Session expired') {
+        console.error('Save username error:', error);
+        showMessage('Failed to update username', 'error');
+      }
     }
   }
 
@@ -344,8 +379,8 @@ class ProfileManager {
     const emailForm = document.getElementById('emailEditForm');
     const emailInput = document.getElementById('emailInput') as HTMLInputElement;
     
-    if (emailInput && this.currentProfile) {
-      emailInput.value = this.currentProfile.email;
+    if (emailInput && this.currentUser) {
+      emailInput.value = this.currentUser.email;
     }
     
     emailDisplay?.classList.add('hidden');
@@ -365,53 +400,65 @@ class ProfileManager {
     const newEmail = emailInput?.value.trim();
 
     if (!newEmail) {
-      this.showMessage('Email cannot be empty', 'error');
+      showMessage('Email cannot be empty', 'error');
       return;
     }
 
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(newEmail)) {
-      this.showMessage('Please enter a valid email address', 'error');
+      showMessage('Please enter a valid email address', 'error');
       return;
     }
 
     try {
-      const response = await fetch('/api/user/provision', {
+      const response = await handleApiCall(this.accessToken, '/api/auth/me', {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${this.accessToken}`,
         },
         body: JSON.stringify({
-          username: this.currentProfile?.name || this.currentUser?.username || '',
+          username: this.currentUser?.username,
           email: newEmail,
-          avatarUrl: this.currentProfile?.avatarUrl,
         }),
       });
 
       if (response.ok) {
         const data = await response.json();
-        this.currentProfile = data.profile;
+
+        if (this.currentUser) {
+          this.currentUser.email = data.account.email;
+          localStorage.setItem('user', JSON.stringify(this.currentUser));
+        }
+
         this.displayProfile();
         this.cancelEditEmail();
-        this.showMessage('Email updated successfully!', 'success');
+        showMessage('Email updated successfully!', 'success');
       } else {
         const data = await response.json();
-        this.showMessage(data.message || 'Failed to update email', 'error');
+        const message = response.status === 409 
+          ? 'Email already in use' 
+          : (data.message || 'Failed to update email');
+        showMessage(message, 'error');
       }
     } catch (error) {
-      console.error('Save email error:', error);
-      this.showMessage('Failed to update email', 'error');
+      if (error instanceof Error && error.message !== 'Session expired') {
+        console.error('Save email error:', error);
+        showMessage('Failed to update email', 'error');
+      }
     }
   }
 
   // Password edit methods
   private startEditPassword(): void {
+    const passwordDisplay = document.getElementById('profilePassword');
     const passwordForm = document.getElementById('passwordEditForm');
+    
+    passwordDisplay?.classList.add('hidden');
     passwordForm?.classList.remove('hidden');
   }
 
   private cancelEditPassword(): void {
+    const passwordDisplay = document.getElementById('profilePassword');
     const passwordForm = document.getElementById('passwordEditForm');
     const currentPasswordInput = document.getElementById('currentPasswordInput') as HTMLInputElement;
     const newPasswordInput = document.getElementById('newPasswordInput') as HTMLInputElement;
@@ -421,6 +468,7 @@ class ProfileManager {
     if (newPasswordInput) newPasswordInput.value = '';
     if (confirmNewPasswordInput) confirmNewPasswordInput.value = '';
     
+    passwordDisplay?.classList.remove('hidden');
     passwordForm?.classList.add('hidden');
   }
 
@@ -474,12 +522,12 @@ class ProfileManager {
 
     // Validate inputs
     if (!currentPassword) {
-      this.showMessage('Please enter your current password', 'error');
+      showMessage('Please enter your current password', 'error');
       return;
     }
 
     if (!newPassword) {
-      this.showMessage('Please enter a new password', 'error');
+      showMessage('Please enter a new password', 'error');
       return;
     }
 
@@ -490,21 +538,20 @@ class ProfileManager {
     const hasNumber = /[0-9]/.test(newPassword);
 
     if (!hasMinLength || !hasUppercase || !hasLowercase || !hasNumber) {
-      this.showMessage('New password does not meet all requirements', 'error');
+      showMessage('New password does not meet all requirements', 'error');
       return;
     }
 
     if (newPassword !== confirmNewPassword) {
-      this.showMessage('New passwords do not match', 'error');
+      showMessage('New passwords do not match', 'error');
       return;
     }
 
     try {
-      const response = await fetch('/api/auth/change-password', { //does not exist yet
-        method: 'POST',
+      const response = await handleApiCall(this.accessToken, '/api/auth/me/password', {
+        method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${this.accessToken}`,
         },
         body: JSON.stringify({
           currentPassword: currentPassword,
@@ -514,14 +561,16 @@ class ProfileManager {
 
       if (response.ok) {
         this.cancelEditPassword();
-        this.showMessage('Password updated successfully!', 'success');
+        showMessage('Password updated successfully!', 'success');
       } else {
         const data = await response.json();
-        this.showMessage(data.message || 'Failed to update password', 'error');
+        showMessage(data.message || 'Failed to update password', 'error');
       }
     } catch (error) {
-      console.error('Save password error:', error);
-      this.showMessage('Failed to update password', 'error');
+      if (error instanceof Error && error.message !== 'Session expired') {
+        console.error('Save password error:', error);
+        showMessage('Failed to update password', 'error');
+      }
     }
   }
 
@@ -540,67 +589,71 @@ class ProfileManager {
     }
 
     try {
-      const response = await fetch('/api/user/', {
-        headers: {
-          'Authorization': `Bearer ${this.accessToken}`,
-        },
-      });
+      const response = await handleApiCall(this.accessToken, `/api/auth/search?prefix=${encodeURIComponent(searchTerm)}`);
 
       if (response.ok) {
         const data = await response.json();
-        const allProfiles = data.profiles || [];
-        
-        // Filter profiles by search term (case-insensitive)
-        const filteredProfiles = allProfiles.filter((profile: any) => {
-          const searchLower = searchTerm.toLowerCase();
-          return profile.name.toLowerCase().includes(searchLower) || 
-                 profile.email.toLowerCase().includes(searchLower);
-        });
+        const accounts = data.accounts || [];
         
         searchResults.innerHTML = '';
         
-        if (filteredProfiles.length === 0) {
+        if (accounts.length === 0) {
           searchResults.innerHTML = '<p class="text-gray-400 text-sm p-3 bg-gray-700 rounded-lg">No users found</p>';
           return;
         }
 
-        filteredProfiles.forEach((profile: any) => {
+        // Fetch avatars for filtered accounts
+        for (const account of accounts) {
           // Don't show current user in search results
-          if (this.currentUser && profile.id === this.currentUser.id) return;
+          if (this.currentUser && account.id === this.currentUser.id) continue;
+          
+          // Try to fetch avatar from user service
+          let avatarUrl = null;
+          try {
+            const profileRes = await handleApiCall(this.accessToken, `/api/user/${account.id}`);
+            if (profileRes.ok) {
+              const profileData = await profileRes.json();
+              avatarUrl = profileData.profile?.avatarUrl;
+            }
+          } catch (error) {
+            console.log('No avatar for user:', account.id);
+          }
           
           const userDiv = document.createElement('div');
           userDiv.className = 'flex items-center p-3 bg-gray-700 rounded-lg mt-2 hover:bg-gray-600 transition cursor-pointer';
           
           // Show avatar image if exists, otherwise show initial
-          const avatarHtml = profile.avatarUrl 
-            ? `<img src="${profile.avatarUrl}" class="w-10 h-10 rounded-full object-cover mr-3" alt="${profile.name}'s avatar" />`
+          const avatarHtml = avatarUrl
+            ? `<img src="${avatarUrl}" class="w-10 h-10 rounded-full object-cover mr-3" alt="${account.username}'s avatar" />`
             : `<div class="w-10 h-10 rounded-full bg-blue-500 flex items-center justify-center text-white font-bold mr-3">
-                ${profile.name.charAt(0).toUpperCase()}
+                ${account.username.charAt(0).toUpperCase()}
               </div>`;
           
           userDiv.innerHTML = `
             <div class="flex items-center">
               ${avatarHtml}
               <div>
-                <p class="text-white font-semibold">${profile.name}</p>
-                <p class="text-gray-400 text-sm">${profile.email}</p>
+                <p class="text-white font-semibold">${account.username}</p>
+                <p class="text-gray-400 text-sm">${account.email}</p>
               </div>
             </div>
           `;
           
           // Make the whole div clickable to view user profile
           userDiv.addEventListener('click', () => {
-            window.location.href = `./other-profiles.html?id=${profile.id}`;
+            window.location.href = `./other-profiles.html?id=${account.id}`;
           });
           
           searchResults.appendChild(userDiv);
-        });
+        }
       } else {
-        this.showMessage('Failed to search users', 'error');
+        showMessage('Failed to search users', 'error');
       }
     } catch (error) {
-      console.error('Search users error:', error);
-      this.showMessage('Failed to search users', 'error');
+      if (error instanceof Error && error.message !== 'Session expired') {
+        console.error('Search users error:', error);
+        showMessage('Failed to search users', 'error');
+      }
     }
   }
 
@@ -609,11 +662,7 @@ class ProfileManager {
     if (!friendRequestsList) return;
 
     try {
-      const response = await fetch('/api/user/friend-request', {
-        headers: {
-          'Authorization': `Bearer ${this.accessToken}`,
-        },
-      });
+      const response = await handleApiCall(this.accessToken, '/api/user/friend-request/received');
 
       if (response.ok) {
         const data = await response.json();
@@ -628,117 +677,138 @@ class ProfileManager {
           return;
         }
 
-        // Fetch user profiles using fromUserId
+        // Fetch user profiles for each request
         for (const request of requests) {
-          console.log('Processing request:', request);
+          const fromProfileId = request.fromProfileId;
           
-          // Always fetch the user profile using fromUserId
           try {
-            const userResponse = await fetch(`/api/user/${request.fromUserId}`, {
-              headers: {
-                'Authorization': `Bearer ${this.accessToken}`,
-              },
+            const authResponse = await handleApiCall(this.accessToken, `/api/auth/${fromProfileId}`);
+            
+            let username = 'Unknown User';
+            let email = '';
+            
+            if (authResponse.ok) {
+              const authData = await authResponse.json();
+              username = authData.account.username;
+              email = authData.account.email;
+            }
+            
+            // Fetch profile from user service for avatar
+            let avatarUrl: string | null = null;
+            try {
+              const profileResponse = await handleApiCall(this.accessToken, `/api/user/${fromProfileId}`);
+              
+              if (profileResponse.ok) {
+                const profileData = await profileResponse.json();
+                avatarUrl = profileData.profile?.avatarUrl || null;
+              }
+            } catch (error) {
+              console.log('No avatar for user:', fromProfileId);
+            }
+            
+            // Create request card
+            const requestDiv = document.createElement('div');
+            requestDiv.className = 'flex items-center justify-between p-4 bg-gray-700 rounded-lg mb-2';
+            
+            const avatarHtml = avatarUrl
+              ? `<img src="${avatarUrl}" class="w-12 h-12 rounded-full object-cover mr-4" alt="${username}'s avatar" />`
+              : `<div class="w-12 h-12 rounded-full bg-purple-500 flex items-center justify-center text-white font-bold mr-4">
+                  ${username.charAt(0).toUpperCase()}
+                </div>`;
+            
+            requestDiv.innerHTML = `
+              <div class="flex items-center cursor-pointer flex-1" data-profile-id="${fromProfileId}">
+                ${avatarHtml}
+                <div>
+                  <p class="text-white font-semibold">${username}</p>
+                  <p class="text-gray-400 text-sm">${email}</p>
+                </div>
+              </div>
+              <div class="flex gap-2">
+                <button class="accept-btn px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition" data-profile-id="${fromProfileId}">
+                  Accept
+                </button>
+                <button class="decline-btn px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition" data-profile-id="${fromProfileId}">
+                  Decline
+                </button>
+              </div>
+            `;
+
+            // Make profile info clickable
+            const profileClick = requestDiv.querySelector('.flex.items-center.cursor-pointer');
+            profileClick?.addEventListener('click', () => {
+              window.location.href = `./other-profiles.html?id=${fromProfileId}`;
             });
             
-            if (userResponse.ok) {
-              const userData = await userResponse.json();
-              request.fromUser = userData.profile;
-            }
+            const acceptBtn = requestDiv.querySelector('.accept-btn');
+            const declineBtn = requestDiv.querySelector('.decline-btn');
+            
+            acceptBtn?.addEventListener('click', (e) => {
+              e.stopPropagation(); // Prevent profile click
+              this.acceptFriendRequest(fromProfileId);
+            });
+            
+            declineBtn?.addEventListener('click', (e) => {
+              e.stopPropagation(); // Prevent profile click
+              this.declineFriendRequest(fromProfileId);
+            });
+
+            friendRequestsList.appendChild(requestDiv);
           } catch (error) {
-            console.error('Failed to fetch user profile:', error);
-            // Set a default fromUser if fetch fails
-            request.fromUser = {
-              name: 'Unknown User',
-              email: '',
-              avatarUrl: null
-            };
+            console.error('Failed to fetch user info:', error);
           }
-          
-          const requestDiv = document.createElement('div');
-          requestDiv.className = 'flex items-center justify-between p-4 bg-gray-700 rounded-lg mb-2';
-          
-          const avatarHtml = request.fromUser.avatarUrl 
-            ? `<img src="${request.fromUser.avatarUrl}" class="w-12 h-12 rounded-full object-cover mr-4" alt="${request.fromUser.name}'s avatar" />`
-            : `<div class="w-12 h-12 rounded-full bg-purple-500 flex items-center justify-center text-white font-bold mr-4">
-                ${request.fromUser.name.charAt(0).toUpperCase()}
-              </div>`;
-          
-          requestDiv.innerHTML = `
-            <div class="flex items-center">
-              ${avatarHtml}
-              <div>
-                <p class="text-white font-semibold">${request.fromUser.name}</p>
-                <p class="text-gray-400 text-sm">${request.fromUser.email}</p>
-              </div>
-            </div>
-            <div class="flex gap-2">
-              <button class="accept-btn px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition" data-user-id="${request.fromUserId}">
-                Accept
-              </button>
-              <button class="decline-btn px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition" data-user-id="${request.fromUserId}">
-                Decline
-              </button>
-            </div>
-          `;
-          
-          const acceptBtn = requestDiv.querySelector('.accept-btn');
-          const declineBtn = requestDiv.querySelector('.decline-btn');
-          
-          acceptBtn?.addEventListener('click', () => this.acceptFriendRequest(request.fromUserId));
-          declineBtn?.addEventListener('click', () => this.declineFriendRequest(request.fromUserId));
-          
-          friendRequestsList.appendChild(requestDiv);
         }
       } else {
-        this.showMessage('Failed to load friend requests', 'error');
+        showMessage('Failed to load friend requests', 'error');
       }
     } catch (error) {
-      console.error('Load friend requests error:', error);
-      this.showMessage('Failed to load friend requests', 'error');
+      if (error instanceof Error && error.message !== 'Session expired') {
+        console.error('Load friend requests error:', error);
+        showMessage('Failed to load friend requests', 'error');
+      }
     }
   }
 
-  private async acceptFriendRequest(fromUserId: string): Promise<void> {
+  private async acceptFriendRequest(fromProfileId: string): Promise<void> {
     try {
-      const response = await fetch(`/api/user/friend-request/${fromUserId}/accept`, {
+      const response = await handleApiCall(this.accessToken, `/api/user/friend-request/${fromProfileId}/accept`, {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${this.accessToken}`,
-        },
       });
 
       if (response.ok) {
-        this.showMessage('Friend request accepted!', 'success');
+        showMessage('Friend request accepted!', 'success');
         await this.loadFriendRequests();
+        await this.loadFriends();
       } else {
         const data = await response.json();
-        this.showMessage(data.message || 'Failed to accept friend request', 'error');
+        showMessage(data.message || 'Failed to accept friend request', 'error');
       }
     } catch (error) {
-      console.error('Accept friend request error:', error);
-      this.showMessage('Failed to accept friend request', 'error');
+      if (error instanceof Error && error.message !== 'Session expired') {
+        console.error('Accept friend request error:', error);
+        showMessage('Failed to accept friend request', 'error');
+      }
     }
   }
 
-  private async declineFriendRequest(fromUserId: string): Promise<void> {
+  private async declineFriendRequest(fromProfileId: string): Promise<void> {
     try {
-      const response = await fetch(`/api/user/friend-request/${fromUserId}/decline`, {
+      const response = await handleApiCall(this.accessToken, `/api/user/friend-request/${fromProfileId}/decline`, {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${this.accessToken}`,
-        },
       });
 
       if (response.ok) {
-        this.showMessage('Friend request declined', 'success');
+        showMessage('Friend request declined', 'success');
         await this.loadFriendRequests();
       } else {
         const data = await response.json();
-        this.showMessage(data.message || 'Failed to decline friend request', 'error');
+        showMessage(data.message || 'Failed to decline friend request', 'error');
       }
     } catch (error) {
-      console.error('Decline friend request error:', error);
-      this.showMessage('Failed to decline friend request', 'error');
+      if (error instanceof Error && error.message !== 'Session expired') {
+        console.error('Decline friend request error:', error);
+        showMessage('Failed to decline friend request', 'error');
+      }
     }
   }
 
@@ -747,11 +817,7 @@ class ProfileManager {
     if (!friendsList) return;
 
     try {
-      const response = await fetch('/api/user/friend', {
-        headers: {
-          'Authorization': `Bearer ${this.accessToken}`,
-        },
-      });
+      const response = await handleApiCall(this.accessToken, '/api/user/friend');
 
       if (response.ok) {
         const data = await response.json();
@@ -766,66 +832,101 @@ class ProfileManager {
 
         // Fetch friend profiles
         for (const friendship of friendships) {
-          // Determine which user is the friend (not current user)
-          const friendId = friendship.userAId === this.currentUser?.id 
-            ? friendship.userBId 
-            : friendship.userAId;
+          // Determine which profile is the friend (not current user)
+          const friendId = friendship.profileAId === this.currentUser?.id 
+            ? friendship.profileBId 
+            : friendship.profileAId;
           
           try {
-            const userResponse = await fetch(`/api/user/${friendId}`, {
-              headers: {
-                'Authorization': `Bearer ${this.accessToken}`,
-              },
+            const authResponse = await handleApiCall(this.accessToken, `/api/auth/${friendId}`);
+            
+            if (!authResponse.ok) continue;
+            
+            const authData = await authResponse.json();
+            const account = authData.account;
+            
+            // Fetch profile from user service for avatar
+            let avatarUrl: string | null = null;
+            try {
+              const profileResponse = await handleApiCall(this.accessToken, `/api/user/${friendId}`);
+              
+              if (profileResponse.ok) {
+                const profileData = await profileResponse.json();
+                avatarUrl = profileData.profile?.avatarUrl || null;
+              }
+            } catch (error) {
+              console.log('No avatar for friend:', friendId);
+            }
+            
+            // Fetch online status from ws service
+            let isOnline = false;
+            try {
+              const presenceResponse = await handleApiCall(this.accessToken, `/api/realtime/presence/${friendId}`);
+              
+              if (presenceResponse.ok) {
+                const presenceData = await presenceResponse.json();
+                isOnline = presenceData.online || false;
+                this.friendOnlineStatus.set(friendId, isOnline);
+              }
+            } catch (error) {
+              console.log('Could not check online status for friend:', friendId);
+            }
+            
+            const friendDiv = document.createElement('div');
+            friendDiv.className = 'flex items-center justify-between p-4 bg-gray-700 rounded-lg';
+
+            // Avatar with status badge
+            const avatarHtml = avatarUrl
+              ? `<div class="relative inline-block mr-4">
+                  <img src="${avatarUrl}" class="w-12 h-12 rounded-full object-cover" alt="${account.username}'s avatar" />
+                  <div class="status-badge absolute bottom-0 right-0 w-4 h-4 rounded-full border-2 border-gray-700 ${isOnline ? 'bg-green-500' : 'bg-gray-500'}" title="${isOnline ? 'Online' : 'Offline'}"></div>
+                </div>`
+              : `<div class="relative inline-block mr-4">
+                  <div class="w-12 h-12 rounded-full bg-blue-500 flex items-center justify-center text-white font-bold">
+                    ${account.username.charAt(0).toUpperCase()}
+                  </div>
+                  <div class="status-badge absolute bottom-0 right-0 w-4 h-4 rounded-full border-2 border-gray-700 ${isOnline ? 'bg-green-500' : 'bg-gray-500'}" title="${isOnline ? 'Online' : 'Offline'}"></div>
+                </div>`;
+            
+            friendDiv.innerHTML = `
+              <div class="flex items-center cursor-pointer flex-1" data-friend-id="${friendId}">
+                ${avatarHtml}
+                <div>
+                  <p class="text-white font-semibold">${account.username}</p>
+                  <p class="text-gray-400 text-sm">${account.email}</p>
+                </div>
+              </div>
+              <button class="remove-friend-btn px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition" data-friend-id="${friendId}">
+                Remove
+              </button>
+            `;
+            
+            // Make profile clickable
+            const profileClick = friendDiv.querySelector('[data-friend-id]');
+            profileClick?.addEventListener('click', () => {
+              window.location.href = `./other-profiles.html?id=${friendId}`;
             });
             
-            if (userResponse.ok) {
-              const userData = await userResponse.json();
-              const friend = userData.profile;
-              
-              const friendDiv = document.createElement('div');
-              friendDiv.className = 'flex items-center justify-between p-4 bg-gray-700 rounded-lg';
-              
-              const avatarHtml = friend.avatarUrl 
-                ? `<img src="${friend.avatarUrl}" class="w-12 h-12 rounded-full object-cover mr-4" alt="${friend.name}'s avatar" />`
-                : `<div class="w-12 h-12 rounded-full bg-blue-500 flex items-center justify-center text-white font-bold mr-4">
-                    ${friend.name.charAt(0).toUpperCase()}
-                  </div>`;
-              
-              friendDiv.innerHTML = `
-                <div class="flex items-center cursor-pointer flex-1" data-friend-id="${friendId}">
-                  ${avatarHtml}
-                  <div>
-                    <p class="text-white font-semibold">${friend.name}</p>
-                    <p class="text-gray-400 text-sm">${friend.email}</p>
-                  </div>
-                </div>
-                <button class="remove-friend-btn px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition" data-friend-id="${friendId}">
-                  Remove
-                </button>
-              `;
-              
-              // Make profile clickable
-              const profileClick = friendDiv.querySelector('[data-friend-id]');
-              profileClick?.addEventListener('click', () => {
-                window.location.href = `./other-profiles.html?id=${friendId}`;
-              });
-              
-              // Add remove button handler
-              const removeBtn = friendDiv.querySelector('.remove-friend-btn');
-              removeBtn?.addEventListener('click', () => this.removeFriend(friendId));
-              
-              friendsList.appendChild(friendDiv);
-            }
+            // Add remove button handler
+            const removeBtn = friendDiv.querySelector('.remove-friend-btn');
+            removeBtn?.addEventListener('click', (e) => {
+              e.stopPropagation(); // Prevent profile click
+              this.removeFriend(friendId);
+            });
+            
+            friendsList.appendChild(friendDiv);
           } catch (error) {
             console.error('Failed to fetch friend profile:', error);
           }
         }
       } else {
-        this.showMessage('Failed to load friends', 'error');
+        showMessage('Failed to load friends', 'error');
       }
     } catch (error) {
-      console.error('Load friends error:', error);
-      this.showMessage('Failed to load friends', 'error');
+      if (error instanceof Error && error.message !== 'Session expired') {
+        console.error('Load friends error:', error);
+        showMessage('Failed to load friends', 'error');
+      }
     }
   }
 
@@ -833,40 +934,68 @@ class ProfileManager {
     if (!confirm('Are you sure you want to remove this friend?')) return;
 
     try {
-      const response = await fetch(`/api/user/friend/${friendId}`, {
+      const response = await handleApiCall(this.accessToken, `/api/user/friend/${friendId}`, {
         method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${this.accessToken}`,
-        },
       });
 
       if (response.ok) {
-        this.showMessage('Friend removed', 'success');
+        showMessage('Friend removed', 'success');
         await this.loadFriends();
       } else {
         const data = await response.json();
-        this.showMessage(data.message || 'Failed to remove friend', 'error');
+        showMessage(data.message || 'Failed to remove friend', 'error');
       }
     } catch (error) {
-      console.error('Remove friend error:', error);
-      this.showMessage('Failed to remove friend', 'error');
+      if (error instanceof Error && error.message !== 'Session expired') {
+        console.error('Remove friend error:', error);
+        showMessage('Failed to remove friend', 'error');
+      }
     }
   }
 
-  private async handleLogout(): Promise<void> {
+  private async deleteAccount(): Promise<void> {
+    const confirmed = confirm(
+      'WARNING: This will permanently delete your account!\n\n' +
+      'This action cannot be undone. You will lose:\n' +
+      '• Your profile and avatar\n' +
+      '• All your friends and friend requests\n' +
+      '• All other associated data\n\n' +
+      'Are you absolutely sure you want to continue?'
+    );
+
+    if (!confirmed) return;
+
+    const username = prompt(
+      `To confirm deletion, please type your username: "${this.currentUser?.username}"`
+    );
+
+    if (username !== this.currentUser?.username) {
+      if (username !== null) {
+        showMessage('Username does not match. Account deletion cancelled.', 'error');
+      }
+      return;
+    }
+
     try {
-      await fetch('/api/auth/logout', {
-        method: 'POST',
-        credentials: 'include',
+      const response = await handleApiCall(this.accessToken, `/api/auth/me`, {
+        method: 'DELETE',
       });
+
+      if (response.ok) {
+        showMessage('Account deleted successfully', 'success');
+        window.location.href = '/login.html';
+      } else {
+        const data = await response.json();
+        showMessage(data.message || 'Failed to delete account', 'error');
+      }
     } catch (error) {
-      console.error('Logout error:', error);
-    } finally {
-      localStorage.removeItem('access_token');
-      localStorage.removeItem('user');
-      window.location.href = './login.html';
+      if (error instanceof Error && error.message !== 'Session expired') {
+        console.error('Delete account error:', error);
+        showMessage('Failed to delete account', 'error');
+      }
     }
   }
+
 }
 
 document.addEventListener('DOMContentLoaded', () => {

@@ -6,7 +6,7 @@ import {buildServer} from './build.js';
 const start = async (): Promise<void> => {
   const app: FastifyInstance = await buildServer({logger: true});
   try {
-    await app.listen({host: '0.0.0.0', port: Number(process.env.AUTH_PORT)}, (err, addr) => {
+    await app.listen({host: '0.0.0.0', port: 3001}, (err, addr) => {
       app.log.info(`auth server listening on ${addr}`);
     });
   } catch (err) {

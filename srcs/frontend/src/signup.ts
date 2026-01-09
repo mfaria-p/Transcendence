@@ -1,4 +1,4 @@
-import { initHeader } from './shared/header.js';
+import { provisionProfile } from './utils-api.js';
 
 interface SignupCredentials {
   username: string;
@@ -10,8 +10,8 @@ interface SignupCredentials {
 interface SignupResponse {
   success: boolean;
   message: string;
-  user?: { id: string; username: string; email: string };
-  at?: string;  // Access token - auto-login after signup
+  account?: { id: string; username: string; email: string };  
+  at?: string;
 }
 
 class SignupManager {
@@ -46,11 +46,36 @@ class SignupManager {
     });
 
     // Real-time password validation
-    this.passwordInput.addEventListener('input', () => this.updatePasswordRequirements());
+    this.passwordInput.addEventListener('input', () => {
+      this.updatePasswordRequirements();
+      // Also check if passwords match when changing the first password
+      if (this.confirmPasswordInput.value) {
+        this.validatePasswordMatch();
+      }
+    });
     this.passwordInput.addEventListener('focus', () => {
       this.passwordRequirements.classList.remove('hidden');
     });
     this.confirmPasswordInput.addEventListener('input', () => this.validatePasswordMatch());
+
+    // Clear errors when user starts typing
+    this.usernameInput.addEventListener('input', () => {
+      this.clearInputError(this.usernameInput);
+      this.hideMessages(); 
+    });
+    
+    this.emailInput.addEventListener('input', () => {
+      this.clearInputError(this.emailInput);
+      this.hideMessages(); 
+    });
+
+    this.passwordInput.addEventListener('input', () => {
+      this.hideMessages(); // Hide general error message
+    });
+    
+    this.confirmPasswordInput.addEventListener('input', () => {
+      this.hideMessages(); // Hide general error message
+    });
   }
 
   private async handleSignup(): Promise<void> {
@@ -85,32 +110,54 @@ class SignupManager {
       console.log('Signup response:', response);
       
       if (response.success) {
+        console.log('Signup successful! Now logging in automatically...');
         
-        console.log('Access token from signup:', response.at);
-        
-        if (response.at) {
-          localStorage.setItem('access_token', response.at);
-          console.log('Stored access_token in localStorage');
+        try {
+          const loginResponse = await this.loginAfterSignup(credentials.username, credentials.password);
           
-          // Create user profile in user service
-          await this.provisionProfile(response.at, response.user!.username, response.user!.email);
-        } else {
-          console.warn('No access token in signup response!');
+          if (loginResponse.success && loginResponse.at) {
+            localStorage.setItem('access_token', loginResponse.at);
+            console.log('Stored access_token from login:', loginResponse.at);
+            
+            if (loginResponse.account) {
+              localStorage.setItem('user', JSON.stringify({
+                id: loginResponse.account.id,
+                username: loginResponse.account.username,
+                email: loginResponse.account.email
+              }));
+              console.log('Stored user from login');
+              
+              await provisionProfile(loginResponse.at).catch(err => {
+                console.warn('Profile provision failed:', err);
+              });
+            }
+            
+            this.showSuccess('Account created successfully! Redirecting...');
+            
+            setTimeout(() => {
+              window.location.replace('./index.html');
+            }, 2000);
+          } else {
+            this.showSuccess('Account created! Please log in to continue.');
+            setTimeout(() => {
+              window.location.replace('./login.html');
+            }, 2000);
+          }
+        } catch (loginError: any) {
+          console.error('Auto-login error:', loginError);
+          this.showSuccess('Account created! Please log in to continue.');
+          setTimeout(() => {
+            window.location.replace('./login.html');
+          }, 2000);
         }
-        
-        if (response.user) {
-          localStorage.setItem('user', JSON.stringify(response.user));
-          console.log('Stored user in localStorage');
-        }
-
-        this.showSuccess(response.message || 'Account created successfully!');
-
-        // Redirect to game after 2 seconds
-        setTimeout(() => {
-          window.location.href = './index.html';
-        }, 2000);
       } else {
-        this.showError(response.message || 'Signup failed');
+        const errorMessage = response.message || 'Signup failed';
+        if (errorMessage.toLowerCase().includes('email')) {
+          this.setInputError(this.emailInput, errorMessage);
+        } else if (errorMessage.toLowerCase().includes('username')) {
+          this.setInputError(this.usernameInput, errorMessage);
+        }
+        this.showError(errorMessage);
       }
     } catch (error: any) {
       console.error('Signup error:', error);
@@ -191,6 +238,11 @@ class SignupManager {
     this.updateRequirement('req-uppercase', hasUppercase);
     this.updateRequirement('req-lowercase', hasLowercase);
     this.updateRequirement('req-number', hasNumber);
+
+    // Clear any existing error if all requirements are met
+    if (hasMinLength && hasUppercase && hasLowercase && hasNumber) {
+      this.clearInputError(this.passwordInput);
+    }
   }
 
   private updateRequirement(id: string, isValid: boolean): void {
@@ -219,6 +271,12 @@ class SignupManager {
     const password = this.passwordInput.value;
     const confirmPassword = this.confirmPasswordInput.value;
     
+    // Only validate if confirmPassword has been entered
+    if (!confirmPassword) {
+      this.clearInputError(this.confirmPasswordInput);
+      return false;
+    }
+
     if (password !== confirmPassword) {
       this.setInputError(this.confirmPasswordInput, 'Passwords do not match');
       return false;
@@ -255,38 +313,6 @@ class SignupManager {
     }
   }
 
-  private async simulateSignup(credentials: { username: string; email: string; password: string }): Promise<SignupResponse> {
-  // Simulate network delay
-  await new Promise(resolve => setTimeout(resolve, 1500));
-  
-  // Simulate existing user check
-  if (credentials.username.toLowerCase() === 'admin' || credentials.username.toLowerCase() === 'test') {
-    return {
-      success: false,
-      message: 'Username already taken. Please choose another one.'
-    };
-  }
-
-  // Simulate invalid email check
-  if (credentials.email.includes('invalid')) {
-    return {
-      success: false,
-      message: 'Email address is not valid.'
-    };
-  }
-  
-  // Simulate successful signup
-  return {
-    success: true,
-    message: 'Account created successfully!',
-    user: {
-      id: Date.now().toString(),
-      username: credentials.username,
-      email: credentials.email
-    }
-  };
-}
-
   private async signupWithBackend(payload: { username: string; email: string; password: string }): Promise<SignupResponse> {
     const url = '/api/auth/signup';
     const controller = new AbortController();
@@ -313,10 +339,8 @@ class SignupManager {
       }
 
       if (!res.ok) {
-        const message = res.status === 401 
-        ? (data?.message || 'Signup failed') 
-        : `Signup failed (${res.status})`;
-      return { success: false, message };
+        const message = data?.message || `Signup failed (${res.status})`;
+        return { success: false, message };
       }
 
       return data as SignupResponse;
@@ -330,29 +354,47 @@ class SignupManager {
     }
   }
 
-  private async provisionProfile(accessToken: string, username: string, email: string): Promise<void> {
+  private async loginAfterSignup(username: string, password: string): Promise<any> {
+    const url = '/api/auth/login';
+    const controller = new AbortController();
+    const timeoutMs = 10_000;
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
     try {
-      console.log('Provisioning profile in user service...');
-      const response = await fetch('/api/user/provision', {
-        method: 'PUT',
-        headers: {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${accessToken}`,
+          'Accept': 'application/json'
         },
         body: JSON.stringify({
-          username: username,
-          email: email,
+          ident: username,
+          password: password
         }),
+        signal: controller.signal,
       });
-
-      if (response.ok) {
-        console.log('Profile provisioned successfully');
-      } else {
-        console.warn('Failed to provision profile:', response.status);
+      
+      let data: any = null;
+      try {
+        data = await res.json();
+      } catch {
+        const text = await res.text();
+        data = { message: text || 'Unknown error' };
       }
-    } catch (error) {
-      console.error('Profile provision error:', error);
-      // Don't fail signup if profile creation fails
+
+      if (!res.ok) {
+        const message = data?.message || `Login failed (${res.status})`;
+        return { success: false, message };
+      }
+
+      return data;
+    } catch (err: any) {
+      if (err.name === 'AbortError') {
+        throw new Error('Request timed out. Please try again.');
+      }
+      throw new Error(err?.message || 'Network error');
+    } finally {
+      clearTimeout(timeoutId);
     }
   }
 
@@ -386,6 +428,5 @@ class SignupManager {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-  initHeader({ active: 'auth' });
   new SignupManager();
 });

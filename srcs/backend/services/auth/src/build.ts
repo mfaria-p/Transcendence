@@ -5,7 +5,6 @@ import Fastify from 'fastify';
 import swagger from '@pkg/lib-docs';
 import cookie from './plugins/cookie.js';
 import jwt from '@pkg/lib-auth';
-// import oauth2 from '@fastify/oauth2';
 import prisma from './plugins/prisma.js';
 import routes from './routes.js';
 import * as dotenv from 'dotenv';

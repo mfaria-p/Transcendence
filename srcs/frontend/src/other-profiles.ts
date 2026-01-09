@@ -1,3 +1,5 @@
+import { connectPresenceSocket, disconnectPresenceSocket, addPresenceListener } from './utils-ws.js';
+import { verifySession, clearSessionAndRedirect, handleApiCall, showMessage, handleLogout } from './utils-api.js';
 import { initHeader } from './shared/header.js';
 
 interface User {
@@ -6,26 +8,32 @@ interface User {
   email: string;
 }
 
-interface Profile {
+interface Account {
   id: string;
-  name: string;
+  username: string;
+  email: string;
+}
+
+interface ViewedUser {
+  id: string;
+  username: string;
   email: string;
   avatarUrl?: string;
 }
 
 class UserProfileViewer {
   private currentUser: User | null = null;
-  private viewedProfile: Profile | null = null;
+  private viewedUser: ViewedUser | null = null;
   private accessToken: string | null = null;
   private userId: string | null = null;
   private friendshipStatus: 'none' | 'friend' | 'pending_sent' | 'pending_received' = 'none';
+  private isOnline: boolean = false;
 
   constructor() {
     this.init();
   }
 
   private async init(): Promise<void> {
-    // Check authentication
     const userStr = localStorage.getItem('user');
     this.accessToken = localStorage.getItem('access_token');
 
@@ -36,117 +44,170 @@ class UserProfileViewer {
 
     try {
       this.currentUser = JSON.parse(userStr);
+      
+      await verifySession(this.accessToken);
+
       initHeader({ active: 'profile' });
       
-      // Get user ID from URL parameters
+      connectPresenceSocket();
+      this.setupPresenceListener();
+      
       const urlParams = new URLSearchParams(window.location.search);
       this.userId = urlParams.get('id');
 
       if (!this.userId) {
-        this.showMessage('No user ID provided', 'error');
+        showMessage('No user ID provided', 'error');
         setTimeout(() => window.location.href = './profile.html', 2000);
         return;
       }
 
-      // Load the user's profile
       await this.loadUserProfile(this.userId);
     } catch (error) {
       console.error('Init error:', error);
-      this.showMessage('Failed to load user profile', 'error');
-      setTimeout(() => window.location.href = './profile.html', 2000);
+      showMessage('Session expired. Redirecting to login...', 'error');
+      
+      setTimeout(() => {
+        clearSessionAndRedirect();
+      }, 2000);
     }
+  }
+
+  private setupPresenceListener(): void {
+    addPresenceListener((event, userId) => {
+      console.log(`[Other-Profile] Presence update: ${userId} is now ${event}`);
+      
+      // Only update if it's the user we're viewing
+      if (userId === this.userId) {
+        this.isOnline = event === 'online';
+        this.updateStatusBadge(event === 'online');
+      }
+    });
+  }
+
+  private updateStatusBadge(isOnline: boolean): void {
+    const statusBadge = document.getElementById('statusBadge');
+    
+    if (!statusBadge) {
+      console.warn('Status badge element not found');
+      return;
+    }
+
+    // Only show badge if they are friends
+    if (this.friendshipStatus !== 'friend') {
+      statusBadge.classList.add('hidden');
+      return;
+    }
+
+    // Update badge color
+    statusBadge.classList.remove('hidden', 'bg-green-500', 'bg-gray-500');
+    statusBadge.classList.add(isOnline ? 'bg-green-500' : 'bg-gray-500');
+    statusBadge.title = isOnline ? 'Online' : 'Offline';
+    
+    console.log(`Updated ${this.userId} status badge to ${isOnline ? 'ONLINE (green)' : 'OFFLINE (gray)'}`);
   }
 
   private async loadUserProfile(userId: string): Promise<void> {
     try {
-      const response = await fetch(`/api/user/${userId}`, {
-        headers: {
-          'Authorization': `Bearer ${this.accessToken}`,
-        },
-      });
+      const authResponse = await handleApiCall(this.accessToken, `/api/auth/${userId}`);
 
-      if (response.ok) {
-        const data = await response.json();
-        this.viewedProfile = data.profile;
-
-        if (!this.viewedProfile) {
-          this.showMessage('User not found', 'error');
+      if (!authResponse.ok) {
+        if (authResponse.status === 404) {
+          showMessage('User not found', 'error');
           setTimeout(() => window.location.href = './profile.html', 2000);
           return;
         }
-
-        this.displayProfile();
-        await this.checkFriendshipStatus();
-        this.displayFriendActions();
-      } else if (response.status === 404) {
-        this.showMessage('User not found', 'error');
-        setTimeout(() => window.location.href = './profile.html', 2000);
-      } else {
-        throw new Error('Failed to load user profile');
+        throw new Error('Failed to load user account');
       }
+
+      const authData = await authResponse.json();
+      const account: Account = authData.account;
+
+      let avatarUrl: string | undefined = undefined;
+      try {
+        const profileResponse = await handleApiCall(this.accessToken, `/api/user/${userId}`);
+        
+        if (profileResponse.ok) {
+          const profileData = await profileResponse.json();
+          avatarUrl = profileData.profile?.avatarUrl;
+        }
+      } catch (error) {
+        console.log('No profile found for user, using defaults');
+      }
+
+      try {
+        const presenceResponse = await handleApiCall(this.accessToken, `/api/realtime/presence/${userId}`);
+        
+        if (presenceResponse.ok) {
+          const presenceData = await presenceResponse.json();
+          this.isOnline = presenceData.online || false;
+          console.log(`User ${userId} online status:`, this.isOnline);
+        }
+      } catch (error) {
+        console.log('Could not check online status');
+        this.isOnline = false;
+      }
+
+      this.viewedUser = {
+        id: account.id,
+        username: account.username,
+        email: account.email,
+        avatarUrl: avatarUrl,
+      };
+
+      await this.checkFriendshipStatus();
+      this.displayProfile();
+      this.displayFriendActions();
     } catch (error) {
       console.error('Load user profile error:', error);
-      this.showMessage('Failed to load user profile', 'error');
+      if (error instanceof Error && error.message === 'Session expired') {
+        return;
+      }
+      
+      showMessage('Failed to load user profile', 'error');
       setTimeout(() => window.location.href = './profile.html', 2000);
     }
   }
 
   private displayProfile(): void {
-    if (!this.viewedProfile) return;
+    if (!this.viewedUser) return;
 
     const usernameEl = document.getElementById('userUsername');
     const emailEl = document.getElementById('userEmail');
     const avatarEl = document.getElementById('userAvatarPlaceholder');
     const avatarImg = document.getElementById('userAvatarImage') as HTMLImageElement;
 
-    if (usernameEl) usernameEl.textContent = this.viewedProfile.name;
-    if (emailEl) emailEl.textContent = this.viewedProfile.email;
+    console.log('=== Display Profile Debug ===');
+    console.log('Username:', this.viewedUser.username);
+    console.log('Is Online:', this.isOnline);
+    console.log('Friendship Status:', this.friendshipStatus);
+
+    if (usernameEl) usernameEl.textContent = this.viewedUser.username;
+    if (emailEl) emailEl.textContent = this.viewedUser.email;
     
-    // Display avatar image if URL exists, otherwise show initials
-    if (this.viewedProfile.avatarUrl && avatarImg) {
-      avatarImg.src = this.viewedProfile.avatarUrl;
+    if (this.viewedUser.avatarUrl && avatarImg) {
+      avatarImg.src = this.viewedUser.avatarUrl;
       avatarImg.classList.remove('hidden');
       avatarEl?.classList.add('hidden');
     } else if (avatarEl) {
       avatarImg?.classList.add('hidden');
       avatarEl.classList.remove('hidden');
-      avatarEl.textContent = this.viewedProfile.name.charAt(0).toUpperCase();
+      avatarEl.textContent = this.viewedUser.username.charAt(0).toUpperCase();
     }
-  }
 
-  private showMessage(message: string, type: 'success' | 'error'): void {
-    const container = document.getElementById('messageContainer');
-    if (!container) return;
-
-    const bgColor = type === 'success' ? 'bg-green-600' : 'bg-red-600';
-    const messageEl = document.createElement('div');
-    messageEl.className = `${bgColor} text-white px-4 py-3 rounded shadow-lg mb-2 transition-opacity`;
-    messageEl.textContent = message;
-
-    container.appendChild(messageEl);
-
-    setTimeout(() => {
-      messageEl.style.opacity = '0';
-      setTimeout(() => messageEl.remove(), 300);
-    }, 3000);
+    this.updateStatusBadge(this.isOnline);
   }
 
   private async checkFriendshipStatus(): Promise<void> {
     if (!this.userId) return;
 
     try {
-      // Check if already friends
-      const friendsResponse = await fetch('/api/user/friend', {
-        headers: {
-          'Authorization': `Bearer ${this.accessToken}`,
-        },
-      });
+      const friendsResponse = await handleApiCall(this.accessToken, '/api/user/friend');
 
       if (friendsResponse.ok) {
         const data = await friendsResponse.json();
         const friendships = data.friendships || [];
         const isFriend = friendships.some((friendship: any) => {
-          return friendship.userAId === this.userId || friendship.userBId === this.userId;
+          return friendship.profileAId === this.userId || friendship.profileBId === this.userId;
         });
 
         if (isFriend) {
@@ -155,30 +216,34 @@ class UserProfileViewer {
         }
       }
 
-      // Check pending requests
-      const requestsResponse = await fetch('/api/user/friend-request', {
-        headers: {
-          'Authorization': `Bearer ${this.accessToken}`,
-        },
-      });
+      const receivedRequestsResponse = await handleApiCall(this.accessToken, '/api/user/friend-request/received');
 
-      if (requestsResponse.ok) {
-        const data = await requestsResponse.json();
+      if (receivedRequestsResponse.ok) {
+        const data = await receivedRequestsResponse.json();
         const requests = data.requests || [];
         
-        // Check if we have a pending request to this user
-        const hasSentRequest = requests.some((req: any) => req.toUserId === this.userId);
+        const receivedRequest = requests.find((req: any) => 
+          req.fromProfileId === this.userId && req.status === 'PENDING'
+        );
         
-        if (hasSentRequest) {
-          this.friendshipStatus = 'pending_sent';
+        if (receivedRequest) {
+          this.friendshipStatus = 'pending_received';
           return;
         }
+      }
 
-        // Check if this user sent us a request
-        const hasReceivedRequest = requests.some((req: any) => req.fromUserId === this.userId);
+      const sentRequestsResponse = await handleApiCall(this.accessToken, '/api/user/friend-request/sent');
+
+      if (sentRequestsResponse.ok) {
+        const data = await sentRequestsResponse.json();
+        const sentRequests = data.requests || [];
         
-        if (hasReceivedRequest) {
-          this.friendshipStatus = 'pending_received';
+        const sentRequest = sentRequests.find((req: any) => 
+          req.toProfileId === this.userId && req.status === 'PENDING'
+        );
+        
+        if (sentRequest) {
+          this.friendshipStatus = 'pending_sent';
           return;
         }
       }
@@ -206,8 +271,14 @@ class UserProfileViewer {
 
       case 'pending_sent':
         friendActions.innerHTML = `
-          <p class="text-yellow-400">Friend request pending...</p>
+          <div class="flex flex-col items-center gap-3">
+            <p class="text-yellow-400 font-semibold">Friend request sent</p>
+            <button id="cancelRequestBtn" class="px-6 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition">
+              Cancel Request
+            </button>
+          </div>
         `;
+        document.getElementById('cancelRequestBtn')?.addEventListener('click', () => this.cancelFriendRequest());
         break;
 
       case 'pending_received':
@@ -241,26 +312,53 @@ class UserProfileViewer {
     if (!this.userId) return;
 
     try {
-      const response = await fetch(`/api/user/friend-request/${this.userId}`, {
+      const response = await handleApiCall(this.accessToken, `/api/user/friend-request/${this.userId}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${this.accessToken}`,
         },
-        body: JSON.stringify({}),
+        body: JSON.stringify({
+          message: '', // Add empty message or optional message
+        }),
       });
 
       if (response.ok) {
-        this.showMessage('Friend request sent!', 'success');
+        showMessage('Friend request sent!', 'success');
         this.friendshipStatus = 'pending_sent';
         this.displayFriendActions();
       } else {
         const data = await response.json();
-        this.showMessage(data.message || 'Failed to send friend request', 'error');
+        showMessage(data.message || 'Failed to send friend request', 'error');
       }
     } catch (error) {
-      console.error('Send friend request error:', error);
-      this.showMessage('Failed to send friend request', 'error');
+      if (error instanceof Error && error.message !== 'Session expired') {
+        console.error('Send friend request error:', error);
+        showMessage('Failed to send friend request', 'error');
+      }
+    }
+  }
+
+  private async cancelFriendRequest(): Promise<void> {
+    if (!this.userId) return;
+
+    try {
+      const response = await handleApiCall(this.accessToken, `/api/user/friend-request/${this.userId}`, {
+        method: 'DELETE',
+      });
+
+      if (response.ok) {
+        showMessage('Friend request cancelled', 'success');
+        this.friendshipStatus = 'none';
+        this.displayFriendActions();
+      } else {
+        const data = await response.json();
+        showMessage(data.message || 'Failed to cancel friend request', 'error');
+      }
+    } catch (error) {
+      if (error instanceof Error && error.message !== 'Session expired') {
+        console.error('Cancel friend request error:', error);
+        showMessage('Failed to cancel friend request', 'error');
+      }
     }
   }
 
@@ -268,24 +366,24 @@ class UserProfileViewer {
     if (!this.userId) return;
 
     try {
-      const response = await fetch(`/api/user/friend-request/${this.userId}/accept`, {
+      const response = await handleApiCall(this.accessToken, `/api/user/friend-request/${this.userId}/accept`, {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${this.accessToken}`,
-        },
       });
 
       if (response.ok) {
-        this.showMessage('Friend request accepted!', 'success');
+        showMessage('Friend request accepted!', 'success');
         this.friendshipStatus = 'friend';
         this.displayFriendActions();
+        this.displayProfile();
       } else {
         const data = await response.json();
-        this.showMessage(data.message || 'Failed to accept friend request', 'error');
+        showMessage(data.message || 'Failed to accept friend request', 'error');
       }
     } catch (error) {
-      console.error('Accept friend request error:', error);
-      this.showMessage('Failed to accept friend request', 'error');
+      if (error instanceof Error && error.message !== 'Session expired') {
+        console.error('Accept friend request error:', error);
+        showMessage('Failed to accept friend request', 'error');
+      }
     }
   }
 
@@ -293,24 +391,23 @@ class UserProfileViewer {
     if (!this.userId) return;
 
     try {
-      const response = await fetch(`/api/user/friend-request/${this.userId}/decline`, {
+      const response = await handleApiCall(this.accessToken, `/api/user/friend-request/${this.userId}/decline`, {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${this.accessToken}`,
-        },
       });
 
       if (response.ok) {
-        this.showMessage('Friend request declined', 'success');
+        showMessage('Friend request declined', 'success');
         this.friendshipStatus = 'none';
         this.displayFriendActions();
       } else {
         const data = await response.json();
-        this.showMessage(data.message || 'Failed to decline friend request', 'error');
+        showMessage(data.message || 'Failed to decline friend request', 'error');
       }
     } catch (error) {
-      console.error('Decline friend request error:', error);
-      this.showMessage('Failed to decline friend request', 'error');
+      if (error instanceof Error && error.message !== 'Session expired') {
+        console.error('Decline friend request error:', error);
+        showMessage('Failed to decline friend request', 'error');
+      }
     }
   }
 
@@ -320,39 +417,24 @@ class UserProfileViewer {
     if (!confirm('Are you sure you want to remove this friend?')) return;
 
     try {
-      const response = await fetch(`/api/user/friend/${this.userId}`, {
+      const response = await handleApiCall(this.accessToken, `/api/user/friend/${this.userId}`, {
         method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${this.accessToken}`,
-        },
       });
 
       if (response.ok) {
-        this.showMessage('Friend removed', 'success');
+        showMessage('Friend removed', 'success');
         this.friendshipStatus = 'none';
         this.displayFriendActions();
+        this.displayProfile();
       } else {
         const data = await response.json();
-        this.showMessage(data.message || 'Failed to remove friend', 'error');
+        showMessage(data.message || 'Failed to remove friend', 'error');
       }
     } catch (error) {
-      console.error('Remove friend error:', error);
-      this.showMessage('Failed to remove friend', 'error');
-    }
-  }
-
-  private async handleLogout(): Promise<void> {
-    try {
-      await fetch('/api/auth/logout', {
-        method: 'POST',
-        credentials: 'include',
-      });
-    } catch (error) {
-      console.error('Logout error:', error);
-    } finally {
-      localStorage.removeItem('access_token');
-      localStorage.removeItem('user');
-      window.location.href = './login.html';
+      if (error instanceof Error && error.message !== 'Session expired') {
+        console.error('Remove friend error:', error);
+        showMessage('Failed to remove friend', 'error');
+      }
     }
   }
 }
