@@ -1,1 +1,98 @@
-@import "tailwindcss"
+@import "tailwindcss";
+
+@layer components {
+  /* Pong game canvas */
+  #gameCanvas {
+    @apply w-full h-auto max-w-full block mx-auto;
+  }
+
+  /* Canvas wrapper needs position relative */
+  .canvas-wrapper {
+    @apply relative;
+  }
+
+  /* Mobile overlay */
+  #mobileStartOverlay {
+    @apply absolute inset-0 hidden items-center justify-center bg-black/80 backdrop-blur-sm z-10 rounded-lg;
+  }
+
+  /* Desktop instructions */
+  .desktop-instructions {
+    @apply block;
+  }
+
+  /* Mobile instructions */
+  .mobile-instructions {
+    @apply hidden;
+  }
+
+  /* Fullscreen button */
+  #fullscreenButton {
+    @apply hidden;
+  }
+}
+
+/* Media queries for orientation */
+@media screen and (max-width: 768px) and (orientation: portrait) {
+  #rotatePrompt {
+    display: flex !important;
+  }
+  #app {
+    display: none;
+  }
+}
+
+@media screen and (orientation: landscape) {
+  #rotatePrompt {
+    display: none !important;
+  }
+}
+
+/* Small screen landscape */
+@media screen and (max-width: 900px) and (orientation: landscape) {
+  #app {
+    @apply p-2 min-h-screen justify-center;
+  }
+
+  #app .canvas-wrapper {
+    @apply p-2 m-0;
+  }
+  
+  #app h1 {
+    @apply text-2xl mb-2;
+  }
+}
+
+/* Touch device detection */
+@media (pointer: coarse) {
+  #mobileStartOverlay {
+    @apply flex;
+  }
+
+  #mobileStartOverlay.hidden {
+    @apply hidden;
+  }
+
+  #fullscreenButton {
+    @apply block;
+  }
+
+  .mobile-instructions {
+    @apply block;
+  }
+
+  .desktop-instructions {
+    @apply hidden;
+  }
+}
+
+/* Mouse/trackpad devices */
+@media (pointer: fine) {
+  #mobileStartOverlay {
+    @apply hidden;
+  }
+
+  #fullscreenButton {
+    @apply hidden;
+  }
+}

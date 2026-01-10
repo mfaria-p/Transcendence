@@ -40,6 +40,10 @@ class PongGame {
   private lastTime = 0;
   private particles: Particle[] = [];
   private animationFrame: number | null = null;
+  private touchActive = false;
+  private touchSide: 'left' | 'right' | null = null;
+  private countdownActive = false;
+  private countdownValue = 3;
 
   private readonly PADDLE_SPEED = 400; // px/s 
   private readonly BALL_SPEED = 550; 
@@ -80,6 +84,7 @@ class PongGame {
     };
 
     this.setupEventListeners();
+    this.setupTouchControls();
     this.lastTime = performance.now();
     this.gameLoop(); 
   }
@@ -90,8 +95,9 @@ class PongGame {
 
       if (e.key === " ") {
         e.preventDefault();
-        if (!this.gameRunning) {
-          this.startGame();
+        if (!this.gameRunning && !this.countdownActive) {
+          this.startCountdown();
+          this.hideMobileOverlay();
         }
       }
     });
@@ -101,7 +107,224 @@ class PongGame {
     });
   }
 
+  private setupTouchControls(): void {
+    console.log('[Pong] Setting up touch controls');
+    
+    // Fullscreen button for mobile
+    const fullscreenButton = document.getElementById('fullscreenButton');
+    if (fullscreenButton) {
+      fullscreenButton.addEventListener('click', () => {
+        this.toggleFullscreen();
+      });
+
+      // Listen for fullscreen changes to update button text
+      document.addEventListener('fullscreenchange', () => {
+        this.updateFullscreenButton();
+      });
+    }
+    
+    // Start button
+    const mobileStartButton = document.getElementById('mobileStartButton');
+    if (mobileStartButton) {
+      console.log('[Pong] Mobile start button found');
+      
+      mobileStartButton.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        console.log('[Pong] Mobile start button CLICKED');
+        if (!this.gameRunning && !this.countdownActive) {
+          this.startCountdown();
+          this.hideMobileOverlay();
+        }
+      });
+      
+      mobileStartButton.addEventListener('touchend', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        console.log('[Pong] Mobile start button TOUCHED');
+        if (!this.gameRunning && !this.countdownActive) {
+          this.startCountdown();
+          this.hideMobileOverlay();
+        }
+      });
+    } else {
+      console.warn('[Pong] Mobile start button NOT found');
+    }
+
+    // Touch controls for paddles
+    this.canvas.addEventListener('touchstart', (e) => {
+      e.preventDefault();
+      if (!this.gameRunning) {
+        console.log('[Pong] Touch ignored - game not running');
+        return;
+      }
+      
+      console.log('[Pong] Touch start - game running');
+      
+      const touch = e.touches[0];
+      const rect = this.canvas.getBoundingClientRect();
+      const x = (touch.clientX - rect.left) * (this.canvas.width / rect.width);
+      const y = (touch.clientY - rect.top) * (this.canvas.height / rect.height);
+
+      this.touchActive = true;
+      this.touchSide = x < this.canvas.width / 2 ? 'left' : 'right';
+
+      console.log(`[Pong] Touch on ${this.touchSide} side at y=${y}`);
+      this.updateTouchKeys(y);
+    }, { passive: false });
+
+    this.canvas.addEventListener('touchmove', (e) => {
+      e.preventDefault();
+      if (!this.touchActive || !this.gameRunning) return;
+
+      const touch = e.touches[0];
+      const rect = this.canvas.getBoundingClientRect();
+      const y = (touch.clientY - rect.top) * (this.canvas.height / rect.height);
+
+      this.updateTouchKeys(y);
+    }, { passive: false });
+
+    this.canvas.addEventListener('touchend', (e) => {
+      e.preventDefault();
+      console.log('[Pong] Touch end');
+      this.touchActive = false;
+      this.touchSide = null;
+      
+      // Clear all keys
+      this.keys['w'] = false;
+      this.keys['s'] = false;
+      this.keys['ArrowUp'] = false;
+      this.keys['ArrowDown'] = false;
+    }, { passive: false });
+
+    this.canvas.addEventListener('touchcancel', (e) => {
+      e.preventDefault();
+      this.touchActive = false;
+      this.touchSide = null;
+      this.keys['w'] = false;
+      this.keys['s'] = false;
+      this.keys['ArrowUp'] = false;
+      this.keys['ArrowDown'] = false;
+    }, { passive: false });
+  }
+
+    private hideMobileOverlay(): void {
+    const overlay = document.getElementById('mobileStartOverlay');
+    if (overlay) {
+      overlay.classList.add('hidden');
+      console.log('[Pong] Mobile overlay hidden');
+    }
+  }
+
+  private showMobileOverlay(): void {
+    const overlay = document.getElementById('mobileStartOverlay');
+    if (overlay) {
+      console.log('[Pong] Showing mobile overlay');
+      console.log('[Pong] Window width:', window.innerWidth);
+      console.log('[Pong] Overlay classes before:', overlay.className);
+      
+      // Remove hidden class
+      overlay.classList.remove('hidden');
+      
+      console.log('[Pong] Overlay classes after:', overlay.className);
+      
+      // Force display for debugging
+      if (window.innerWidth < 900) {
+        overlay.style.display = 'flex';
+        console.log('[Pong] Forced overlay to display: flex');
+      }
+    } else {
+      console.error('[Pong] Mobile overlay element NOT FOUND!');
+    }
+  }
+
+  private updateTouchKeys(y: number): void {
+    if (!this.touchSide) return;
+
+    // Clear all keys first
+    this.keys['w'] = false;
+    this.keys['s'] = false;
+    this.keys['ArrowUp'] = false;
+    this.keys['ArrowDown'] = false;
+
+    if (this.touchSide === 'left') {
+      const paddle = this.player1;
+      if (y < paddle.y + paddle.height / 2) {
+        this.keys['w'] = true;
+      } else {
+        this.keys['s'] = true;
+      }
+    } else {
+      const paddle = this.player2;
+      if (y < paddle.y + paddle.height / 2) {
+        this.keys['ArrowUp'] = true;
+      } else {
+        this.keys['ArrowDown'] = true;
+      }
+    }
+  }
+
+  private toggleFullscreen(): void {
+    const elem = document.documentElement;
+    
+    if (!document.fullscreenElement) {
+      // Enter fullscreen
+      if (elem.requestFullscreen) {
+        elem.requestFullscreen().catch(err => {
+          console.error('[Pong] Error attempting fullscreen:', err);
+        });
+      }
+      console.log('[Pong] Entering fullscreen mode');
+    } else {
+      // Exit fullscreen
+      if (document.exitFullscreen) {
+        document.exitFullscreen().catch(err => {
+          console.error('[Pong] Error exiting fullscreen:', err);
+        });
+      }
+      console.log('[Pong] Exiting fullscreen mode');
+    }
+  }
+
+  private updateFullscreenButton(): void {
+    const fullscreenButton = document.getElementById('fullscreenButton');
+    if (!fullscreenButton) return;
+
+    const isFullscreen = !!document.fullscreenElement;
+    
+    if (isFullscreen) {
+      fullscreenButton.innerHTML = 'Exit Fullscreen';
+      console.log('[Pong] Updated button: Exit Fullscreen');
+    } else {
+      fullscreenButton.innerHTML = 'Fullscreen';
+      console.log('[Pong] Updated button: Fullscreen');
+    }
+  }
+
+  private startCountdown(): void {
+    this.countdownActive = true;
+    this.countdownValue = 3;
+
+    // Scroll canvas into view and center it
+    this.canvas.scrollIntoView({ 
+      behavior: 'smooth', 
+      block: 'center',
+      inline: 'center'
+    });
+
+    const countdownInterval = setInterval(() => {
+      this.countdownValue--;
+      
+      if (this.countdownValue <= 0) {
+        clearInterval(countdownInterval);
+        this.countdownActive = false;
+        this.startGame(); // Start game after countdown
+      }
+    }, 1000); // 1 second per count
+  }
+
   private startGame(): void {
+    console.log('[Pong] Game starting!');
     this.gameRunning = true;
     this.lastTime = performance.now();
     this.gameLoop();
@@ -179,21 +402,18 @@ class PongGame {
       this.ball.dy = (Math.random() - 0.5) * (0.7 * this.ball.dx);
     }
 
-    // Ball out of bounds (scoring)
+    // Scoring
     if (this.ball.x < 0) {
-      // Player 2 scores
       this.player2Score++;
-      this.createGoalExplosion(0, this.ball.y + this.ball.height / 2);
+      this.createGoalExplosion(this.ball.x, this.ball.y + this.ball.height / 2);
+      this.updateScore();
       this.resetBall();
     } else if (this.ball.x > this.canvas.width) {
-      // Player 1 scores
       this.player1Score++;
-      this.createGoalExplosion(this.canvas.width, this.ball.y + this.ball.height / 2);
+      this.createGoalExplosion(this.ball.x, this.ball.y + this.ball.height / 2);
+      this.updateScore();
       this.resetBall();
     }
-
-    this.updateScore();
-
   }
 
   private createGoalExplosion(x: number, y: number): void {
@@ -251,13 +471,14 @@ class PongGame {
     this.player2.y = this.canvas.height / 2 - this.player2.height / 2;
     
     this.gameRunning = false;
+    this.showMobileOverlay();
   }
 
   private updateScore(): void {
-    const player1ScoreEl = document.getElementById('player1Score');
-    const player2ScoreEl = document.getElementById('player2Score');
-    if (player1ScoreEl) player1ScoreEl.textContent = this.player1Score.toString();
-    if (player2ScoreEl) player2ScoreEl.textContent = this.player2Score.toString();
+    const p1Score = document.getElementById('player1Score');
+    const p2Score = document.getElementById('player2Score');
+    if (p1Score) p1Score.textContent = this.player1Score.toString();
+    if (p2Score) p2Score.textContent = this.player2Score.toString();
   }
 
   private draw(): void {
@@ -282,6 +503,7 @@ class PongGame {
     // Draw ball
     this.ctx.fillRect(this.ball.x, this.ball.y, this.ball.width, this.ball.height);
 
+    // Particles
     for (const p of this.particles) {
       const alpha = p.life / p.maxLife;
       this.ctx.globalAlpha = alpha;
@@ -292,8 +514,21 @@ class PongGame {
     }
     this.ctx.globalAlpha = 1;
 
+    if (this.countdownActive) {
+      this.ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+      this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+      
+      this.ctx.fillStyle = '#4ade80';
+      this.ctx.font = 'bold 120px monospace';
+      this.ctx.textAlign = 'center';
+      this.ctx.textBaseline = 'middle';
+      
+      const text = this.countdownValue > 0 ? this.countdownValue.toString() : 'GO!';
+      this.ctx.fillText(text, this.canvas.width / 2, this.canvas.height / 2);
+    }
+
     // If not started yet, show text
-    if (!this.gameRunning) {
+    if (!this.gameRunning && window.innerWidth >= 900) {
       this.ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
       this.ctx.font = '24px monospace';
       this.ctx.textAlign = 'center';
@@ -302,17 +537,18 @@ class PongGame {
   }
 }
 
-
 document.addEventListener("DOMContentLoaded", () => {
-  // This code only runs once the HTML is fully loaded
+  console.log('[Pong] DOM loaded, initializing game');
   const canvas = document.getElementById('gameCanvas') as HTMLCanvasElement;
 
   if (canvas) {
+    console.log('[Pong] Canvas found, creating game');
     const game = new PongGame(canvas);
     
-    // Cleanup when leaving the page
     window.addEventListener('beforeunload', () => {
       game.destroy();
     });
+  } else {
+    console.error('[Pong] Canvas NOT found!');
   }
 });
