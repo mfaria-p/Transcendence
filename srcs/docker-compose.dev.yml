@@ -85,7 +85,7 @@ services:
       - NODE_ENV=development
     expose:
       - "3003"
-    networks: [ appnet]
+    networks: [appnet]
     restart: unless-stopped
 
 networks:
