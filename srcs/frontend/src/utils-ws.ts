@@ -39,7 +39,7 @@ export function connectPresenceSocket(): void {
   manualClose = false;
 
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-  const url = `${protocol}//${window.location.host}/ws/?token=${encodeURIComponent(token)}`;
+  const url = `${protocol}//${window.location.host}/ws?token=${encodeURIComponent(token)}`;
   
   console.log('[Presence WS] Attempting to connect to:', url);
   ws = new WebSocket(url);
