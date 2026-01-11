@@ -424,18 +424,23 @@ body:not(.menu-collapsed) .menu-toggle .menu-icon {
 .menu-btn:active {
 	transform: translateY(0);
 }
+
 .menu-collapsed .menu-column {
 	width: 120px;
 }
+
 .menu-collapsed .menu {
 	max-width: 88px;
 }
+
 .menu-collapsed .menu-btn {
 	justify-content: center;
 }
+
 .menu-collapsed .menu-btn span:last-child {
 	display: none;
 }
+
 .menu-collapsed .menu-icon {
 	width: 28px;
 	height: 28px;
