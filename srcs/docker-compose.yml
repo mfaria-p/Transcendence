@@ -20,9 +20,9 @@ services:
     depends_on:
       - frontend
       - gateway
-      - ws
       - auth
       - user
+      - ws
     networks: [appnet]
     restart: unless-stopped
 
@@ -51,10 +51,14 @@ services:
     build:
       context: ./backend
       dockerfile: services/auth/Dockerfile
+    volumes:
+      - account_data:/app/data
     environment:
       - AUTH_PORT=3001
-      - DATABASE_URL=file:./account.db
+      - DATABASE_URL=file:/app/data/account.db
       - JWT_SECRET=${JWT_SECRET}
+      - GOOGLE_OAUTH_CLIENT_ID=${GOOGLE_OAUTH_CLIENT_ID}
+      - GOOGLE_OAUTH_CLIENT_SECRET=${GOOGLE_OAUTH_CLIENT_SECRET}
       - NODE_ENV=production
     expose:
       - "3001"
@@ -65,9 +69,11 @@ services:
     build:
       context: ./backend
       dockerfile: services/user/Dockerfile
+    volumes:
+      - profile_data:/app/data
     environment:
       - USER_PORT=3002
-      - DATABASE_URL=file:./profile.db
+      - DATABASE_URL=file:/app/data/profile.db
       - JWT_SECRET=${JWT_SECRET}
       - NODE_ENV=production
     expose:
@@ -94,3 +100,15 @@ networks:
 
 volumes:
   frontend_data:
+  account_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${ACCOUNT_DATA_PATH}
+  profile_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${PROFILE_DATA_PATH}
