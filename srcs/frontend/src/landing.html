@@ -6,24 +6,39 @@
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
 	<link href="https://fonts.googleapis.com/css2?family=Oxanium:wght@400;600;700&display=swap" rel="stylesheet">
 	<link href="./output.css" rel="stylesheet">
-	<script src="https://unpkg.com/@lottiefiles/lottie-player@latest/dist/lottie-player.js"></script>
 	<title>Pong Arcade</title>
 </head>
 
-<body class="landing-body">
+<body class="landing-body menu-collapsed">
 	<main class="landing-shell">
 		<section class="arcade-column">
 			<div class="arcade-frame">
 				<div class="arcade-glow"></div>
-				<div class="arcade-lottie" aria-hidden="true">
-					<lottie-player src="./assets/gamelottie.json" background="transparent" speed="1.5" loop autoplay></lottie-player>
+				<div class="arcade-lottie">
+					<lottie-player src="./assets/gamelottie.json" background="transparent" speed="1" loop autoplay></lottie-player>
 				</div>
 				<img src="./assets/arcade.svg" alt="Pong Arcade" class="arcade-img" />
 				<div class="arcade-overlay"></div>
 			</div>
 		</section>
 
+		<section class="hero">
+			<div class="hero-card">
+				<h1 class="hero-title">Simple. Fast. Competitive.</h1>
+				<p class="hero-body">Challenge friends in public or private online matches, train for tournaments in single-player mode, or face the AI and prove who owns the table.</p>
+				<button class="hero-cta" type="button">Play Now</button>
+			</div>
+			<footer class="landing-footer">
+				<a href="./terms.html" class="footer-link">Termos e Condições</a>
+				<span class="footer-divider">@ 2026</span>
+				<span class="footer-meta">By Grupo maravilhoso</span>
+			</footer>
+		</section>
+
 		<section class="menu-column">
+			<button class="menu-toggle" type="button" aria-pressed="false" aria-label="Alternar menu">
+				<span class="menu-icon icon-user" aria-hidden="true"></span>
+			</button>
 			<div class="menu-stack">
 				<div class="menu">
 					<button class="menu-btn cyan" data-target="./signup.html">
@@ -48,13 +63,10 @@
 					</button>
 				</div>
 			</div>
-			<footer class="landing-footer">
-				<a href="./terms.html" class="footer-link">Termos e Condições</a>
-				<span class="footer-divider">@ 2026</span>
-				<span class="footer-meta">By Grupo maravilhoso</span>
-			</footer>
 		</section>
 	</main>
+
+	<script src="https://unpkg.com/@lottiefiles/lottie-player@latest/dist/lottie-player.js"></script>
 
 	<script type="module" src="./landing.js"></script>
 </body>

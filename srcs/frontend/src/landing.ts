@@ -14,4 +14,17 @@ function wireMenuButtons(): void {
 document.addEventListener('DOMContentLoaded', () => {
   initHeader({ active: 'home' });
   wireMenuButtons();
+
+  const toggle = document.querySelector<HTMLButtonElement>('.menu-toggle');
+  const body = document.body;
+  if (toggle) {
+	// reflect initial collapsed state
+	const isCollapsed = body.classList.contains('menu-collapsed');
+	toggle.setAttribute('aria-pressed', isCollapsed ? 'true' : 'false');
+
+    toggle.addEventListener('click', () => {
+      const collapsed = body.classList.toggle('menu-collapsed');
+      toggle.setAttribute('aria-pressed', collapsed ? 'true' : 'false');
+    });
+  }
 });

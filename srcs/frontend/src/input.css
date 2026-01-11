@@ -18,6 +18,7 @@
 
 body.landing-body {
 	margin: 0;
+	height: 100vh;
 	min-height: 100vh;
 	display: flex;
 	flex-direction: column;
@@ -35,14 +36,74 @@ body.landing-body {
 	display: grid;
 	grid-template-columns: 60% 40%;
 	place-items: stretch;
-	gap: 24px;
+	gap: 40px;
 	height: 100vh;
-	padding: 0px 60px 0px 30px;
+	padding: 0 220px 0 30px;
+	position: relative;
+}
+
+.hero {
+	flex: 0 1 38vw;
+	max-width: 40vw;
+	display: flex;
+	align-items: center;
+	justify-content: flex-start;
+	position: relative;
+	padding: 0 0 100px 0;
+}
+
+.hero-card {
+	max-width: 40vw;
+	display: flex;
+	flex-direction: column;
+	gap: 18px;
+	color: var(--cyan);
+}
+
+.hero-title {
+	margin: 0;
+	font-size: clamp(42px, 5vw, 54px);
+	line-height: 1.1;
+	color: var(--cyan);
+}
+
+.hero-body {
+	margin: 0;
+	color: #cfe8ff;
+	font-size: 16px;
+	line-height: 1.6;
+	max-width: 100%;
+}
+
+.hero-cta {
+	align-self: flex-start;
+	padding: 12px 24px;
+	border: 2px solid var(--cyan);
+	border-radius: 12px;
+	background: transparent;
+	color: var(--cyan);
+	font-size: 16px;
+	font-weight: 700;
+	letter-spacing: 0.4px;
+	cursor: pointer;
+	transition: transform 0.14s, box-shadow 0.14s, border-color 0.14s, background-color 0.14s;
+}
+
+.hero-cta:hover {
+	transform: translateY(-2px) scale(1.01);
+	box-shadow: 0 0 16px #24f2ff55;
+	background: #24f2ff14;
+}
+
+.hero-cta:active {
+	transform: translateY(0);
 }
 
 .arcade-column {
 	display: flex;
 	align-items: center;
+	width: 60vw;
+	flex: 1;
 	height: 100%;
 	overflow: hidden;
 }
@@ -235,6 +296,7 @@ body.landing-body {
 	align-items: center;
 	justify-content: center;
 	pointer-events: none;
+	z-index: 2;
 }
 
 .arcade-lottie lottie-player {
@@ -263,26 +325,58 @@ body.landing-body {
 		inset 0 0 12px #ffffff0a;
 }
 
-.menu {
-	display: grid;
-	gap: 14px;
-	width: max-content;
-	max-width: none;
-	justify-items: stretch;
+.menu-toggle {
+	align-self: flex-end;
+	background: transparent;
+	border: none;
+	color: var(--cyan);
+	width: 42px;
+	height: 42px;
+	padding: 0;
+	cursor: pointer;
+	transition: transform 0.14s, opacity 0.14s;
+}
+
+.menu-toggle:hover {
+	transform: translateY(-1px) scale(1.02);
+}
+
+.menu-toggle:active {
+	transform: translateY(0);
 }
 
 .menu-column {
-	display: grid;
-	grid-template-rows: 1fr auto;
+	position: fixed;
+	top: 0;
+	right: 0;
+	bottom: 0;
+	z-index: 10;
+	width: 360px;
+	display: flex;
+	flex-direction: column;
 	align-items: center;
-	height: 100%;
+	gap: 16px;
+	padding: 18px 26px 24px;
+	background: linear-gradient(180deg, #0b0827e6, #09051ee6);
+	border-left: 1px solid #24f2ff33;
 }
 
 .menu-stack {
-	display: flex;
-	align-items: center;
-	justify-content: flex-end;
 	width: 100%;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	flex: 1;
+	gap: 14px;
+}
+
+.menu {
+	width: 100%;
+	max-width: 320px;
+	display: flex;
+	flex-direction: column;
+	gap: 14px;
 }
 
 .menu-btn {
@@ -309,6 +403,23 @@ body.landing-body {
 
 .menu-btn:active {
 	transform: translateY(0);
+}
+.menu-collapsed .menu-column {
+	width: 120px;
+}
+.menu-collapsed .menu {
+	max-width: 88px;
+}
+.menu-collapsed .menu-btn {
+	padding: 12px;
+	justify-content: center;
+}
+.menu-collapsed .menu-btn span:last-child {
+	display: none;
+}
+.menu-collapsed .menu-icon {
+	width: 28px;
+	height: 28px;
 }
 
 .menu-btn.cyan {
@@ -393,12 +504,16 @@ body.landing-body {
 .landing-footer {
 	display: flex;
 	align-items: center;
-	justify-content: center;
+	justify-content: flex-start;
 	gap: 12px;
-	padding: 18px 28px 28px;
+	padding: 10px 0 0;
 	font-size: 14px;
 	color: #ffffffb8;
 	letter-spacing: 0.3px;
+	position: absolute;
+	left: 0;
+	bottom: 20px;
+	background: transparent;
 }
 
 .landing-footer .footer-link {
@@ -420,9 +535,12 @@ body.landing-body {
 
 @media (max-width: 960px) {
 	.landing-shell {
-		grid-template-columns: 1fr;
+		flex-direction: column;
+		align-items: stretch;
+		justify-content: space-between;
 		height: auto;
-		padding: 48px 24px 0;
+		padding: 48px 260px 24px 20px;
+		gap: 40px;
 	}
 
 	.arcade {
@@ -430,9 +548,12 @@ body.landing-body {
 	}
 
 	.menu-column {
-		grid-template-rows: auto auto;
-		gap: 16px;
-		height: auto;
+		width: 240px;
+		padding: 14px 18px 18px;
+	}
+
+	.menu-collapsed .menu-column {
+		width: 100px;
 	}
 }
 
