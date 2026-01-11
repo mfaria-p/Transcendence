@@ -4,7 +4,7 @@ services:
       context: ./frontend
       dockerfile: Dockerfile.dev
     volumes:
-      -  frontend_data:/app/dist
+      - frontend_data:/app/dist
 
   nginx:
     build:
@@ -14,10 +14,13 @@ services:
       - "9000:80"
     volumes:
       - ./nginx/dev.conf:/etc/nginx/nginx.conf:ro
-      -  frontend_data:/usr/share/nginx/html
+      - frontend_data:/usr/share/nginx/html
     depends_on:
       - frontend
+      - gateway
       - auth
+      - user
+      - ws
     networks: [appnet]
 
   gateway:
@@ -32,6 +35,7 @@ services:
     depends_on:
       - auth
       - user
+      - ws
     networks: [appnet]
 
   auth:
@@ -58,11 +62,11 @@ services:
     build:
       context: ./backend
       dockerfile: services/ws/Dockerfile
-    expose:
-      - "3003"
     environment:
       - WS_PORT=3003
       - JWT_SECRET=${JWT_SECRET}
+    expose:
+      - "3003"
     networks: [ appnet ]
 
 networks:
