@@ -16,6 +16,13 @@ interface Ball extends GameObject {
   speed: number;
 }
 
+const AI_DECISION_RATE = 270;      // ms (reaction time)
+const AI_MAX_SPEED = 8;          // max paddle speed
+const AI_ACCELERATION = 0.8;      // smoothness
+const AI_ERROR_RANGE = 80;        // aiming error
+const AI_DEAD_ZONE = 4;           // precision
+
+
 class PongGame {
   private canvas: HTMLCanvasElement;
   private ctx: CanvasRenderingContext2D;
@@ -27,6 +34,10 @@ class PongGame {
   private player1Score = 0;
   private player2Score = 0;
 
+  private aiLastUpdate = 0;
+  private aiTargetY = 0;
+  private aiVelocity = 0;
+  private aiLastDecision = 0;
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -69,6 +80,64 @@ class PongGame {
     this.draw();
   }
 
+  private predictBallY(): number {
+    const { ball, canvas } = this;
+
+    // time until ball reaches AI paddle
+    const distanceX =
+      this.player2.x - ball.x - ball.width;
+    const time = distanceX / ball.dx;
+
+    if (time <= 0) return ball.y;
+
+    let predictedY = ball.y + ball.dy * time;
+
+    // simulate wall bounces
+    const height = canvas.height - ball.height;
+    while (predictedY < 0 || predictedY > height) {
+      if (predictedY < 0) predictedY = -predictedY;
+      else if (predictedY > height)
+        predictedY = height - (predictedY - height);
+    }
+
+    return predictedY + ball.height / 2;
+  }
+
+  private updateAIDecision(): void {
+    const now = performance.now();
+    if (now - this.aiLastDecision < AI_DECISION_RATE) return;
+    this.aiLastDecision = now;
+
+    if (this.ball.dx <= 0) {
+      this.aiTargetY = this.canvas.height / 2;
+      return;
+    }
+
+    const predictedY = this.predictBallY();
+
+    const error = (Math.random() * 2 - 1) * AI_ERROR_RANGE;
+    this.aiTargetY = predictedY + error;
+  }
+
+  private updateAIMovement(): void {
+    const paddleCenter = this.player2.y + this.player2.height / 2;
+    const diff = this.aiTargetY - paddleCenter;
+
+    if (Math.abs(diff) < AI_DEAD_ZONE) {
+      this.aiVelocity *= 0.8;
+      return;
+    }
+
+    this.aiVelocity += Math.sign(diff) * AI_ACCELERATION;
+
+    this.aiVelocity = Math.max(
+      -AI_MAX_SPEED,
+      Math.min(AI_MAX_SPEED, this.aiVelocity)
+    );
+
+    this.player2.y += this.aiVelocity;
+  }
+
   private setupEventListeners(): void {
     document.addEventListener("keydown", (e) => {
       this.keys[e.key] = true;
@@ -109,12 +178,14 @@ class PongGame {
     }
 
     // Move player2 (Arrow keys)
-    if (this.keys["ArrowUp"]) {
-      this.player2.y -= this.player2.speed;
-    }
-    if (this.keys["ArrowDown"]) {
-      this.player2.y += this.player2.speed;
-    }
+    // if (this.keys["ArrowUp"]) {
+    //   this.player2.y -= this.player2.speed;
+    // }
+    // if (this.keys["ArrowDown"]) {
+    //   this.player2.y += this.player2.speed;
+    // }
+    this.updateAIDecision();
+    this.updateAIMovement();
 
     // Keep paddles inside the canvas
     this.player1.y = Math.max(0, Math.min(this.canvas.height - this.player1.height, this.player1.y));
@@ -127,14 +198,14 @@ class PongGame {
     // Ball collision with top/bottom walls
     if (this.ball.y <= 0 || this.ball.y >= this.canvas.height - this.ball.height) {
       this.ball.dy = -this.ball.dy; // reverse vertical direction
-      this.ball.dx *= 1.05; // gradually increase ball speed  
+      // this.ball.dx *= 1.05; // gradually increase ball speed  
     }
 
     // Ball collision with left paddle
     if (this.checkCollision(this.ball, this.player1)) {
       this.ball.dx = Math.abs(this.ball.dx); // always move right
       this.ball.x = this.player1.x + this.player1.width; // push ball out so it doesn't stick
-      this.ball.dx *= 1.05; // gradually increase ball speed  
+      // this.ball.dx *= 1.05; // gradually increase ball speed  
       this.ball.dy = (Math.random() - 0.5) * (0.7 * this.ball.dx);     
     }
 
