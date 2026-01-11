@@ -1,3 +1,4 @@
+import { initHeader } from './shared/header.js';
 import { provisionProfile } from './utils-api.js';
 
 interface SignupCredentials {
@@ -26,6 +27,8 @@ class SignupManager {
   private passwordRequirements: HTMLElement;
   
   constructor() {
+    initHeader({ active: 'auth' });
+
     this.form = document.getElementById('signupForm') as HTMLFormElement;
     this.usernameInput = document.getElementById('username') as HTMLInputElement;
     this.emailInput = document.getElementById('email') as HTMLInputElement;

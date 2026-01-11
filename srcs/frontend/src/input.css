@@ -310,6 +310,29 @@ body.auth-body {
 	transform: translateY(0);
 }
 
+.auth-req {
+	display: grid;
+	gap: 6px;
+	margin-top: 8px;
+	padding: 10px 12px;
+	border-radius: 12px;
+	background: #ffffff08;
+	border: 1px solid #24f2ff26;
+	box-shadow: inset 0 0 12px #0a0832aa;
+}
+
+.auth-req-item {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	color: #cfe8ff;
+	font-size: 13px;
+}
+
+.auth-req-indicator {
+	font-size: 14px;
+}
+
 .game-shell {
 	box-sizing: border-box;
 	min-height: 100vh;
