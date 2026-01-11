@@ -326,12 +326,14 @@ body.landing-body {
 }
 
 .menu-toggle {
-	align-self: flex-end;
+	position: absolute;
+	right: var(--menu-toggle-anchor);
+	top: 18px;
 	background: transparent;
 	border: none;
 	color: var(--cyan);
-	width: 42px;
-	height: 42px;
+	width: 30px;
+	height: 30px;
 	padding: 0;
 	cursor: pointer;
 	transition: transform 0.14s, opacity 0.14s;
@@ -345,7 +347,20 @@ body.landing-body {
 	transform: translateY(0);
 }
 
+.menu-toggle .menu-icon {
+	transition: transform 0.6s ease;
+}
+
+.menu-toggle .menu-icon::before {
+	transition: inherit;
+}
+
+body:not(.menu-collapsed) .menu-toggle .menu-icon {
+	transform: rotate(180deg);
+}
+
 .menu-column {
+	--menu-toggle-anchor: calc((120px / 2) - (30px / 2));
 	position: fixed;
 	top: 0;
 	right: 0;
@@ -380,11 +395,13 @@ body.landing-body {
 }
 
 .menu-btn {
+	box-sizing: border-box;
 	display: inline-flex;
 	align-items: center;
 	gap: 10px;
 	width: 100%;
-	padding: 14px 16px;
+	height: 52px;
+	padding: 0 16px;
 	border: 2px solid transparent;
 	border-radius: 12px;
 	background: #ffffff0a;
@@ -393,12 +410,15 @@ body.landing-body {
 	font-weight: 600;
 	letter-spacing: 0.4px;
 	text-align: left;
+	white-space: nowrap;
 	cursor: pointer;
 	transition: transform 0.14s, box-shadow 0.14s, border-color 0.14s;
 }
 
 .menu-btn:hover {
 	transform: translateY(-2px) scale(1.01);
+	box-shadow: 0 0 16px currentColor;
+	background: color-mix(in srgb, currentColor 18%, transparent);
 }
 
 .menu-btn:active {
@@ -411,7 +431,6 @@ body.landing-body {
 	max-width: 88px;
 }
 .menu-collapsed .menu-btn {
-	padding: 12px;
 	justify-content: center;
 }
 .menu-collapsed .menu-btn span:last-child {
@@ -474,6 +493,11 @@ body.landing-body {
 	-webkit-mask-position: 50%;
 	-webkit-mask-size: contain;
 	-webkit-mask-repeat: no-repeat;
+}
+
+.icon-next::before {
+	mask-image: url(./assets/icons/next.svg);
+	-webkit-mask-image: url(./assets/icons/next.svg);
 }
 
 .icon-user::before {
@@ -548,6 +572,7 @@ body.landing-body {
 	}
 
 	.menu-column {
+		--menu-toggle-anchor: calc((100px / 2) - (30px / 2));
 		width: 240px;
 		padding: 14px 18px 18px;
 	}
