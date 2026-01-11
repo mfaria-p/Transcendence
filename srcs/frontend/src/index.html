@@ -4,26 +4,38 @@
 <head>
 	<meta charset="UTF-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link href="https://fonts.googleapis.com/css2?family=Oxanium:wght@400;600;700&display=swap" rel="stylesheet">
 	<link href="./output.css" rel="stylesheet">
+	<title>Pong Arcade | Free Play</title>
 </head>
-<body class="bg-gray-900 text-white min-h-screen">
-  <div id="globalHeader"></div>
 
-  <div id="app" class="text-center flex flex-col items-center justify-center" style="min-height: calc(100vh - 4rem);">
-    <h1 class="text-4xl font-bold mb-8 text-green-400">PONG</h1>
+<body class="game-body menu-collapsed">
+	<main class="game-shell">
+		<section class="game-panel">
+			<header class="game-hero">
+				<p class="game-kicker">Arcade Mode</p>
+				<h1 class="game-title">Free Play</h1>
+				<p class="game-subtitle">Fast neon duels. Practice, warm up, or settle scores before the next
+					tournament.</p>
+			</header>
 
-			<div class="bg-black p-4 rounded-lg shadow-2xl">
-				<canvas id="gameCanvas" data-mode="freeplay" width="800" height="400"
-					class="border border-white"></canvas>
+			<div class="game-canvas-frame">
+				<div class="game-canvas-glow"></div>
+				<canvas id="gameCanvas" data-mode="freeplay" width="720" height="360" class="game-canvas"></canvas>
 			</div>
-			<div class="mt-4 text-sm text-gray-400">
-				<p>Player 1: W/S keys | Player 2: ↑/↓ keys</p>
-				<p>Press SPACE to start</p>
+
+			<div class="game-meta">
+				<div class="game-instructions">
+					<p>Player 1: W / S keys &nbsp; | &nbsp; Player 2: ↑ / ↓ keys</p>
+					<p>Press SPACE to start</p>
+				</div>
+				<div id="score" class="score-row">
+					<span class="score-pill">P1 <span id="player1Score">0</span></span>
+					<span class="score-divider">—</span>
+					<span class="score-pill">P2 <span id="player2Score">0</span></span>
+				</div>
 			</div>
-			<div id="score" class="mt-4 text-2xl font-mono">
-				<span id="player1Score">0</span> - <span id="player2Score">0</span>
-			</div>
-		</div>
+		</section>
 	</main>
 	<script type="module" src="./index.js"></script>
 	<script type="module" src="./pong.js"></script>

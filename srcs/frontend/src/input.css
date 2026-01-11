@@ -16,6 +16,10 @@
 	--arcade-dark: #0b0a2b;
 }
 
+body {
+	font-family: Oxanium, Segoe UI, sans-serif;
+}
+
 body.landing-body {
 	margin: 0;
 	height: 100vh;
@@ -29,6 +33,157 @@ body.landing-body {
 		radial-gradient(circle at 20% 20%, #ff2bba33, transparent 35%),
 		radial-gradient(circle at 80% 80%, #00ddff2e, transparent 40%),
 		linear-gradient(135deg, var(--bg-1), var(--bg-2));
+}
+
+/* Game page styling */
+body.game-body {
+	margin: 0;
+	min-height: 100vh;
+	color: #fff;
+	font-family: Oxanium, Segoe UI, sans-serif;
+	background:
+		radial-gradient(circle at 20% 20%, #ff2bba33, transparent 35%),
+		radial-gradient(circle at 80% 80%, #00ddff2e, transparent 40%),
+		linear-gradient(135deg, var(--bg-1), var(--bg-2));
+	overflow-x: hidden;
+	overflow-y: auto;
+}
+
+.game-shell {
+	box-sizing: border-box;
+	min-height: 100vh;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 100%;
+	max-width: 1400px;
+	margin: 0 auto;
+	padding: 32px clamp(24px, 5vw, 48px);
+	position: relative;
+}
+
+.game-panel {
+	width: min(980px, 100%);
+	background: #0c072ab8;
+	border: 1px solid #24f2ff55;
+	border-radius: 18px;
+	padding: clamp(20px, 2.8vw, 30px);
+	box-shadow:
+		0 0 24px #24f2ff33,
+		0 0 32px #ff2bba26;
+	display: flex;
+	flex-direction: column;
+	gap: 20px;
+}
+
+.game-hero {
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+}
+
+.game-kicker {
+	margin: 0;
+	color: #ffffffb3;
+	letter-spacing: 1.2px;
+	text-transform: uppercase;
+	font-size: 13px;
+}
+
+.game-title {
+	margin: 0;
+	color: var(--cyan);
+	font-size: clamp(34px, 5vw, 46px);
+	line-height: 1.05;
+}
+
+.game-subtitle {
+	margin: 0;
+	color: #cfe8ff;
+	font-size: 16px;
+	line-height: 1.5;
+}
+
+.game-canvas-frame {
+	position: relative;
+	max-width: 920px;
+	border: 6px solid var(--cyan);
+	border-radius: 16px;
+	box-shadow:
+		0 0 28px #24f2ff66,
+		0 0 36px #ff2bba2e,
+		inset 0 0 0 8px #090622;
+	margin: 0 auto;
+}
+
+.game-canvas-glow {
+	position: absolute;
+	inset: 8% 10% auto 10%;
+	height: 40%;
+	filter: blur(28px);
+	background:
+		radial-gradient(circle at 60% 40%, #ff3fb047, #0000 55%),
+		radial-gradient(circle at 40% 60%, #0fe5ff4d, #0000 60%);
+	pointer-events: none;
+}
+
+.game-canvas {
+	display: block;
+	width: 100%;
+	height: auto;
+	max-width: 880px;
+	max-height: 52vh;
+	aspect-ratio: 2 / 1;
+	border-radius: 10px;
+	border: 2px solid #ffffff22;
+	background: #030314;
+	box-shadow: inset 0 0 18px #000000aa;
+}
+
+.game-meta {
+	display: grid;
+	gap: 20px;
+}
+
+.game-instructions {
+	color: #d8e6ff;
+	font-size: 13px;
+	letter-spacing: 0.3px;
+	text-align: center;
+	background: #ffffff0a;
+	border: 1px solid #24f2ff33;
+	border-radius: 12px;
+	padding: 8px 12px;
+	box-shadow: inset 0 0 12px #0a0832aa;
+}
+
+.score-row {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 12px;
+	font-family: Oxanium, Segoe UI, sans-serif;
+}
+
+.score-pill {
+	min-width: 110px;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 6px;
+	padding: 10px 14px;
+	border-radius: 12px;
+	background: #ffffff0a;
+	border: 1px solid #24f2ff66;
+	box-shadow: 0 0 12px #24f2ff55;
+	color: #fff;
+	font-weight: 700;
+	font-size: 16px;
+}
+
+.score-divider {
+	color: #ffffffb3;
+	font-size: 18px;
 }
 
 .landing-shell {
@@ -570,6 +725,20 @@ body:not(.menu-collapsed) .menu-toggle .menu-icon {
 		height: auto;
 		padding: 48px 260px 24px 20px;
 		gap: 40px;
+	}
+
+	.game-shell {
+		padding: 24px 16px 24px 16px;
+		align-items: center;
+	}
+
+	.game-panel {
+		padding: 18px;
+		gap: 16px;
+	}
+
+	.game-canvas {
+		max-height: 46vh;
 	}
 
 	.arcade {
