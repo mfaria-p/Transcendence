@@ -51,10 +51,11 @@ class PongGame {
   private countdownActive = false;
   private countdownValue = 3;
 
-  private aiLastUpdate = 0;
-  private aiTargetY = 0;
-  private aiVelocity = 0;
-  private aiLastDecision = 0;
+  private aiPlayer: boolean = true;
+  private aiTargetY: number = 0;
+  private aiVelocity: number = 0;
+  private aiLastDecision: number = 0;
+
   private readonly PADDLE_SPEED = 400; // px/s 
   private readonly BALL_SPEED = 550; 
 
@@ -430,14 +431,18 @@ class PongGame {
     }
 
     // Move player2 (Arrow keys)
-    // if (this.keys["ArrowUp"]) {
-    //   this.player2.y -= this.player2.speed * dt;
-    // }
-    // if (this.keys["ArrowDown"]) {
-    //   this.player2.y += this.player2.speed * dt;
-    // }
-    this.updateAIDecision();
-    this.updateAIMovement();
+    if (this.aiPlayer) {
+      this.updateAIDecision();
+      this.updateAIMovement();
+    }
+    else {
+      if (this.keys["ArrowUp"]) {
+        this.player2.y -= this.player2.speed * dt;
+      }
+      if (this.keys["ArrowDown"]) {
+        this.player2.y += this.player2.speed * dt;
+      }
+    }
 
     // Keep paddles inside the canvas
     this.player1.y = Math.max(0, Math.min(this.canvas.height - this.player1.height, this.player1.y));
