@@ -63,7 +63,7 @@ services:
     environment:
       - WS_PORT=3003
       - JWT_SECRET=${JWT_SECRET}
-    networks: [ appnet ]
+    networks: [appnet]
 
 networks:
   appnet:
