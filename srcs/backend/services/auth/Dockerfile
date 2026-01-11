@@ -24,9 +24,7 @@ WORKDIR /app
 
 COPY --from=build /out .
 
-ENV DATABASE_URL="file:./auth.db"
-ENV PRISMA_CLI_VERSION=6.17.0
+COPY --from=build /app/services/auth/entry.sh /entry.sh
+RUN chmod +x /entry.sh
 
-RUN npx prisma@${PRISMA_CLI_VERSION} migrate deploy --schema ./prisma/schema.prisma
-
-CMD ["node","dist/server.js"]
+CMD ["/entry.sh"]

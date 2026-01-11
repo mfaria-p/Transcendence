@@ -15,7 +15,7 @@ const InvalidRelationError = createError('INVALID_RELATION', 'Invalid reference'
 const NotFoundError = createError('NOT_FOUND', 'Record not found', 404);
 const DatabaseError = createError('DB_ERROR', 'Database error', 500);
 
-function handlePrismaError(error: unknown): never {
+function handlePrismaError(error: any): never {
   if (error instanceof Prisma.PrismaClientKnownRequestError) {
     const fields = error.meta?.target ?? [];
     switch (error.code) {
