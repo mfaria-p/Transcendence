@@ -1,42 +1,194 @@
 <!doctype html>
 <html>
-
 <head>
-	<meta charset="UTF-8">
-	<meta name="viewport" content="width=device-width, initial-scale=1.0">
-	<link href="https://fonts.googleapis.com/css2?family=Oxanium:wght@400;600;700&display=swap" rel="stylesheet">
-	<link href="./output.css" rel="stylesheet">
-	<title>Pong Arcade | Free Play</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <link href="./output.css" rel="stylesheet">
+  <title>PONG - Transcendence</title>
+  <!-- <style>
+    /* Landscape orientation prompt */
+    @media screen and (max-width: 768px) and (orientation: portrait) {
+      #rotatePrompt {
+        display: flex !important;
+      }
+      #app {
+        display: none;
+      }
+    }
+    
+    /* Hide prompt in landscape */
+    @media screen and (orientation: landscape) {
+      #rotatePrompt {
+        display: none !important;
+      }
+    }
+
+    #gameCanvas {
+      width: 100%;
+      height: auto;
+      max-width: 100%;
+      display: block;
+      margin: 0 auto;
+    }
+
+    .bg-black.rounded-lg {
+      position: relative;
+    }
+
+    @media screen and (max-width: 900px) and (orientation: landscape) {
+      #app {
+        padding: 0.5rem !important;
+        min-height: 100vh !important;
+        justify-content: center !important;
+      }
+
+      #app .bg-black {
+        padding: 0.5rem !important;
+        margin: 0.1rem !important;
+      }
+      
+      #app h1 {
+        font-size: 1.5rem !important;
+        margin-bottom: 0.5rem !important;
+      }
+    }
+
+    /* Mobile start overlay - positioned OVER canvas */
+    #mobileStartOverlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      background: rgba(0, 0, 0, 0.8);
+      backdrop-filter: blur(3px);
+      z-index: 10;
+      border-radius: 0.5rem;
+    }
+
+    #fullscreenButton {
+      display: none; 
+    }
+
+    .mobile-instructions {
+      display: none;
+    }
+
+    .desktop-instructions {
+      display: block;
+    }
+
+    /* ===== TOUCH DEVICE DETECTION ===== */
+    /* This detects devices with coarse pointer (touch) as PRIMARY input */
+    @media (pointer: coarse) {
+      #mobileStartOverlay {
+        display: flex;
+      }
+
+      #mobileStartOverlay.hidden {
+        display: none !important;
+      }
+
+      #fullscreenButton {
+        display: block !important;
+      }
+
+      .mobile-instructions {
+        display: block;
+      }
+
+      .desktop-instructions {
+        display: none;
+      }
+    }
+
+    /* For devices with fine pointer (mouse) - DESKTOP */
+    @media (pointer: fine) {
+      #mobileStartOverlay {
+        display: none !important;
+      }
+
+      #fullscreenButton {
+        display: none !important;
+      }
+
+      .mobile-instructions {
+        display: none;
+      }
+
+      .desktop-instructions {
+        display: block;
+      }
+    }
+
+    @media screen and (max-width: 640px) {
+      #mobileStartOverlay {
+        display: flex !important;
+      }
+
+      #mobileStartOverlay.hidden {
+        display: none !important;
+      }
+
+      #fullscreenButton {
+        display: block !important;
+      }
+    }
+  </style> -->
 </head>
 
-<body class="game-body menu-collapsed">
-	<main class="game-shell">
-		<section class="game-panel">
-			<header class="game-hero">
-				<p class="game-kicker">Arcade Mode</p>
-				<h1 class="game-title">Free Play</h1>
-				<p class="game-subtitle">Fast neon duels. Practice, warm up, or settle scores before the next tournament.</p>
-			</header>
+<body class="bg-gray-900 text-white min-h-screen">
+  <div id="globalHeader"></div>
 
-			<div class="game-canvas-frame">
-				<div class="game-canvas-glow"></div>
-				<canvas id="gameCanvas" data-mode="freeplay" width="720" height="360" class="game-canvas"></canvas>
-			</div>
+  <div id="rotatePrompt" class="hidden fixed inset-0 bg-gray-900 flex-col items-center justify-center z-50 p-4">
+    <svg class="w-24 h-24 text-green-400 mb-4 animate-bounce" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+    </svg>
+    <h2 class="text-2xl font-bold text-green-400 mb-2">Rotate Your Device</h2>
+    <p class="text-gray-300 text-center">Please rotate your device to landscape mode for the best Pong experience!</p>
+  </div>
+  
+  <div id="app" class="text-center flex flex-col items-center justify-center px-4" style="min-height: calc(100vh - 4rem);">
+    <h1 class="text-4xl font-bold mb-8 text-green-400">PONG</h1>
 
-			<div class="game-meta">
-				<div class="game-instructions">
-					<p>Player 1: W / S keys &nbsp; | &nbsp; Player 2: ↑ / ↓ keys</p>
-					<p>Press SPACE to start</p>
-				</div>
-				<div id="score" class="score-row">
-					<span class="score-pill">P1 <span id="player1Score">0</span></span>
-					<span class="score-divider">—</span>
-					<span class="score-pill">P2 <span id="player2Score">0</span></span>
-				</div>
-			</div>
-		</section>
-	</main>
-	<script type="module" src="./index.js"></script>
-	<script type="module" src="./pong.js"></script>
+    <!-- Canvas container -->
+    <div class="bg-black p-4 rounded-lg shadow-2xl inline-block relative">
+      <canvas id="gameCanvas" width="800" height="400" 
+        class="border border-white block"></canvas>
+      
+      <!-- Mobile overlay -->
+      <div id="mobileStartOverlay">
+        <button id="mobileStartButton" 
+          class="bg-green-600 hover:bg-green-700 active:bg-green-800 text-white font-bold py-6 px-12 rounded-xl text-2xl shadow-2xl transform hover:scale-105 active:scale-95 transition-all">
+          TAP TO START
+        </button>
+      </div>
+    </div>
+    
+    <!-- Desktop instructions -->
+    <div class="mt-4 text-sm text-gray-400 desktop-instructions">
+      <p>Player 1: W/S keys | Player 2: ↑/↓ keys</p>
+      <p>Press SPACE to start</p>
+    </div>
+    
+    <!-- Mobile instructions -->
+    <div class="mt-4 text-xs text-gray-400 mobile-instructions">
+      <p>Tap left half = control left paddle | Tap right half = control right paddle</p>
+    </div>
+
+    <button id="fullscreenButton" class="mt-3 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg text-sm">
+      Fullscreen
+    </button>
+    
+    <div id="score" class="mt-4 text-2xl font-mono">
+      <span id="player1Score">0</span> - <span id="player2Score">0</span>
+    </div>
+  </div>
+  
+  <script type="module" src="./index.js"></script>
+  <script type="module" src="./pong.js"></script>
 </body>
 </html>
