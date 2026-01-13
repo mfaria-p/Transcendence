@@ -252,7 +252,7 @@ class SignupManager {
     const element = document.getElementById(id);
     if (!element) return;
     
-    const indicator = element.querySelector('.indicator');
+    const indicator = element.querySelector('.auth-req-indicator');
     const text = element.querySelector('span:last-child');
     
     if (indicator) {
