@@ -1,101 +1,103 @@
-@import "tailwindcss";
 @import url("https://fonts.googleapis.com/css2?family=Oxanium:wght@400;600;700&display=swap");
+@import "tailwindcss";
 
 @layer components {
-  /* Pong game canvas */
-  #gameCanvas {
-    @apply w-full h-auto max-w-full block mx-auto;
-  }
 
-  /* Canvas wrapper needs position relative */
-  .canvas-wrapper {
-    @apply relative;
-  }
+	/* Pong game canvas */
+	#gameCanvas {
+		@apply w-full h-auto max-w-full block mx-auto;
+	}
 
-  /* Mobile overlay */
-  #mobileStartOverlay {
-    @apply absolute inset-0 hidden items-center justify-center bg-black/80 backdrop-blur-sm z-10 rounded-lg;
-  }
+	/* Canvas wrapper needs position relative */
+	.canvas-wrapper {
+		@apply relative;
+	}
 
-  /* Desktop instructions */
-  .desktop-instructions {
-    @apply block;
-  }
+	/* Mobile overlay */
+	#mobileStartOverlay {
+		@apply absolute inset-0 hidden items-center justify-center bg-black/80 backdrop-blur-sm z-10 rounded-lg;
+	}
 
-  /* Mobile instructions */
-  .mobile-instructions {
-    @apply hidden;
-  }
+	/* Desktop instructions */
+	.desktop-instructions {
+		@apply block;
+	}
 
-  /* Fullscreen button */
-  #fullscreenButton {
-    @apply hidden;
-  }
+	/* Mobile instructions */
+	.mobile-instructions {
+		@apply hidden;
+	}
+
+	/* Fullscreen button */
+	#fullscreenButton {
+		@apply hidden;
+	}
 }
 
 /* Media queries for orientation */
 @media screen and (max-width: 768px) and (orientation: portrait) {
-  #rotatePrompt {
-    display: flex !important;
-  }
-  #app {
-    display: none;
-  }
+	#rotatePrompt {
+		display: flex !important;
+	}
+
+	#app {
+		display: none;
+	}
 }
 
 @media screen and (orientation: landscape) {
-  #rotatePrompt {
-    display: none !important;
-  }
+	#rotatePrompt {
+		display: none !important;
+	}
 }
 
 /* Small screen landscape */
 @media screen and (max-width: 900px) and (orientation: landscape) {
-  #app {
-    @apply p-2 min-h-screen justify-center;
-  }
+	#app {
+		@apply p-2 min-h-screen justify-center;
+	}
 
-  #app .canvas-wrapper {
-    @apply p-2 m-0;
-  }
-  
-  #app h1 {
-    @apply text-2xl mb-2;
-  }
+	#app .canvas-wrapper {
+		@apply p-2 m-0;
+	}
+
+	#app h1 {
+		@apply text-2xl mb-2;
+	}
 }
 
 /* Touch device detection */
 @media (pointer: coarse) {
-  #mobileStartOverlay {
-    @apply flex;
-  }
+	#mobileStartOverlay {
+		@apply flex;
+	}
 
-  #mobileStartOverlay.hidden {
-    @apply hidden;
-  }
+	#mobileStartOverlay.hidden {
+		@apply hidden;
+	}
 
-  #fullscreenButton {
-    @apply block;
-  }
+	#fullscreenButton {
+		@apply block;
+	}
 
-  .mobile-instructions {
-    @apply block;
-  }
+	.mobile-instructions {
+		@apply block;
+	}
 
-  .desktop-instructions {
-    @apply hidden;
-  }
+	.desktop-instructions {
+		@apply hidden;
+	}
 }
 
 /* Mouse/trackpad devices */
 @media (pointer: fine) {
-  #mobileStartOverlay {
-    @apply hidden;
-  }
+	#mobileStartOverlay {
+		@apply hidden;
+	}
 
-  #fullscreenButton {
-    @apply hidden;
-  }
+	#fullscreenButton {
+		@apply hidden;
+	}
 
 	.mobile-instructions {
 		@apply hidden;
@@ -168,7 +170,7 @@ body.bg-gray-900 .bg-gray-800::before {
 	pointer-events: none;
 }
 
-body.bg-gray-900 .bg-gray-800 > * {
+body.bg-gray-900 .bg-gray-800>* {
 	position: relative;
 	z-index: 1;
 }
@@ -292,7 +294,7 @@ body.bg-gray-900 .max-w-5xl .bg-gray-800::before {
 	pointer-events: none;
 }
 
-body.bg-gray-900 .max-w-5xl .bg-gray-800 > * {
+body.bg-gray-900 .max-w-5xl .bg-gray-800>* {
 	position: relative;
 	z-index: 1;
 }
