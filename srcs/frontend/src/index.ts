@@ -29,4 +29,44 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Initialize header for non-authenticated user
     initHeader({ active: 'home' });
   }
+
+  setupMenuAutoHide();
 });
+
+function setupMenuAutoHide(): void {
+  const gameCanvas = document.getElementById('gameCanvas');
+  if (!gameCanvas) return;
+
+  const mqMobile = window.matchMedia('(max-width: 900px)');
+  const mqLandscape = window.matchMedia('(orientation: landscape)');
+  const mqCoarse = window.matchMedia('(pointer: coarse)');
+
+  let lastIntersecting = false;
+
+  const compute = () => {
+    const shouldHide = mqMobile.matches && mqLandscape.matches && mqCoarse.matches && lastIntersecting;
+    document.body.classList.toggle('menu-hidden', shouldHide);
+  };
+
+  const observer = new IntersectionObserver(
+    (entries) => {
+      lastIntersecting = entries.some((entry) => entry.isIntersecting);
+      compute();
+    },
+    { threshold: 0.35 },
+  );
+
+  observer.observe(gameCanvas);
+
+  const handleChange = () => compute();
+  mqMobile.addEventListener('change', handleChange);
+  mqLandscape.addEventListener('change', handleChange);
+  mqCoarse.addEventListener('change', handleChange);
+
+  window.addEventListener('beforeunload', () => {
+    observer.disconnect();
+    mqMobile.removeEventListener('change', handleChange);
+    mqLandscape.removeEventListener('change', handleChange);
+    mqCoarse.removeEventListener('change', handleChange);
+  });
+}

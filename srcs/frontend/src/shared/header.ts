@@ -16,9 +16,15 @@ export function initHeader(options: InitHeaderOptions = {}): void {
   const { user, hasSession } = readSession();
   const body = document.body;
 
-  // Ensure collapsed by default
-  if (!body.classList.contains('menu-collapsed')) {
-    body.classList.add('menu-collapsed');
+  const prefersSidebar = window.matchMedia('(min-width: 1024px)').matches;
+
+  // Sidebar collapse only on desktop; mobile stays expanded for bottom nav
+  if (prefersSidebar) {
+    if (!body.classList.contains('menu-collapsed')) {
+      body.classList.add('menu-collapsed');
+    }
+  } else {
+    body.classList.remove('menu-collapsed');
   }
 
   const menuColumn = ensureMenuColumn(hasSession);
@@ -60,9 +66,9 @@ function buildMenuEntries(hasSession: boolean): MenuEntry[] {
   return [
     sessionEntry,
     { label: 'TOURNAMENTS', href: './tournaments.html', color: 'magenta', iconClass: 'icon-trophy' },
-    { label: '1v1 MATCH', href: './multiplayer.html', color: 'green', iconClass: 'icon-gamepad' },
+    { label: 'ARCADE', href: './index.html', color: 'green', iconClass: 'icon-gamepad' },
     { label: 'PLAY vs AI', href: './match.html', color: 'amber', iconClass: 'icon-robot' },
-    { label: 'CHAT', href: './profile.html', color: 'purple', iconClass: 'icon-chat' },
+    { label: '1v1 MATCH', href: './multiplayer.html', color: 'purple', iconClass: 'icon-web' },
   ];
 }
 
