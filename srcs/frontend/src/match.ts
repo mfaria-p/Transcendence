@@ -102,6 +102,44 @@ interface TournamentSummary {
 	matches: TournamentMatchSummary[];
 }
 
+function setupMenuAutoHide(): void {
+	const gameCanvas = document.getElementById('gameCanvas');
+	if (!gameCanvas) return;
+
+	const mqMobile = window.matchMedia('(max-width: 900px)');
+	const mqLandscape = window.matchMedia('(orientation: landscape)');
+	const mqCoarse = window.matchMedia('(pointer: coarse)');
+
+	let lastIntersecting = false;
+
+	const compute = () => {
+		const shouldHide = mqMobile.matches && mqLandscape.matches && mqCoarse.matches && lastIntersecting;
+		document.body.classList.toggle('menu-hidden', shouldHide);
+	};
+
+	const observer = new IntersectionObserver(
+		(entries) => {
+			lastIntersecting = entries.some((entry) => entry.isIntersecting);
+			compute();
+		},
+		{ threshold: 0.35 },
+	);
+
+	observer.observe(gameCanvas);
+
+	const handleChange = () => compute();
+	mqMobile.addEventListener('change', handleChange);
+	mqLandscape.addEventListener('change', handleChange);
+	mqCoarse.addEventListener('change', handleChange);
+
+	window.addEventListener('beforeunload', () => {
+		observer.disconnect();
+		mqMobile.removeEventListener('change', handleChange);
+		mqLandscape.removeEventListener('change', handleChange);
+		mqCoarse.removeEventListener('change', handleChange);
+	});
+}
+
 class TournamentMatchPage {
 	private canvas: HTMLCanvasElement | null;
 	private ctx: CanvasRenderingContext2D | null;
@@ -116,6 +154,8 @@ class TournamentMatchPage {
 	private sentReady = false;
 	private gameStatus: GameStatus = 'waiting';
 	private readyButton: HTMLButtonElement | null = null;
+	private touchActive = false;
+	private lastTouchY: number | null = null;
 	private userNameCache = new Map<string, string>();
 	private fetchingNames = new Set<string>();
 	private tournamentName: string | null = null;
@@ -888,6 +928,7 @@ class TournamentMatchPage {
 		window.addEventListener('keydown', this.keyDownHandler);
 		window.addEventListener('keyup', this.keyUpHandler);
 		window.addEventListener('beforeunload', this.beforeUnloadHandler);
+		this.setupTouchControls();
 
 		this.readyButton = document.getElementById('readyButton') as HTMLButtonElement | null;
 		if (this.readyButton) {
@@ -955,6 +996,63 @@ class TournamentMatchPage {
 		if (next === this.currentDirection) return;
 		this.currentDirection = next;
 		this.sendInput(next);
+	}
+
+	private setupTouchControls(): void {
+		if (!this.canvas) return;
+		const canvas = this.canvas;
+
+		const getY = (touch: Touch): number => {
+			const rect = canvas.getBoundingClientRect();
+			return (touch.clientY - rect.top) * (canvas.height / rect.height);
+		};
+
+		canvas.addEventListener('touchstart', (e) => {
+			e.preventDefault();
+			if (this.gameStatus !== 'playing') return;
+			const touch = e.touches[0];
+			if (!touch) return;
+			this.touchActive = true;
+			this.lastTouchY = getY(touch);
+		}, { passive: false });
+
+		canvas.addEventListener('touchmove', (e) => {
+			e.preventDefault();
+			if (!this.touchActive || this.gameStatus !== 'playing') return;
+			const touch = e.touches[0];
+			if (!touch) return;
+			const currentY = getY(touch);
+
+			if (this.lastTouchY !== null) {
+				const delta = currentY - this.lastTouchY;
+				if (Math.abs(delta) > 2) {
+					const dir: Direction = delta < 0 ? 'up' : 'down';
+					this.pressed.up = dir === 'up';
+					this.pressed.down = dir === 'down';
+					this.pushDirection();
+				}
+			}
+
+			this.lastTouchY = currentY;
+		}, { passive: false });
+
+		const resetTouch = () => {
+			this.touchActive = false;
+			this.lastTouchY = null;
+			this.pressed.up = false;
+			this.pressed.down = false;
+			this.pushDirection();
+		};
+
+		canvas.addEventListener('touchend', (e) => {
+			e.preventDefault();
+			resetTouch();
+		}, { passive: false });
+
+		canvas.addEventListener('touchcancel', (e) => {
+			e.preventDefault();
+			resetTouch();
+		}, { passive: false });
 	}
 
 	private sendInput(direction: Direction): void {
@@ -1650,6 +1748,7 @@ document.addEventListener('DOMContentLoaded', () => {
 	console.log('[match] DOMContentLoaded - creating TournamentMatchPage');
 	console.log('[match] readyButton exists in DOM?', !!document.getElementById('readyButton'));
 	new TournamentMatchPage(roomId, token, normalizedUser, isQuickMatch);
+	setupMenuAutoHide();
 });
 
 // Configure your Lottie sources here. Set to a URL (string) or leave as inline JSON.
