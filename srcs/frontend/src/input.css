@@ -992,6 +992,7 @@ body.auth-body {
 	box-sizing: border-box;
 	display: grid;
 	grid-template-columns: 60% 40%;
+	grid-template-areas: "arcade hero";
 	place-items: stretch;
 	gap: 40px;
 	height: 100vh;
@@ -1000,6 +1001,7 @@ body.auth-body {
 }
 
 .hero {
+	grid-area: hero;
 	flex: 0 1 38vw;
 	max-width: 40vw;
 	display: flex;
@@ -1040,6 +1042,7 @@ body.auth-body {
 	background: transparent;
 	color: var(--cyan);
 	font-size: 16px;
+	z-index: 3;
 	font-weight: 700;
 	letter-spacing: 0.4px;
 	cursor: pointer;
@@ -1057,6 +1060,7 @@ body.auth-body {
 }
 
 .arcade-column {
+	grid-area: arcade;
 	display: flex;
 	align-items: center;
 	width: 60vw;
@@ -1505,6 +1509,7 @@ body:not(.menu-collapsed) .menu-toggle .menu-icon {
 	letter-spacing: 0.3px;
 	position: absolute;
 	left: 0;
+	z-index: 3;
 	bottom: 20px;
 	background: transparent;
 }
