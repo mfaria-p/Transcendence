@@ -26,6 +26,8 @@ services:
       dockerfile: services/gateway/Dockerfile
     expose:
       - "3000"
+    environment:
+      - USERS_URL=http://user:3002
     env_file:
       - ./backend/services/gateway/.env
       - ./.env
@@ -50,6 +52,8 @@ services:
       dockerfile: services/user/Dockerfile
     expose:
       - "3002"
+    environment:
+      - USER_PORT=3002
     env_file:
       - ./.env
     networks: [appnet]

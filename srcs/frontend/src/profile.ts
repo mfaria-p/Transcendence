@@ -35,7 +35,15 @@ class ProfileManager {
 
     try {
       this.currentUser = JSON.parse(userStr);
-      await verifySession(this.accessToken);
+
+      try {
+        await verifySession(this.accessToken);
+      } catch (error) {
+        if (error instanceof Error && error.message === 'Session expired') {
+          throw error; // will be handled below
+        }
+        console.warn('Session check failed, keeping stored session (non-expiring error):', error);
+      }
       
       // Initialize global header
       initHeader({ active: 'profile' });
@@ -50,11 +58,16 @@ class ProfileManager {
       this.loadFriends();
     } catch (error) {
       console.error('Init error:', error);
-      showMessage('Session expired. Redirecting to login...', 'error');
       
-      setTimeout(() => {
-        clearSessionAndRedirect();
-      }, 2000);
+      if (error instanceof Error && error.message === 'Session expired') {
+        showMessage('Session expired. Redirecting to login...', 'error');
+        setTimeout(() => {
+          clearSessionAndRedirect();
+        }, 2000);
+        return;
+      }
+
+      showMessage('Auth service temporarily unavailable. Please try again shortly.', 'error');
     }
   }
 
@@ -109,17 +122,26 @@ class ProfileManager {
         const data = await response.json();
         this.currentProfile = data.profile;
         this.displayProfile();
-      } else if (response.status === 404) {
-        throw new Error('Profile not found');
-      } else {
-        throw new Error(`Failed to load profile: ${response.status}`);
+        return;
       }
+
+      if (response.status === 404) {
+        throw new Error('Profile not found');
+      }
+
+      if (response.status >= 500) {
+        console.warn('User service unavailable while loading profile:', response.status);
+        showMessage('User service indisponível. Tenta novamente em breve.', 'error');
+        return;
+      }
+
+      throw new Error(`Failed to load profile: ${response.status}`);
     } catch (error) {
       if (error instanceof Error && error.message === 'Session expired') {
         return;
       }
       console.error('Load profile error:', error);
-      throw error;
+      showMessage('Não foi possível carregar o perfil agora.', 'error');
     }
   }
 

@@ -9,8 +9,12 @@ export async function verifySession(accessToken: string): Promise<void> {
       },
     });
 
-    if (!response.ok) {
+    if (response.status === 401) {
       throw new Error('Session expired');
+    }
+
+    if (!response.ok) {
+      throw new Error(`Auth check failed (${response.status})`);
     }
   } catch (error) {
     console.error('Session verification failed:', error);
