@@ -730,7 +730,7 @@ class ProfileManager {
             
             // Create request card
             const requestDiv = document.createElement('div');
-            requestDiv.className = 'flex items-center justify-between p-4 bg-gray-700 rounded-lg mb-2';
+            requestDiv.className = 'flex flex-col sm:flex-row items-start sm:items-center justify-between p-4 bg-gray-700 rounded-lg mb-2 gap-3';
             
             const avatarHtml = avatarUrl
               ? `<img src="${avatarUrl}" class="w-12 h-12 rounded-full object-cover mr-4" alt="${username}'s avatar" />`
@@ -739,18 +739,18 @@ class ProfileManager {
                 </div>`;
             
             requestDiv.innerHTML = `
-              <div class="flex items-center cursor-pointer flex-1" data-profile-id="${fromProfileId}">
+                <div class="flex items-center cursor-pointer flex-1 min-w-0" data-profile-id="${fromProfileId}">
                 ${avatarHtml}
-                <div>
-                  <p class="text-white font-semibold">${username}</p>
-                  <p class="text-gray-400 text-sm">${email}</p>
+                <div class="overflow-hidden">
+                  <p class="text-white font-semibold truncate">${username}</p>
+                  <p class="text-gray-400 text-sm truncate">${email}</p>
                 </div>
               </div>
-              <div class="flex gap-2">
-                <button class="accept-btn px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition" data-profile-id="${fromProfileId}">
+              <div class="flex gap-2 w-full sm:w-auto flex-shrink-0">
+                <button class="accept-btn flex-1 sm:flex-none px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition text-sm" data-profile-id="${fromProfileId}">
                   Accept
                 </button>
-                <button class="decline-btn px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition" data-profile-id="${fromProfileId}">
+                <button class="decline-btn flex-1 sm:flex-none px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition text-sm" data-profile-id="${fromProfileId}">
                   Decline
                 </button>
               </div>
@@ -895,7 +895,7 @@ class ProfileManager {
             }
             
             const friendDiv = document.createElement('div');
-            friendDiv.className = 'flex items-center justify-between p-4 bg-gray-700 rounded-lg';
+            friendDiv.className = 'flex flex-col sm:flex-row items-start sm:items-center justify-between p-4 bg-gray-700 rounded-lg gap-3';
 
             // Avatar with status badge
             const avatarHtml = avatarUrl
@@ -911,14 +911,14 @@ class ProfileManager {
                 </div>`;
             
             friendDiv.innerHTML = `
-              <div class="flex items-center cursor-pointer flex-1" data-friend-id="${friendId}">
+              <div class="flex items-center cursor-pointer flex-1 min-w-0" data-friend-id="${friendId}">
                 ${avatarHtml}
-                <div>
-                  <p class="text-white font-semibold">${account.username}</p>
-                  <p class="text-gray-400 text-sm">${account.email}</p>
+                <div class="overflow-hidden">
+                  <p class="text-white font-semibold truncate">${account.username}</p>
+                  <p class="text-gray-400 text-sm truncate">${account.email}</p>
                 </div>
               </div>
-              <button class="remove-friend-btn px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition" data-friend-id="${friendId}">
+              <button class="remove-friend-btn w-full sm:w-auto px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition text-sm flex-shrink-0" data-friend-id="${friendId}">
                 Remove
               </button>
             `;
