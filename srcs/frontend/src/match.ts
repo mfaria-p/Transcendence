@@ -192,6 +192,7 @@ class TournamentMatchPage {
 	private redirectingToNextMatch = false;
 	private quickWaitOverlay: HTMLElement | null = null;
 	private quickWaitText: HTMLElement | null = null;
+	private quickWaitCancelBtn: HTMLButtonElement | null = null;
 	private readonly normalizedUser: User;
 
 	constructor(
@@ -728,10 +729,22 @@ class TournamentMatchPage {
 	private setupQuickWaitOverlay(): void {
 		this.quickWaitOverlay = document.getElementById('quickWaitOverlay');
 		this.quickWaitText = document.getElementById('quickWaitText');
+		this.quickWaitCancelBtn = document.getElementById('quickWaitCancel') as HTMLButtonElement | null;
 		if (!this.isQuickMatch) {
 			this.setQuickWaitVisible(false);
 			return;
 		}
+		this.quickWaitCancelBtn?.addEventListener('click', () => {
+			this.shouldReconnect = false;
+			try {
+				this.socket?.close();
+			} catch (err) {
+				console.warn('quick wait cancel close socket failed', err);
+			}
+			this.setQuickWaitVisible(false);
+			window.location.href = './multiplayer.html';
+		});
+
 		this.setQuickWaitVisible(true, this.roomId ? 'Waiting for your opponent to join.' : 'Looking for another player...');
 	}
 
