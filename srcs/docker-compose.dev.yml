@@ -4,7 +4,8 @@ services:
       context: ./frontend
       dockerfile: Dockerfile.dev
     volumes:
-      -  frontend_data:/app/dist
+      - frontend_data:/app/dist
+    restart: "no"
 
   nginx:
     build:
@@ -14,60 +15,84 @@ services:
       - "9000:80"
     volumes:
       - ./nginx/dev.conf:/etc/nginx/nginx.conf:ro
-      -  frontend_data:/usr/share/nginx/html
+      - frontend_data:/usr/share/nginx/html
     depends_on:
       - frontend
+      - gateway
       - auth
+      - user
+      - ws
     networks: [appnet]
+    restart: unless-stopped
 
   gateway:
     build:
       context: ./backend
       dockerfile: services/gateway/Dockerfile
+    environment:
+      - GATEWAY_PORT=3000
+      - AUTH_URL=http://auth:3001
+      - USERS_URL=http://user:3002
+      - REALTIME_URL=http://ws:3003
+      - JWT_SECRET=${JWT_SECRET}
+      - NODE_ENV=development
     expose:
       - "3000"
-    environment:
-      - USERS_URL=http://user:3002
-    env_file:
-      - ./backend/services/gateway/.env
-      - ./.env
     depends_on:
       - auth
       - user
+      - ws
     networks: [appnet]
+    restart: unless-stopped
 
   auth:
     build:
       context: ./backend
       dockerfile: services/auth/Dockerfile
+    volumes:
+      - account_data:/app/prisma/data
+    environment:
+      - AUTH_PORT=3001
+      - DATABASE_URL=file:/app/prisma/data/account.db
+      - PRISMA_CLI_VERSION=6.17.0
+      - JWT_SECRET=${JWT_SECRET}
+      - GOOGLE_OAUTH_CLIENT_ID=${GOOGLE_OAUTH_CLIENT_ID}
+      - GOOGLE_OAUTH_CLIENT_SECRET=${GOOGLE_OAUTH_CLIENT_SECRET}
+      - NODE_ENV=development
     expose:
       - "3001"
-    env_file:
-      - ./.env
     networks: [appnet]
+    restart: unless-stopped
 
   user:
     build:
       context: ./backend
       dockerfile: services/user/Dockerfile
-    expose:
-      - "3002"
+    volumes:
+      - profile_data:/app/prisma/data
     environment:
       - USER_PORT=3002
-    env_file:
-      - ./.env
+      - DATABASE_URL=file:/app/prisma/data/profile.db
+      - PRISMA_CLI_VERSION=6.17.0
+      - JWT_SECRET=${JWT_SECRET}
+      - NODE_ENV=development
+    expose:
+      - "3002"
     networks: [appnet]
+    restart: unless-stopped
 
   ws:
     build:
       context: ./backend
       dockerfile: services/ws/Dockerfile
-    expose:
-      - "3003"
     environment:
       - WS_PORT=3003
       - JWT_SECRET=${JWT_SECRET}
+      - NODE_ENV=development
+    expose:
+      - "3003"
     networks: [appnet]
+    restart: unless-stopped
 
 networks:
   appnet:
@@ -75,3 +100,5 @@ networks:
 
 volumes:
   frontend_data:
+  account_data:
+  profile_data:

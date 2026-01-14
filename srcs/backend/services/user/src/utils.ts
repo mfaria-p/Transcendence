@@ -10,7 +10,7 @@ const NotFoundError = createError('NOT_FOUND', 'Record not found', 404);
 const InvalidRelationError = createError('INVALID_RELATION', 'Invalid relation reference', 400);
 const DatabaseError = createError('DATABASE_ERROR', 'Database operation failed', 500);
 
-function handlePrismaError(error: unknown): never {
+function handlePrismaError(error: any): never {
   if (error instanceof Prisma.PrismaClientKnownRequestError) {
     switch (error.code) {
       case 'P2002':

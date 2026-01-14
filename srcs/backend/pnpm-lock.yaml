@@ -86,7 +86,7 @@ importers:
         specifier: workspace:*
         version: link:../../packages/lib-docs
       '@prisma/client':
-        specifier: ^6.16.2
+        specifier: ^6.17.0
         version: 6.17.0(prisma@6.17.0(typescript@5.9.3))(typescript@5.9.3)
       argon2:
         specifier: ^0.44.0
