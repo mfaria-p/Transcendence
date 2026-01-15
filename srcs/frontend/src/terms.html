@@ -10,6 +10,7 @@
 </head>
 
 <body class="terms-body">
+	<div id="globalHeader"></div>
 	<main class="terms-shell">
 		<article class="terms-card">
 			<header class="terms-header">
@@ -88,8 +89,18 @@
 			<footer class="terms-footer">
 				<a class="terms-back" href="./landing.html">Back</a>
 			</footer>
-		</article>
-	</main>
+				</article>
+				<div id="globalFooterMount"></div>
+			</main>
+
+
+			<script type="module">
+				import { initHeader } from './shared/header.js';
+				import { initFooter } from './shared/footer.js';
+				initHeader();
+				initFooter({ containerId: 'globalFooterMount' });
+			</script>
+
 </body>
 
 </html>
