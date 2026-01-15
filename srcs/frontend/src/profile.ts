@@ -226,6 +226,7 @@ class ProfileManager {
     searchInput?.addEventListener('input', () => this.searchUsers());
 
     document.getElementById('deleteAccountBtn')?.addEventListener('click', () => this.deleteAccount());
+    document.getElementById('logoutBtn')?.addEventListener('click', () => this.logout());
   }
 
   private openAvatarModal(): void {
@@ -1016,6 +1017,10 @@ class ProfileManager {
         showMessage('Failed to delete account', 'error');
       }
     }
+  }
+
+  private async logout(): Promise<void> {
+    await handleLogout();
   }
 
 }
