@@ -31,6 +31,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   setupMenuAutoHide();
+  preventArrowScroll();
 });
 
 function setupMenuAutoHide(): void {
@@ -68,5 +69,25 @@ function setupMenuAutoHide(): void {
     mqMobile.removeEventListener('change', handleChange);
     mqLandscape.removeEventListener('change', handleChange);
     mqCoarse.removeEventListener('change', handleChange);
+  });
+}
+
+function preventArrowScroll(): void {
+  const handler = (event: KeyboardEvent) => {
+    const target = event.target as HTMLElement | null;
+
+    // Allow typing/navigation inside form controls or contenteditable elements
+    if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT' || target.isContentEditable)) {
+      return;
+    }
+
+    if (event.key === 'ArrowUp' || event.key === 'ArrowDown' || event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+      event.preventDefault();
+    }
+  };
+
+  window.addEventListener('keydown', handler, { passive: false });
+  window.addEventListener('beforeunload', () => {
+    window.removeEventListener('keydown', handler);
   });
 }
