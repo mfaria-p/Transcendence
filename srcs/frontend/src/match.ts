@@ -903,6 +903,7 @@ class TournamentMatchPage {
 		const ctx = this.ctx;
 		const width = this.canvas.width;
 		const height = this.canvas.height;
+		const paddingX = Math.max(16, width * 0.025);
 		const scaleX = width / state.width;
 		const scaleY = height / state.height;
 
@@ -921,9 +922,9 @@ class TournamentMatchPage {
 		const paddlePixelHeight = state.paddleHeight * scaleY;
 
 		ctx.fillStyle = '#f5f5f5';
-		ctx.fillRect(0, state.leftY * scaleY, paddlePixelWidth, paddlePixelHeight);
+		ctx.fillRect(paddingX, state.leftY * scaleY, paddlePixelWidth, paddlePixelHeight);
 		ctx.fillRect(
-			width - paddlePixelWidth,
+			width - paddlePixelWidth - paddingX,
 			state.rightY * scaleY,
 			paddlePixelWidth,
 			paddlePixelHeight,
