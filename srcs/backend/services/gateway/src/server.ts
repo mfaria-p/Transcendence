@@ -11,7 +11,7 @@ dotenv.config();
 const {
   GATEWAY_PORT = '3000',
   AUTH_URL = 'http://auth:3001',
-  USERS_URL = 'http://users:3002',
+  USERS_URL = 'http://user:3002',
   REALTIME_URL = 'http://ws:3003',
 } = process.env;
 

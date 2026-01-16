@@ -13,56 +13,22 @@ interface InitHeaderOptions {
 }
 
 export function initHeader(options: InitHeaderOptions = {}): void {
-  const container = document.getElementById('globalHeader');
-  if (!container) return;
-
-  const resolvedActive = options.active === 'match' ? 'quick' : options.active;
   const { user, hasSession } = readSession();
+  const body = document.body;
 
-  const navLinks = hasSession
-    ? [
-        { key: 'home' as const, label: 'Free play', href: './index.html' },
-        { key: 'quick' as const, label: 'Quick match', href: './multiplayer.html' },
-        { key: 'tournaments' as const, label: 'Tournaments', href: './tournaments.html' },
-        { key: 'profile' as const, label: 'Profile', href: './profile.html' },
-      ]
-    : [];
+  const prefersSidebar = window.matchMedia('(min-width: 1024px)').matches;
 
-  const navHtml = navLinks
-    .map((link) => {
-      const isActive = link.key === resolvedActive;
-      const base = 'text-sm font-medium transition';
-      const color = isActive ? 'text-green-400' : 'text-gray-300 hover:text-white';
-      return `<a href="${link.href}" class="${base} ${color}">${link.label}</a>`;
-    })
-    .join('<span class="text-gray-600">|</span>');
-
-  const authHtml = hasSession && user
-    ? `
-      <span class="text-gray-300 text-sm">Welcome, <a href="./profile.html" class="text-green-400 hover:text-green-300 font-semibold underline transition">${user.username}</a></span>
-      <button id="globalLogoutButton" class="bg-red-600 hover:bg-red-700 text-white text-sm py-1.5 px-4 rounded transition">Logout</button>
-    `
-    : `
-      <a href="./login.html" class="text-sm bg-gray-700 hover:bg-gray-600 text-gray-200 hover:text-white py-1.5 px-4 rounded transition">Login</a>
-      <a href="./signup.html" class="text-sm bg-green-600 hover:bg-green-700 text-white py-1.5 px-4 rounded transition">Sign Up</a>
-    `;
-
-  container.innerHTML = `
-    <header class="sticky top-0 z-40 bg-gray-900/95 backdrop-blur border-b border-gray-800">
-      <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-        <div class="flex items-center gap-6">
-          <a href="./index.html" class="text-lg font-bold text-green-400 tracking-tight">PHONG</a>
-          <nav class="flex items-center gap-4">${navHtml}</nav>
-        </div>
-        <div class="flex items-center gap-3">${authHtml}</div>
-      </div>
-    </header>
-  `;
-
-  const logoutButton = document.getElementById('globalLogoutButton');
-  if (logoutButton) {
-    logoutButton.addEventListener('click', () => handleLogout());
+  // Sidebar collapse only on desktop; mobile stays expanded for bottom nav
+  if (prefersSidebar) {
+    if (!body.classList.contains('menu-collapsed')) {
+      body.classList.add('menu-collapsed');
+    }
+  } else {
+    body.classList.remove('menu-collapsed');
   }
+
+  const menuColumn = ensureMenuColumn(hasSession);
+  wireMenu(menuColumn, body);
 }
 
 function readSession(): { user: StoredUser | null; hasSession: boolean } {
@@ -81,4 +47,106 @@ function readSession(): { user: StoredUser | null; hasSession: boolean } {
     localStorage.removeItem('user');
     return { user: null, hasSession: false };
   }
+}
+
+type MenuColor = 'cyan' | 'magenta' | 'green' | 'amber' | 'purple';
+
+interface MenuEntry {
+  label: string;
+  href: string;
+  color: MenuColor;
+  iconClass: string;
+}
+
+function buildMenuEntries(hasSession: boolean): MenuEntry[] {
+  const sessionEntry: MenuEntry = hasSession
+    ? { label: 'PROFILE', href: './profile.html', color: 'cyan', iconClass: 'icon-user' }
+    : { label: 'SIGN IN / UP', href: './login.html', color: 'cyan', iconClass: 'icon-user' };
+
+  return [
+    sessionEntry,
+    { label: 'TOURNAMENTS', href: './tournaments.html', color: 'magenta', iconClass: 'icon-trophy' },
+    { label: 'ARCADE', href: './index.html', color: 'green', iconClass: 'icon-gamepad' },
+    { label: 'PLAY vs AI', href: './match.html', color: 'amber', iconClass: 'icon-robot' },
+    { label: '1v1 MATCH', href: './multiplayer.html', color: 'purple', iconClass: 'icon-web' },
+  ];
+}
+
+function ensureMenuColumn(hasSession: boolean): HTMLElement {
+  const existing = document.querySelector<HTMLElement>('.menu-column');
+  if (existing) {
+    hydrateMenuButtons(existing, hasSession);
+    return existing;
+  }
+
+  const entries = buildMenuEntries(hasSession);
+  const section = document.createElement('section');
+  section.className = 'menu-column';
+  section.innerHTML = `
+    <button class="menu-toggle" type="button" aria-pressed="false" aria-label="Toggle menu">
+      <span class="menu-icon icon-next" aria-hidden="true"></span>
+    </button>
+    <div class="menu-stack">
+      <div class="menu">
+        ${entries
+          .map(
+            (entry) => `
+              <button class="menu-btn ${entry.color}" data-target="${entry.href}">
+                <span class="menu-icon ${entry.iconClass}" aria-hidden="true"></span>
+                <span>${entry.label}</span>
+              </button>
+            `,
+          )
+          .join('')}
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(section);
+  return section;
+}
+
+function hydrateMenuButtons(menuColumn: HTMLElement, hasSession: boolean): void {
+  const entries = buildMenuEntries(hasSession);
+  const buttons = menuColumn.querySelectorAll<HTMLButtonElement>('.menu-btn');
+
+  buttons.forEach((btn, idx) => {
+    const entry = entries[idx];
+    if (!entry) return;
+
+    btn.dataset.target = entry.href;
+    btn.classList.remove('cyan', 'magenta', 'green', 'amber', 'purple');
+    btn.classList.add(entry.color);
+
+    const label = btn.querySelector<HTMLElement>('span:last-child');
+    if (label) label.textContent = entry.label;
+
+    const icon = btn.querySelector<HTMLElement>('.menu-icon');
+    if (icon) icon.className = `menu-icon ${entry.iconClass}`;
+  });
+}
+
+function wireMenu(menuColumn: HTMLElement, body: HTMLElement): void {
+  const toggle = menuColumn.querySelector<HTMLButtonElement>('.menu-toggle');
+  if (toggle) {
+    const sync = () => {
+      const collapsed = body.classList.contains('menu-collapsed');
+      toggle.setAttribute('aria-pressed', collapsed ? 'true' : 'false');
+    };
+
+    sync();
+    toggle.addEventListener('click', () => {
+      const collapsed = body.classList.toggle('menu-collapsed');
+      toggle.setAttribute('aria-pressed', collapsed ? 'true' : 'false');
+    });
+  }
+
+  const menuButtons = menuColumn.querySelectorAll<HTMLButtonElement>('.menu-btn[data-target]');
+  menuButtons.forEach((btn) => {
+    const target = btn.dataset.target;
+    if (!target) return;
+    btn.addEventListener('click', () => {
+      window.location.href = target;
+    });
+  });
 }

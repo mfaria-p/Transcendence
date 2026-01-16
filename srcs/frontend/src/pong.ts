@@ -296,12 +296,7 @@ class PongGame {
       overlay.classList.remove('hidden');
       
       console.log('[Pong] Overlay classes after:', overlay.className);
-      
-      // Force display for debugging
-      if (window.innerWidth < 900) {
-        overlay.style.display = 'flex';
-        console.log('[Pong] Forced overlay to display: flex');
-      }
+
     } else {
       console.error('[Pong] Mobile overlay element NOT FOUND!');
     }

@@ -1,127 +1,65 @@
 <!doctype html>
 <html>
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <link href="./output.css" rel="stylesheet">
-  <title>Transcendence - Sign Up</title>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link href="https://fonts.googleapis.com/css2?family=Oxanium:wght@400;600;700&display=swap" rel="stylesheet">
+	<link href="./output.css" rel="stylesheet">
+	<title>Transcendence - Sign Up</title>
 </head>
-<body class="bg-gray-900 text-white min-h-screen flex items-center justify-center">
-  <div class="bg-gray-800 p-10 rounded-lg shadow-2xl w-full max-w-lg">
-    <div class="text-center mb-8">
-      <h1 class="text-4xl font-bold text-green-400 mb-2">TRANSCENDENCE</h1>
-      <p class="text-gray-400">Create your account to play</p>
-    </div>
+<body class="auth-body menu-collapsed">
+	<main class="auth-shell">
+		<section class="auth-panel">
+			<header class="auth-hero">
+				<p class="auth-kicker">Join the arena</p>
+				<h1 class="auth-title">Create your account</h1>
+				<p class="auth-subtitle">Save your progress, track tournaments, and jump back into matches instantly.</p>
+			</header>
 
-    <form id="signupForm" class="space-y-6" novalidate>
-      <div>
-        <label for="username" class="block text-base font-medium text-gray-200 tracking-wide mb-2">
-          Username
-        </label>
-        <input 
-          type="text" 
-          id="username" 
-          name="username" 
-          required
-          minlength="3"
-          maxlength="20"
-          class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-green-400 focus:border-transparent"
-          placeholder="Choose a username (3-20 characters)"
-        >
-      </div>
+			<form id="signupForm" class="auth-form" novalidate>
+				<div class="auth-field">
+					<label for="username">Username</label>
+					<input type="text" id="username" name="username" required minlength="3" maxlength="20" placeholder="Choose a username (3-20 characters)" class="auth-input" />
+				</div>
 
-      <div>
-        <label for="email" class="block text-base font-medium text-gray-200 tracking-wide mb-2">
-          Email
-        </label>
-        <input 
-          type="email" 
-          id="email" 
-          name="email" 
-          required
-          class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-green-400 focus:border-transparent"
-          placeholder="Enter your email address"
-        >
-      </div>
+				<div class="auth-field">
+					<label for="email">Email</label>
+					<input type="email" id="email" name="email" required placeholder="Enter your email address" class="auth-input" />
+				</div>
 
-      <div>
-        <label for="password" class="block text-base font-medium text-gray-200 tracking-wide mb-2">
-          Password
-        </label>
-        <input 
-          type="password" 
-          id="password" 
-          name="password" 
-          required
-          minlength="8"
-          class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-green-400 focus:border-transparent"
-          placeholder="Create a password"
-        >
-        <div id="passwordRequirements" class="mt-2 space-y-1 text-sm hidden">
-          <div id="req-length" class="flex items-center gap-2">
-            <span class="indicator">❌</span>
-            <span class="text-gray-400">At least 8 characters</span>
-          </div>
-          <div id="req-uppercase" class="flex items-center gap-2">
-            <span class="indicator">❌</span>
-            <span class="text-gray-400">One uppercase letter</span>
-          </div>
-          <div id="req-lowercase" class="flex items-center gap-2">
-            <span class="indicator">❌</span>
-            <span class="text-gray-400">One lowercase letter</span>
-          </div>
-          <div id="req-number" class="flex items-center gap-2">
-            <span class="indicator">❌</span>
-            <span class="text-gray-400">One number</span>
-          </div>
-        </div>
-      </div>
+				<div class="auth-field">
+					<label for="password">Password</label>
+					<input type="password" id="password" name="password" required minlength="8" placeholder="Create a password" class="auth-input" />
+					<div id="passwordRequirements" class="auth-req hidden">
+						<div id="req-length" class="auth-req-item"><span class="auth-req-indicator">❌</span><span>At least 8 characters</span></div>
+						<div id="req-uppercase" class="auth-req-item"><span class="auth-req-indicator">❌</span><span>One uppercase letter</span></div>
+						<div id="req-lowercase" class="auth-req-item"><span class="auth-req-indicator">❌</span><span>One lowercase letter</span></div>
+						<div id="req-number" class="auth-req-item"><span class="auth-req-indicator">❌</span><span>One number</span></div>
+					</div>
+				</div>
 
-      <div>
-        <label for="confirmPassword" class="block text-base font-medium text-gray-200 tracking-wide mb-2">
-          Confirm Password
-        </label>
-        <input 
-          type="password" 
-          id="confirmPassword" 
-          name="confirmPassword" 
-          required
-          class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-green-400 focus:border-transparent"
-          placeholder="Confirm your password"
-        >
-      </div>
+				<div class="auth-field">
+					<label for="confirmPassword">Confirm Password</label>
+					<input type="password" id="confirmPassword" name="confirmPassword" required placeholder="Confirm your password" class="auth-input" />
+				</div>
 
-      <div id="errorMessage" class="hidden bg-red-600 text-white p-3 rounded-md text-sm">
-        Please fix the errors above
-      </div>
+				<div id="errorMessage" class="auth-alert auth-alert-error hidden">Please fix the errors above</div>
+				<div id="successMessage" class="auth-alert auth-alert-success hidden">Account created successfully!</div>
 
-      <div id="successMessage" class="hidden bg-green-600 text-white p-3 rounded-md text-sm">
-        Account created successfully!
-      </div>
+				<button type="submit" id="signupButton" class="auth-primary">Sign up</button>
+			</form>
 
-      <button 
-        type="submit" 
-        id="signupButton"
-        class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-md transition duration-200 focus:outline-none focus:ring-2 focus:ring-green-400"
-      >
-        Sign Up
-      </button>
-    </form>
+			<div class="auth-links">
+				<p>Already have an account? <a href="./login.html">Login</a></p>
+				<a class="auth-ghost" href="./index.html">Skip to game</a>
+			</div>
+		</section>
+	</main>
 
-    <div class="mt-6 text-center">
-      <p class="text-gray-400 text-sm">
-        Already have an account? 
-        <a href="./login.html" class="text-green-400 hover:text-green-300 underline">Login</a>
-      </p>
-    </div>
-
-    <div class="mt-4 text-center">
-      <a href="./index.html" class="text-gray-400 hover:text-white text-sm underline">
-        Skip to game 
-      </a>
-    </div>
-  </div>
-
-  <script type="module" src="./signup.js"></script>
+	<script type="module" src="./signup.js"></script>
+	<script type="module">
+		import { initFooter } from './shared/footer.js';
+		initFooter();
+	</script>
 </body>
 </html>

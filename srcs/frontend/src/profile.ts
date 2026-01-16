@@ -35,7 +35,15 @@ class ProfileManager {
 
     try {
       this.currentUser = JSON.parse(userStr);
-      await verifySession(this.accessToken);
+
+      try {
+        await verifySession(this.accessToken);
+      } catch (error) {
+        if (error instanceof Error && error.message === 'Session expired') {
+          throw error; // will be handled below
+        }
+        console.warn('Session check failed, keeping stored session (non-expiring error):', error);
+      }
       
       // Initialize global header
       initHeader({ active: 'profile' });
@@ -50,11 +58,16 @@ class ProfileManager {
       this.loadFriends();
     } catch (error) {
       console.error('Init error:', error);
-      showMessage('Session expired. Redirecting to login...', 'error');
       
-      setTimeout(() => {
-        clearSessionAndRedirect();
-      }, 2000);
+      if (error instanceof Error && error.message === 'Session expired') {
+        showMessage('Session expired. Redirecting to login...', 'error');
+        setTimeout(() => {
+          clearSessionAndRedirect();
+        }, 2000);
+        return;
+      }
+
+      showMessage('Auth service temporarily unavailable. Please try again shortly.', 'error');
     }
   }
 
@@ -109,17 +122,26 @@ class ProfileManager {
         const data = await response.json();
         this.currentProfile = data.profile;
         this.displayProfile();
-      } else if (response.status === 404) {
-        throw new Error('Profile not found');
-      } else {
-        throw new Error(`Failed to load profile: ${response.status}`);
+        return;
       }
+
+      if (response.status === 404) {
+        throw new Error('Profile not found');
+      }
+
+      if (response.status >= 500) {
+        console.warn('User service unavailable while loading profile:', response.status);
+        showMessage('User service indisponível. Tenta novamente em breve.', 'error');
+        return;
+      }
+
+      throw new Error(`Failed to load profile: ${response.status}`);
     } catch (error) {
       if (error instanceof Error && error.message === 'Session expired') {
         return;
       }
       console.error('Load profile error:', error);
-      throw error;
+      showMessage('Não foi possível carregar o perfil agora.', 'error');
     }
   }
 
@@ -204,6 +226,7 @@ class ProfileManager {
     searchInput?.addEventListener('input', () => this.searchUsers());
 
     document.getElementById('deleteAccountBtn')?.addEventListener('click', () => this.deleteAccount());
+    document.getElementById('logoutBtn')?.addEventListener('click', () => this.logout());
   }
 
   private openAvatarModal(): void {
@@ -708,7 +731,7 @@ class ProfileManager {
             
             // Create request card
             const requestDiv = document.createElement('div');
-            requestDiv.className = 'flex items-center justify-between p-4 bg-gray-700 rounded-lg mb-2';
+            requestDiv.className = 'flex flex-col sm:flex-row items-start sm:items-center justify-between p-4 bg-gray-700 rounded-lg mb-2 gap-3';
             
             const avatarHtml = avatarUrl
               ? `<img src="${avatarUrl}" class="w-12 h-12 rounded-full object-cover mr-4" alt="${username}'s avatar" />`
@@ -717,18 +740,18 @@ class ProfileManager {
                 </div>`;
             
             requestDiv.innerHTML = `
-              <div class="flex items-center cursor-pointer flex-1" data-profile-id="${fromProfileId}">
+                <div class="flex items-center cursor-pointer flex-1 min-w-0" data-profile-id="${fromProfileId}">
                 ${avatarHtml}
-                <div>
-                  <p class="text-white font-semibold">${username}</p>
-                  <p class="text-gray-400 text-sm">${email}</p>
+                <div class="overflow-hidden">
+                  <p class="text-white font-semibold truncate">${username}</p>
+                  <p class="text-gray-400 text-sm truncate">${email}</p>
                 </div>
               </div>
-              <div class="flex gap-2">
-                <button class="accept-btn px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition" data-profile-id="${fromProfileId}">
+              <div class="flex gap-2 w-full sm:w-auto flex-shrink-0">
+                <button class="accept-btn flex-1 sm:flex-none px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition text-sm" data-profile-id="${fromProfileId}">
                   Accept
                 </button>
-                <button class="decline-btn px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition" data-profile-id="${fromProfileId}">
+                <button class="decline-btn flex-1 sm:flex-none px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition text-sm" data-profile-id="${fromProfileId}">
                   Decline
                 </button>
               </div>
@@ -873,7 +896,7 @@ class ProfileManager {
             }
             
             const friendDiv = document.createElement('div');
-            friendDiv.className = 'flex items-center justify-between p-4 bg-gray-700 rounded-lg';
+            friendDiv.className = 'flex flex-col sm:flex-row items-start sm:items-center justify-between p-4 bg-gray-700 rounded-lg gap-3';
 
             // Avatar with status badge
             const avatarHtml = avatarUrl
@@ -889,14 +912,14 @@ class ProfileManager {
                 </div>`;
             
             friendDiv.innerHTML = `
-              <div class="flex items-center cursor-pointer flex-1" data-friend-id="${friendId}">
+              <div class="flex items-center cursor-pointer flex-1 min-w-0" data-friend-id="${friendId}">
                 ${avatarHtml}
-                <div>
-                  <p class="text-white font-semibold">${account.username}</p>
-                  <p class="text-gray-400 text-sm">${account.email}</p>
+                <div class="overflow-hidden">
+                  <p class="text-white font-semibold truncate">${account.username}</p>
+                  <p class="text-gray-400 text-sm truncate">${account.email}</p>
                 </div>
               </div>
-              <button class="remove-friend-btn px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition" data-friend-id="${friendId}">
+              <button class="remove-friend-btn w-full sm:w-auto px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition text-sm flex-shrink-0" data-friend-id="${friendId}">
                 Remove
               </button>
             `;
@@ -994,6 +1017,10 @@ class ProfileManager {
         showMessage('Failed to delete account', 'error');
       }
     }
+  }
+
+  private async logout(): Promise<void> {
+    await handleLogout();
   }
 
 }

@@ -102,6 +102,44 @@ interface TournamentSummary {
 	matches: TournamentMatchSummary[];
 }
 
+function setupMenuAutoHide(): void {
+	const gameCanvas = document.getElementById('gameCanvas');
+	if (!gameCanvas) return;
+
+	const mqMobile = window.matchMedia('(max-width: 900px)');
+	const mqLandscape = window.matchMedia('(orientation: landscape)');
+	const mqCoarse = window.matchMedia('(pointer: coarse)');
+
+	let lastIntersecting = false;
+
+	const compute = () => {
+		const shouldHide = mqMobile.matches && mqLandscape.matches && mqCoarse.matches && lastIntersecting;
+		document.body.classList.toggle('menu-hidden', shouldHide);
+	};
+
+	const observer = new IntersectionObserver(
+		(entries) => {
+			lastIntersecting = entries.some((entry) => entry.isIntersecting);
+			compute();
+		},
+		{ threshold: 0.35 },
+	);
+
+	observer.observe(gameCanvas);
+
+	const handleChange = () => compute();
+	mqMobile.addEventListener('change', handleChange);
+	mqLandscape.addEventListener('change', handleChange);
+	mqCoarse.addEventListener('change', handleChange);
+
+	window.addEventListener('beforeunload', () => {
+		observer.disconnect();
+		mqMobile.removeEventListener('change', handleChange);
+		mqLandscape.removeEventListener('change', handleChange);
+		mqCoarse.removeEventListener('change', handleChange);
+	});
+}
+
 class TournamentMatchPage {
 	private canvas: HTMLCanvasElement | null;
 	private ctx: CanvasRenderingContext2D | null;
@@ -116,6 +154,8 @@ class TournamentMatchPage {
 	private sentReady = false;
 	private gameStatus: GameStatus = 'waiting';
 	private readyButton: HTMLButtonElement | null = null;
+	private touchActive = false;
+	private lastTouchY: number | null = null;
 	private userNameCache = new Map<string, string>();
 	private fetchingNames = new Set<string>();
 	private tournamentName: string | null = null;
@@ -152,6 +192,7 @@ class TournamentMatchPage {
 	private redirectingToNextMatch = false;
 	private quickWaitOverlay: HTMLElement | null = null;
 	private quickWaitText: HTMLElement | null = null;
+	private quickWaitCancelBtn: HTMLButtonElement | null = null;
 	private readonly normalizedUser: User;
 
 	constructor(
@@ -688,10 +729,22 @@ class TournamentMatchPage {
 	private setupQuickWaitOverlay(): void {
 		this.quickWaitOverlay = document.getElementById('quickWaitOverlay');
 		this.quickWaitText = document.getElementById('quickWaitText');
+		this.quickWaitCancelBtn = document.getElementById('quickWaitCancel') as HTMLButtonElement | null;
 		if (!this.isQuickMatch) {
 			this.setQuickWaitVisible(false);
 			return;
 		}
+		this.quickWaitCancelBtn?.addEventListener('click', () => {
+			this.shouldReconnect = false;
+			try {
+				this.socket?.close();
+			} catch (err) {
+				console.warn('quick wait cancel close socket failed', err);
+			}
+			this.setQuickWaitVisible(false);
+			window.location.href = './multiplayer.html';
+		});
+
 		this.setQuickWaitVisible(true, this.roomId ? 'Waiting for your opponent to join.' : 'Looking for another player...');
 	}
 
@@ -850,6 +903,7 @@ class TournamentMatchPage {
 		const ctx = this.ctx;
 		const width = this.canvas.width;
 		const height = this.canvas.height;
+		const paddingX = Math.max(16, width * 0.025);
 		const scaleX = width / state.width;
 		const scaleY = height / state.height;
 
@@ -868,9 +922,9 @@ class TournamentMatchPage {
 		const paddlePixelHeight = state.paddleHeight * scaleY;
 
 		ctx.fillStyle = '#f5f5f5';
-		ctx.fillRect(0, state.leftY * scaleY, paddlePixelWidth, paddlePixelHeight);
+		ctx.fillRect(paddingX, state.leftY * scaleY, paddlePixelWidth, paddlePixelHeight);
 		ctx.fillRect(
-			width - paddlePixelWidth,
+			width - paddlePixelWidth - paddingX,
 			state.rightY * scaleY,
 			paddlePixelWidth,
 			paddlePixelHeight,
@@ -888,6 +942,7 @@ class TournamentMatchPage {
 		window.addEventListener('keydown', this.keyDownHandler);
 		window.addEventListener('keyup', this.keyUpHandler);
 		window.addEventListener('beforeunload', this.beforeUnloadHandler);
+		this.setupTouchControls();
 
 		this.readyButton = document.getElementById('readyButton') as HTMLButtonElement | null;
 		if (this.readyButton) {
@@ -955,6 +1010,63 @@ class TournamentMatchPage {
 		if (next === this.currentDirection) return;
 		this.currentDirection = next;
 		this.sendInput(next);
+	}
+
+	private setupTouchControls(): void {
+		if (!this.canvas) return;
+		const canvas = this.canvas;
+
+		const getY = (touch: Touch): number => {
+			const rect = canvas.getBoundingClientRect();
+			return (touch.clientY - rect.top) * (canvas.height / rect.height);
+		};
+
+		canvas.addEventListener('touchstart', (e) => {
+			e.preventDefault();
+			if (this.gameStatus !== 'playing') return;
+			const touch = e.touches[0];
+			if (!touch) return;
+			this.touchActive = true;
+			this.lastTouchY = getY(touch);
+		}, { passive: false });
+
+		canvas.addEventListener('touchmove', (e) => {
+			e.preventDefault();
+			if (!this.touchActive || this.gameStatus !== 'playing') return;
+			const touch = e.touches[0];
+			if (!touch) return;
+			const currentY = getY(touch);
+
+			if (this.lastTouchY !== null) {
+				const delta = currentY - this.lastTouchY;
+				if (Math.abs(delta) > 2) {
+					const dir: Direction = delta < 0 ? 'up' : 'down';
+					this.pressed.up = dir === 'up';
+					this.pressed.down = dir === 'down';
+					this.pushDirection();
+				}
+			}
+
+			this.lastTouchY = currentY;
+		}, { passive: false });
+
+		const resetTouch = () => {
+			this.touchActive = false;
+			this.lastTouchY = null;
+			this.pressed.up = false;
+			this.pressed.down = false;
+			this.pushDirection();
+		};
+
+		canvas.addEventListener('touchend', (e) => {
+			e.preventDefault();
+			resetTouch();
+		}, { passive: false });
+
+		canvas.addEventListener('touchcancel', (e) => {
+			e.preventDefault();
+			resetTouch();
+		}, { passive: false });
 	}
 
 	private sendInput(direction: Direction): void {
@@ -1650,6 +1762,7 @@ document.addEventListener('DOMContentLoaded', () => {
 	console.log('[match] DOMContentLoaded - creating TournamentMatchPage');
 	console.log('[match] readyButton exists in DOM?', !!document.getElementById('readyButton'));
 	new TournamentMatchPage(roomId, token, normalizedUser, isQuickMatch);
+	setupMenuAutoHide();
 });
 
 // Configure your Lottie sources here. Set to a URL (string) or leave as inline JSON.

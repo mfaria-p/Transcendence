@@ -1,3 +1,4 @@
+import { initHeader } from './shared/header.js';
 import { provisionProfile } from './utils-api.js';
 
 interface LoginResponse {
@@ -8,6 +9,8 @@ interface LoginResponse {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+  initHeader({ active: 'auth' });
+
   const loginForm = document.getElementById('loginForm') as HTMLFormElement;
   const identInput = document.getElementById('ident') as HTMLInputElement;
   const passwordInput = document.getElementById('password') as HTMLInputElement;
