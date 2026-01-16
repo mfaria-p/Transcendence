@@ -1,4 +1,5 @@
 import { initHeader } from './shared/header.js';
+import { GATEWAY_URL } from './utils-api.js';
 
 interface User {
   id: string;
@@ -98,7 +99,7 @@ class TournamentsPage {
     this.toggleLoadingState(true);
 
     try {
-      const response = await fetch('/api/realtime/tournaments', {
+      const response = await fetch(`${GATEWAY_URL}/realtime/tournaments`, {
         headers: {
           'Authorization': `Bearer ${this.accessToken}`,
         },
@@ -412,7 +413,7 @@ class TournamentsPage {
   private async fetchUserProfile(userId: string): Promise<{ name?: string; username?: string; id?: string } | null> {
     if (!this.accessToken) return null;
     try {
-      const res = await fetch(`/api/user/${userId}`, {
+      const res = await fetch(`${GATEWAY_URL}/user/${userId}`, {
         headers: { 'Authorization': `Bearer ${this.accessToken}` },
       });
       if (!res.ok) return null;
@@ -490,7 +491,7 @@ class TournamentsPage {
     }
 
     try {
-      const response = await fetch('/api/realtime/tournaments', {
+      const response = await fetch(`${GATEWAY_URL}/realtime/tournaments`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -588,7 +589,7 @@ class TournamentsPage {
     }
 
     try {
-      const response = await fetch('/api/realtime/tournaments/join-by-code', {
+      const response = await fetch(`${GATEWAY_URL}/realtime/tournaments/join-by-code`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -637,7 +638,7 @@ class TournamentsPage {
     }
 
     try {
-      const response = await fetch(`/api/realtime/tournaments/${tournamentId}/join`, {
+      const response = await fetch(`${GATEWAY_URL}/realtime/tournaments/${tournamentId}/join`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${this.accessToken}`,
@@ -692,7 +693,7 @@ class TournamentsPage {
     }
 
     try {
-      const response = await fetch(`/api/realtime/tournaments/${tournamentId}/start`, {
+      const response = await fetch(`${GATEWAY_URL}/realtime/tournaments/${tournamentId}/start`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${this.accessToken}`,
@@ -809,7 +810,7 @@ class TournamentsPage {
     if (!this.accessToken) return null;
 
     try {
-      const res = await fetch(`/api/realtime/tournaments/${tournamentId}`, {
+      const res = await fetch(`${GATEWAY_URL}/realtime/tournaments/${tournamentId}`, {
         headers: { 'Authorization': `Bearer ${this.accessToken}` },
       });
       if (!res.ok) return null;
@@ -833,7 +834,7 @@ class TournamentsPage {
 
   private async handleLogout(): Promise<void> {
     try {
-      await fetch('/api/auth/logout', {
+      await fetch(`${GATEWAY_URL}/auth/logout`, {
         method: 'POST',
         credentials: 'include',
       });

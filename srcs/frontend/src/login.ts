@@ -1,5 +1,5 @@
 import { initHeader } from './shared/header.js';
-import { provisionProfile } from './utils-api.js';
+import { provisionProfile, GATEWAY_URL } from './utils-api.js';
 
 interface LoginResponse {
   success: boolean;
@@ -46,7 +46,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const timeoutMs = 10_000;
       const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
-      const response = await fetch('/api/auth/login', {
+      const response = await fetch(`${GATEWAY_URL}/auth/login`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -131,7 +131,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     try {
       // Redirect to backend Google OAuth endpoint
-      window.location.href = '/api/auth/google/login';
+      window.location.href = `${GATEWAY_URL}/auth/google/login`;
     } catch (error) {
       console.error('Google login error:', error);
       errorMessage.textContent = 'Failed to initiate Google login';

@@ -1,4 +1,5 @@
 import { initHeader } from './shared/header.js';
+import { GATEWAY_URL } from './utils-api.js';
 
 interface User {
 	id: string;
@@ -237,7 +238,7 @@ class TournamentMatchPage {
 	private async fetchSnapshot(): Promise<void> {
 		if (!this.tournamentId || !this.matchId) return;
 		try {
-			const res = await fetch(`/api/realtime/tournaments/${this.tournamentId}`, {
+			const res = await fetch(`${GATEWAY_URL}/realtime/tournaments/${this.tournamentId}`, {
 				headers: { 'Authorization': `Bearer ${this.token}` },
 			});
 			if (!res.ok) return;
@@ -1130,7 +1131,7 @@ class TournamentMatchPage {
 
 	private async fetchUserProfile(userId: string): Promise<{ name?: string; username?: string; id?: string } | null> {
 		try {
-			const res = await fetch(`/api/user/${userId}`, {
+			const res = await fetch(`${GATEWAY_URL}/user/${userId}`, {
 				headers: { 'Authorization': `Bearer ${this.token}` },
 			});
 			if (!res.ok) return null;
@@ -1143,7 +1144,7 @@ class TournamentMatchPage {
 
 	private async fetchTournament(tournamentId: string): Promise<TournamentSummary | null> {
 		try {
-			const res = await fetch(`/api/realtime/tournaments/${tournamentId}`, {
+			const res = await fetch(`${GATEWAY_URL}/realtime/tournaments/${tournamentId}`, {
 				headers: { 'Authorization': `Bearer ${this.token}` },
 			});
 			if (!res.ok) return null;
@@ -1707,7 +1708,7 @@ function renderAuth(container: HTMLElement, user: User): void {
 	const logoutButton = document.getElementById('logoutButton');
 	logoutButton?.addEventListener('click', async () => {
 		try {
-			await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' });
+			await fetch(`${GATEWAY_URL}/auth/logout`, { method: 'POST', credentials: 'include' });
 		} catch (err) {
 			console.error('logout error', err);
 		} finally {

@@ -1,5 +1,5 @@
 import { initHeader } from './shared/header.js';
-import { provisionProfile } from './utils-api.js';
+import { provisionProfile, GATEWAY_URL } from './utils-api.js';
 
 interface SignupCredentials {
   username: string;
@@ -317,7 +317,7 @@ class SignupManager {
   }
 
   private async signupWithBackend(payload: { username: string; email: string; password: string }): Promise<SignupResponse> {
-    const url = '/api/auth/signup';
+    const url = `${GATEWAY_URL}/auth/signup`;
     const controller = new AbortController();
     const timeoutMs = 10_000;
     const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
@@ -358,7 +358,7 @@ class SignupManager {
   }
 
   private async loginAfterSignup(username: string, password: string): Promise<any> {
-    const url = '/api/auth/login';
+    const url = `${GATEWAY_URL}/auth/login`;
     const controller = new AbortController();
     const timeoutMs = 10_000;
     const timeoutId = setTimeout(() => controller.abort(), timeoutMs);

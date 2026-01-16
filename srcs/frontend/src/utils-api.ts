@@ -1,9 +1,11 @@
 import { disconnectPresenceSocket } from './utils-ws.js';
 
+export const GATEWAY_URL: string = process.env.GATEWAY_URL!;
+
 //Verify if the current session is still valid
 export async function verifySession(accessToken: string): Promise<void> {
   try {
-    const response = await fetch('/api/auth/me', {
+    const response = await fetch(`${GATEWAY_URL}/auth/me`, {
       headers: {
         'Authorization': `Bearer ${accessToken}`,
       },
@@ -82,7 +84,7 @@ export async function handleLogout(): Promise<void> {
   disconnectPresenceSocket();
   
   try {
-    await fetch('/api/auth/logout', {
+    await fetch(`${GATEWAY_URL}/auth/logout`, {
       method: 'POST',
       credentials: 'include',
     });
@@ -98,7 +100,7 @@ export async function handleLogout(): Promise<void> {
 //Provision user profile in user service after authentication
 export async function provisionProfile(accessToken: string): Promise<void> {
   try {
-    const response = await fetch('/api/user/provision', {
+    const response = await fetch(`${GATEWAY_URL}/user/provision`, {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
