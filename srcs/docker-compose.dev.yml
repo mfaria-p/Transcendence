@@ -5,6 +5,9 @@ services:
       dockerfile: Dockerfile.dev
     volumes:
       - frontend_data:/app/dist
+    environment:
+      - GATEWAY_URL=http://gateway:3000
+      - NODE_ENV=development
     restart: "no"
 
   nginx:
