@@ -4,9 +4,6 @@ import cors from '@fastify/cors';
 import rateLimit from '@fastify/rate-limit';
 import replyFrom from '@fastify/reply-from';
 import jwtPlugin from '@pkg/lib-auth';
-import * as dotenv from 'dotenv';
-
-dotenv.config();
 
 const {
   GATEWAY_PORT = '3000',

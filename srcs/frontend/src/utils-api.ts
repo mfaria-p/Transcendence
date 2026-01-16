@@ -1,6 +1,5 @@
 import { disconnectPresenceSocket } from './utils-ws.js';
-
-export const GATEWAY_URL: string = process.env.GATEWAY_URL!;
+import { GATEWAY_URL } from './config.js';
 
 //Verify if the current session is still valid
 export async function verifySession(accessToken: string): Promise<void> {

@@ -1,5 +1,5 @@
 import { initHeader } from './shared/header.js';
-import { GATEWAY_URL } from './utils-api.js';
+import { GATEWAY_URL } from './config.js';
 
 interface User {
   id: string;

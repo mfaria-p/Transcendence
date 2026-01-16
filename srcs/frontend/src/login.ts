@@ -1,5 +1,6 @@
 import { initHeader } from './shared/header.js';
-import { provisionProfile, GATEWAY_URL } from './utils-api.js';
+import { provisionProfile } from './utils-api.js';
+import { GATEWAY_URL } from './config.js';
 
 interface LoginResponse {
   success: boolean;
