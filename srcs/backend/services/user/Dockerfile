@@ -14,6 +14,7 @@ COPY packages/lib-docs ./packages/lib-docs
 COPY services/user ./services/user
 
 RUN pnpm --filter "@svc/user" exec prisma generate --schema /app/services/user/prisma/schema.prisma
+RUN mv ./services/user/src/generated/prisma/libquery_engine-linux-musl-openssl-*.so.node ./services/user/prisma
 
 RUN pnpm -r --filter "@svc/user..." run build
 RUN pnpm --filter "@svc/user" deploy --prod /out
