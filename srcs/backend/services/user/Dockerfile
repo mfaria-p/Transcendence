@@ -7,12 +7,15 @@ COPY packages/lib-auth/package.json ./packages/lib-auth/package.json
 COPY packages/lib-docs/package.json ./packages/lib-docs/package.json
 COPY services/user/package.json ./services/user/package.json
 
+ENV NODE_ENV=development
 RUN pnpm install --filter "@svc/user..." --frozen-lockfile
 
 COPY packages/lib-auth ./packages/lib-auth
 COPY packages/lib-docs ./packages/lib-docs
 COPY services/user ./services/user
 
+ENV DATABASE_URL=file:/app/prisma/data/profile.db
+RUN pnpm --filter "@svc/user" exec prisma migrate deploy --schema /app/services/user/prisma/schema.prisma
 RUN pnpm --filter "@svc/user" exec prisma generate --schema /app/services/user/prisma/schema.prisma
 RUN mv ./services/user/src/generated/prisma/libquery_engine-linux-musl-openssl-*.so.node ./services/user/prisma
 
@@ -24,7 +27,8 @@ WORKDIR /app
 
 COPY --from=build /out .
 
-COPY --from=build /app/services/user/entry.sh /entry.sh
-RUN chmod +x /entry.sh
+ENV DATABASE_URL=file:/app/prisma/data/profile.db
+RUN mkdir -p /app/prisma/data
+RUN chown -R node:node /app/prisma/data
 
-CMD ["/entry.sh"]
+CMD ["node","dist/server.js"]
