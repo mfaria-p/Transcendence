@@ -1130,12 +1130,12 @@ class TournamentMatchPage {
 
 	private async fetchUserProfile(userId: string): Promise<{ name?: string; username?: string; id?: string } | null> {
 		try {
-			const res = await fetch(`/api/user/${userId}`, {
+			const res = await fetch(`/api/auth/${userId}`, {
 				headers: { 'Authorization': `Bearer ${this.token}` },
 			});
 			if (!res.ok) return null;
 			const data = await res.json();
-			return (data as any).profile ?? null;
+			return (data as any).account ?? null;
 		} catch (err) {
 			return null;
 		}
