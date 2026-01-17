@@ -16,15 +16,9 @@ export function initHeader(options: InitHeaderOptions = {}): void {
   const { user, hasSession } = readSession();
   const body = document.body;
 
-  const prefersSidebar = window.matchMedia('(min-width: 1024px)').matches;
-
-  // Sidebar collapse only on desktop; mobile stays expanded for bottom nav
-  if (prefersSidebar) {
-    if (!body.classList.contains('menu-collapsed')) {
-      body.classList.add('menu-collapsed');
-    }
-  } else {
-    body.classList.remove('menu-collapsed');
+  // Always start collapsed regardless of viewport size
+  if (!body.classList.contains('menu-collapsed')) {
+	body.classList.add('menu-collapsed');
   }
 
   const menuColumn = ensureMenuColumn(hasSession);
