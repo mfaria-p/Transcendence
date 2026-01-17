@@ -1,4 +1,5 @@
 import { initHeader } from './shared/header.js';
+import { verifySession, clearSessionAndRedirect, showMessage } from './utils-api.js';
 
 interface User {
   id: string;
@@ -67,6 +68,20 @@ class TournamentsPage {
       localStorage.removeItem('access_token');
       window.location.href = './login.html';
       return;
+    }
+
+    // Verify session before proceeding
+    try {
+      await verifySession(this.accessToken);
+    } catch (error) {
+      if (error instanceof Error && error.message === 'Session expired') {
+        showMessage('Session expired. Redirecting to login...', 'error');
+        setTimeout(() => {
+          clearSessionAndRedirect();
+        }, 2000);
+        return;
+      }
+      console.warn('Session check failed, proceeding anyway (non-expiring error):', error);
     }
 
     initHeader({ active: 'tournaments' });
@@ -828,21 +843,6 @@ class TournamentsPage {
     const match = this.getCurrentMatchForUser(resolved);
     if (match) {
       window.location.href = `./match.html?roomId=${match.roomId}`;
-    }
-  }
-
-  private async handleLogout(): Promise<void> {
-    try {
-      await fetch('/api/auth/logout', {
-        method: 'POST',
-        credentials: 'include',
-      });
-    } catch (error) {
-      console.error('logout error:', error);
-    } finally {
-      localStorage.removeItem('access_token');
-      localStorage.removeItem('user');
-      window.location.href = './login.html';
     }
   }
 
