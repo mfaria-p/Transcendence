@@ -23,8 +23,10 @@ export function initFooter(options: FooterOptions = {}): void {
   footer.innerHTML = `
     <div class="mx-auto w-full max-w-6xl px-4 py-6 flex flex-col sm:flex-row items-center justify-center gap-2 sm:gap-3 text-sm" style="color:${footerColor};">
       <a href="./terms.html" class="transition-opacity hover:opacity-80" style="color:${footerColor};">Terms &amp; Conditions</a>
+      <span>|</span>
+      <a href="./privacy.html" class="transition-opacity hover:opacity-80" style="color:${footerColor};">Privacy Policy</a>
       <span>@ ${year}</span>
-      <span>By Grupo maravilhoso</span>
+      <span>By Grupo Maravilhoso</span>
     </div>
   `;
 
