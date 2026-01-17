@@ -310,7 +310,8 @@ class TournamentMatchPage {
 			this.setRoomName('Quick match (searching)');
 			return;
 		}
-		this.setRoomName(this.tournamentName ?? this.roomId ?? 'Quick match');
+		const fallback = this.isQuickMatch ? 'Quick match' : 'Match';
+		this.setRoomName(this.tournamentName ?? fallback);
 	}
 
 	private connect(): void {
@@ -484,7 +485,8 @@ class TournamentMatchPage {
 
 		if (payload.roomId && !this.tournamentName) {
 			// keep showing current label; tournament name is resolved via snapshot
-			this.setRoomName(this.tournamentName ?? this.roomId ?? '');
+			const fallback = this.isQuickMatch ? 'Quick match' : 'Match';
+			this.setRoomName(this.tournamentName ?? fallback);
 		}
 
 		if (payload.yourSide && payload.yourSide !== this.yourSide) {
