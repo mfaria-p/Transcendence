@@ -2,7 +2,7 @@ services:
   frontend:
     build:
       context: ./frontend
-      dockerfile: Dockerfile.dev
+      dockerfile: Dockerfile
     volumes:
       - frontend_data:/app/dist
     restart: "no"
@@ -10,10 +10,9 @@ services:
   nginx:
     build:
       context: ./nginx
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.dev
     ports:
       - "9000:80"
-      - "9001:443"
     volumes:
       - ./nginx/dev.conf:/etc/nginx/nginx.conf:ro
       - frontend_data:/usr/share/nginx/html
@@ -56,7 +55,6 @@ services:
     environment:
       - AUTH_PORT=3001
       - DATABASE_URL=file:/app/prisma/data/account.db
-      - PRISMA_CLI_VERSION=6.17.0
       - JWT_SECRET=${JWT_SECRET}
       - GOOGLE_OAUTH_CLIENT_ID=${GOOGLE_OAUTH_CLIENT_ID}
       - GOOGLE_OAUTH_CLIENT_SECRET=${GOOGLE_OAUTH_CLIENT_SECRET}
@@ -75,7 +73,6 @@ services:
     environment:
       - USER_PORT=3002
       - DATABASE_URL=file:/app/prisma/data/profile.db
-      - PRISMA_CLI_VERSION=6.17.0
       - JWT_SECRET=${JWT_SECRET}
       - NODE_ENV=development
     expose:

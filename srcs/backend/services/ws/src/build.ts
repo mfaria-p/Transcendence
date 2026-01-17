@@ -2,12 +2,10 @@
 
 import type { FastifyInstance, FastifyServerOptions } from 'fastify';
 import Fastify from 'fastify';
-import * as dotenv from 'dotenv';
 import jwt from '@pkg/lib-auth';
 import websocket from '@fastify/websocket';
 import routes from './routes.js';
 
-dotenv.config();
 
 export async function buildServer(
     opts: FastifyServerOptions = {},

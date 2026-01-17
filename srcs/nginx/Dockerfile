@@ -1,5 +1,4 @@
 FROM nginx:alpine
-EXPOSE 80
 EXPOSE 443
 RUN apk add --no-cache openssl
 COPY transcendence.conf /
