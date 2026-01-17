@@ -1,392 +1,449 @@
+// src/game.ts
+/**
+ * Implementação de Pong server-side (autoritativo) + integração opcional com torneios.
+ *
+ * Toda a lógica de física do jogo corre aqui no serviço ws. Os clientes:
+ *  - enviam apenas inputs (up/down/none) via mensagens `game:input`
+ *  - entram/saem de jogos com `game:join` e `game:leave`
+ *  - recebem o estado completo do jogo em mensagens `game:state`
+ */
+
 import type WebSocket from 'ws';
+import { sendToUser } from './presence.js';
+import { getMatchByRoomId, markMatchPlayingByRoomId, reportMatchResultByRoomId } from './tournament.js';
+import { emitTournamentUpdate, emitTournamentsChanged } from './events.js';
 
-import { forEachConnection } from './presence.js';
-import { getMatchByRoomId, reportMatchResultByRoomId } from './tournament.js';
+export interface GameMessage {
+  type: string;
+  [key: string]: unknown;
+}
 
+type Direction = 'up' | 'down' | 'none';
 type Side = 'left' | 'right';
-type InputDir = 'up' | 'down' | 'none';
-type GameStatus = 'waiting' | 'playing' | 'finished';
 
-interface PlayerSlot {
+interface PlayerState {
   userId: string;
   side: Side;
-  input: InputDir;
+  input: Direction;
 }
 
 interface GameState {
   width: number;
   height: number;
-
   paddleWidth: number;
   paddleHeight: number;
-
-  leftPaddleY: number;
-  rightPaddleY: number;
-
-  ballRadius: number;
+  ballSize: number;
+  leftY: number;
+  rightY: number;
   ballX: number;
   ballY: number;
   ballVX: number;
   ballVY: number;
-
-  // posições X fixas das raquetes (para colisões)
-  leftPaddleX: number;
-  rightPaddleX: number;
 }
+
+type GameStatus = 'waiting' | 'playing' | 'finished';
 
 interface GameRoom {
   id: string;
   status: GameStatus;
-
-  left: PlayerSlot | null;
-  right: PlayerSlot | null;
-
+  left?: PlayerState;
+  right?: PlayerState;
+  ready: { left: boolean; right: boolean };
   state: GameState;
   scores: { left: number; right: number };
   maxScore: number;
-
-  loop: NodeJS.Timeout | null;
-
-  // tournament integration
+  loop?: NodeJS.Timeout;
+  countdownTimeout?: NodeJS.Timeout;
+  countdownEndsAt?: number;
+  // tournament integration (opcional)
   isTournament: boolean;
   tournamentId?: string;
   matchId?: string;
-
-  // lobby / remote play
-  isPublic: boolean;
-  name?: string;
-  createdAt: number;
 }
 
-export interface LobbySummary {
-  roomId: string;
-  status: GameStatus;
-  players: string[];
-  createdAt: number;
-  name?: string;
-  ownerId?: string;
+function sendReadyUpdate(room: GameRoom): void {
+  const payload = {
+    type: 'game:ready:ack' as const,
+    roomId: room.id,
+    ready: { ...room.ready },
+  };
+
+  if (room.left) sendToUser(room.left.userId, payload);
+  if (room.right) sendToUser(room.right.userId, payload);
 }
 
-// ====== Config ======
-const TICK_RATE = 60;
-const DT = 1 / TICK_RATE;
-
-const FIELD_WIDTH = 800;
-const FIELD_HEIGHT = 500;
-
-const PADDLE_WIDTH = 14;
-const PADDLE_HEIGHT = 100;
-const PADDLE_MARGIN_X = 20;
-const PADDLE_SPEED = 420;
-
-const BALL_RADIUS = 8;
-const BALL_SPEED = 360;
-
+const TICK_RATE = 60; // 60 updates por segundo
+const TICK_MS = 1000 / TICK_RATE;
+const PADDLE_SPEED = 400; // px/s
+const BALL_SPEED = 550; // velocidade base da bola
 const MAX_SCORE_DEFAULT = 5;
+// Frontend: 3,2,1,Start! (1s cada) + 600ms para esconder
+const TOURNAMENT_COUNTDOWN_TOTAL_MS = 3600;
 
-const WS_OPEN = 1;
-
-// ====== Storage in-memory ======
+// rooms em memória e mapping user -> room
 const rooms = new Map<string, GameRoom>();
 const userToRoom = new Map<string, string>();
 
-function safeSend(socket: WebSocket, payload: unknown): void {
-  if (socket.readyState === WS_OPEN) {
-    socket.send(JSON.stringify(payload));
-  }
+function normalizeId(value: unknown): string | null {
+  if (value === null || value === undefined) return null;
+  return String(value);
 }
 
-function sendToUser(userId: string, payload: unknown): void {
-  forEachConnection((uid, socket) => {
-    if (uid === userId) safeSend(socket, payload);
-  });
-}
-
-function broadcastAll(payload: unknown): void {
-  forEachConnection((_uid, socket) => safeSend(socket, payload));
-}
-
-function clamp(v: number, min: number, max: number): number {
-  return Math.max(min, Math.min(max, v));
+function parseTournamentRoomId(roomId: string): { tournamentId: string; matchId: string } | null {
+  if (!roomId.startsWith('room_')) return null;
+  const payload = roomId.slice('room_'.length);
+  const marker = '_m_';
+  const idx = payload.indexOf(marker);
+  if (idx === -1) return null;
+  const tournamentId = payload.slice(0, idx);
+  const matchId = payload.slice(idx + 1);
+  if (!tournamentId || !matchId.startsWith('m_')) return null;
+  return { tournamentId, matchId };
 }
 
 function createInitialState(): GameState {
-  const leftX = PADDLE_MARGIN_X;
-  const rightX = FIELD_WIDTH - PADDLE_MARGIN_X - PADDLE_WIDTH;
-
-  const startPaddleY = (FIELD_HEIGHT - PADDLE_HEIGHT) / 2;
+  const width = 800;
+  const height = 450;
+  const paddleHeight = 80;
+  const paddleWidth = 12;
+  const ballSize = 10;
 
   return {
-    width: FIELD_WIDTH,
-    height: FIELD_HEIGHT,
-
-    paddleWidth: PADDLE_WIDTH,
-    paddleHeight: PADDLE_HEIGHT,
-
-    leftPaddleX: leftX,
-    rightPaddleX: rightX,
-
-    leftPaddleY: startPaddleY,
-    rightPaddleY: startPaddleY,
-
-    ballRadius: BALL_RADIUS,
-    ballX: FIELD_WIDTH / 2,
-    ballY: FIELD_HEIGHT / 2,
-    ballVX: 0,
-    ballVY: 0,
+    width,
+    height,
+    paddleWidth,
+    paddleHeight,
+    ballSize,
+    leftY: height / 2 - paddleHeight / 2,
+    rightY: height / 2 - paddleHeight / 2,
+    ballX: width / 2,
+    ballY: height / 2,
+    ballVX: BALL_SPEED,
+    ballVY: BALL_SPEED * 0.3,
   };
 }
 
-function resetBall(room: GameRoom, direction: 1 | -1): void {
+function resetBall(room: GameRoom, direction: Side): void {
   const s = room.state;
   s.ballX = s.width / 2;
   s.ballY = s.height / 2;
 
-  // ângulo pequeno para não ficar sempre horizontal
-  const angle = (Math.random() * 0.6 - 0.3) * Math.PI; // [-0.3pi, 0.3pi]
-  const vx = Math.cos(angle) * BALL_SPEED * direction;
-  const vy = Math.sin(angle) * BALL_SPEED;
-
-  s.ballVX = vx;
-  s.ballVY = vy;
+  const angle = (Math.random() * Math.PI) / 3 - Math.PI / 6; // [-30º, +30º]
+  const speed = BALL_SPEED;
+  const sign = direction === 'right' ? 1 : -1;
+  s.ballVX = Math.cos(angle) * speed * sign;
+  s.ballVY = Math.sin(angle) * speed;
 }
 
-function roomPlayers(room: GameRoom): { left: string | null; right: string | null } {
-  return {
-    left: room.left ? room.left.userId : null,
-    right: room.right ? room.right.userId : null,
-  };
+function debugToUser(userId: string, event: string, data?: Record<string, unknown>): void {
+  sendToUser(userId, {
+    type: 'debug',
+    scope: 'game',
+    event,
+    ...(data ? { data } : {}),
+    ts: Date.now(),
+  });
 }
 
-function sendRoomState(room: GameRoom): void {
-  const base: any = {
-    type: 'game:state',
+function broadcastRoomState(room: GameRoom): void {
+  const base = {
+    type: 'game:state' as const,
     roomId: room.id,
     status: room.status,
     state: room.state,
     scores: room.scores,
-    players: roomPlayers(room),
+    players: {
+      left: room.left?.userId ?? null,
+      right: room.right?.userId ?? null,
+    },
+    ready: { ...room.ready },
     isTournament: room.isTournament,
+    tournamentId: room.tournamentId ?? null,
+    matchId: room.matchId ?? null,
   };
-
-  if (room.tournamentId !== undefined) base.tournamentId = room.tournamentId;
-  if (room.matchId !== undefined) base.matchId = room.matchId;
 
   if (room.left) {
     sendToUser(room.left.userId, { ...base, yourSide: 'left' as const });
   }
-  if (room.right && room.right.userId !== room.left?.userId) {
+  if (room.right) {
     sendToUser(room.right.userId, { ...base, yourSide: 'right' as const });
   }
 }
 
-function stopLoop(room: GameRoom): void {
-  if (room.loop) {
-    clearInterval(room.loop);
-    room.loop = null;
+function clearTournamentCountdown(room: GameRoom): void {
+  if (room.countdownTimeout) {
+    clearTimeout(room.countdownTimeout);
+    delete room.countdownTimeout;
   }
+  delete room.countdownEndsAt;
 }
 
-function startLoopIfReady(room: GameRoom): void {
-  if (room.status !== 'waiting') return;
+function beginReadyCountdownIfNeeded(room: GameRoom): boolean {
+  if (room.status !== 'waiting') return false;
+  if (!room.left || !room.right) return false;
+  if (!room.ready.left || !room.ready.right) return false;
+  if (room.countdownTimeout) return true;
+
+  room.countdownEndsAt = Date.now() + TOURNAMENT_COUNTDOWN_TOTAL_MS;
+  room.countdownTimeout = setTimeout(() => {
+    if (room.status !== 'waiting') return;
+    if (!room.left || !room.right) return;
+    if (!room.ready.left || !room.ready.right) return;
+    clearTournamentCountdown(room);
+    startGame(room);
+  }, TOURNAMENT_COUNTDOWN_TOTAL_MS);
+
+  return true;
+}
+
+function startGame(room: GameRoom): void {
+  if (room.status === 'playing') return;
   if (!room.left || !room.right) return;
 
   room.status = 'playing';
-  resetBall(room, Math.random() < 0.5 ? 1 : -1);
 
-  room.loop = setInterval(() => stepRoom(room), 1000 / TICK_RATE);
-  sendRoomState(room);
+  // tournament: update match status -> "playing" once the authoritative loop starts
+  if (room.isTournament) {
+    const tournament = markMatchPlayingByRoomId(room.id);
+    if (tournament) {
+      emitTournamentUpdate(tournament);
+      emitTournamentsChanged();
+    }
+  }
+
+  // reset flags para não interferir em futuros reusos
+  room.ready.left = false;
+  room.ready.right = false;
+  resetBall(room, Math.random() < 0.5 ? 'left' : 'right');
+
+  // envia já o estado em playing (sem esperar pelo primeiro tick)
+  broadcastRoomState(room);
+
+  room.loop = setInterval(() => {
+    stepRoom(room);
+  }, TICK_MS);
 }
 
-function finishGame(
-  room: GameRoom,
-  opts?: { forfeitLoserId?: string; forcedWinnerId?: string; reason?: 'score' | 'forfeit' },
-): void {
-  stopLoop(room);
-  room.status = 'finished';
+function startLoopIfReady(room: GameRoom): void {
+  if (room.status === 'playing') return;
+  if (!room.left || !room.right) return;
 
-  const players = roomPlayers(room);
+  const requiresReady = room.isTournament || room.id.startsWith('match_');
 
-  let winnerId: string | null = null;
-  let reason: 'score' | 'forfeit' = opts?.reason ?? 'score';
-
-  if (opts?.forcedWinnerId) {
-    winnerId = opts.forcedWinnerId;
-    reason = opts.reason ?? 'forfeit';
-  } else if (opts?.forfeitLoserId) {
-    reason = 'forfeit';
-
-    const loser = opts.forfeitLoserId;
-
-    // Preferência: vencedor = o outro jogador conectado
-    if (players.left && players.left !== loser) winnerId = players.left;
-    if (players.right && players.right !== loser) winnerId = players.right;
-
-    // Se não houver opponent conectado mas for torneio, tenta usar os players do match
-    if (!winnerId && room.isTournament) {
-      const info = getMatchByRoomId(room.id);
-      if (info) {
-        const p1 = info.match.player1Id;
-        const p2 = info.match.player2Id;
-        if (p1 && p1 !== loser) winnerId = p1;
-        else if (p2 && p2 !== loser) winnerId = p2;
-      }
-    }
-  } else {
-    // por score
-    if (room.scores.left > room.scores.right) winnerId = players.left;
-    else if (room.scores.right > room.scores.left) winnerId = players.right;
-  }
-
-  const payload: any = {
-    type: 'game:finished',
-    roomId: room.id,
-    winnerId,
-    scores: room.scores,
-    reason,
-  };
-
-  // avisa os dois lados se existirem
-  if (players.left) sendToUser(players.left, payload);
-  if (players.right && players.right !== players.left) sendToUser(players.right, payload);
-
-  // se for torneio e houver winner, avança bracket
-  if (room.isTournament && winnerId) {
-    const res = reportMatchResultByRoomId(room.id, winnerId);
-    if (res) {
-      const update: any = {
-        type: 'tournament:update',
-        tournament: res.tournament,
-        match: res.match,
-      };
-      if (res.finalMatch !== undefined) update.finalMatch = res.finalMatch;
-      broadcastAll(update);
+  // Defensive: se o id parece de torneio, garante flag e metadados
+  if (!room.isTournament) {
+    const parsed = parseTournamentRoomId(room.id);
+    if (parsed) {
+      room.isTournament = true;
+      room.tournamentId = room.tournamentId ?? parsed.tournamentId;
+      room.matchId = room.matchId ?? parsed.matchId;
     }
   }
 
-  // cleanup
-  if (players.left) userToRoom.delete(players.left);
-  if (players.right) userToRoom.delete(players.right);
-  rooms.delete(room.id);
+  if (requiresReady && (!room.ready.left || !room.ready.right)) return;
+
+  // Defer real start until countdown when readiness is required.
+  if (requiresReady && beginReadyCountdownIfNeeded(room)) return;
+
+  startGame(room);
+}
+
+function stopLoop(room: GameRoom): void {
+  clearTournamentCountdown(room);
+  if (room.loop) {
+    clearInterval(room.loop);
+    delete room.loop; // em vez de room.loop = undefined
+  }
 }
 
 function stepRoom(room: GameRoom): void {
   if (room.status !== 'playing') return;
 
   const s = room.state;
+  const dt = 1 / TICK_RATE;
 
-  // --- paddles ---
+  // Paddles
   if (room.left) {
-    if (room.left.input === 'up') s.leftPaddleY -= PADDLE_SPEED * DT;
-    else if (room.left.input === 'down') s.leftPaddleY += PADDLE_SPEED * DT;
-    s.leftPaddleY = clamp(s.leftPaddleY, 0, s.height - s.paddleHeight);
+    if (room.left.input === 'up') s.leftY -= PADDLE_SPEED * dt;
+    else if (room.left.input === 'down') s.leftY += PADDLE_SPEED * dt;
   }
-
   if (room.right) {
-    if (room.right.input === 'up') s.rightPaddleY -= PADDLE_SPEED * DT;
-    else if (room.right.input === 'down') s.rightPaddleY += PADDLE_SPEED * DT;
-    s.rightPaddleY = clamp(s.rightPaddleY, 0, s.height - s.paddleHeight);
+    if (room.right.input === 'up') s.rightY -= PADDLE_SPEED * dt;
+    else if (room.right.input === 'down') s.rightY += PADDLE_SPEED * dt;
   }
 
-  // --- ball ---
-  s.ballX += s.ballVX * DT;
-  s.ballY += s.ballVY * DT;
+  // clamp paddles
+  s.leftY = Math.max(0, Math.min(s.height - s.paddleHeight, s.leftY));
+  s.rightY = Math.max(0, Math.min(s.height - s.paddleHeight, s.rightY));
 
-  // top/bottom
-  if (s.ballY - s.ballRadius <= 0) {
-    s.ballY = s.ballRadius;
-    s.ballVY = -s.ballVY;
-  } else if (s.ballY + s.ballRadius >= s.height) {
-    s.ballY = s.height - s.ballRadius;
-    s.ballVY = -s.ballVY;
+  // Bola
+  s.ballX += s.ballVX * dt;
+  s.ballY += s.ballVY * dt;
+
+  // topo/fundo
+  if (s.ballY <= 0 && s.ballVY < 0) {
+    s.ballY = 0;
+    s.ballVY *= -1;
+  } else if (s.ballY + s.ballSize >= s.height && s.ballVY > 0) {
+    s.ballY = s.height - s.ballSize;
+    s.ballVY *= -1;
   }
 
-  // paddles collision
-  const inLeftPaddleY =
-    s.ballY >= s.leftPaddleY && s.ballY <= s.leftPaddleY + s.paddleHeight;
-  const inRightPaddleY =
-    s.ballY >= s.rightPaddleY && s.ballY <= s.rightPaddleY + s.paddleHeight;
+  // colisão com paddles
+  checkPaddleCollision(room);
 
-  // left paddle
-  if (
-    s.ballVX < 0 &&
-    s.ballX - s.ballRadius <= s.leftPaddleX + s.paddleWidth &&
-    s.ballX - s.ballRadius >= s.leftPaddleX &&
-    inLeftPaddleY
-  ) {
-    s.ballX = s.leftPaddleX + s.paddleWidth + s.ballRadius;
-    s.ballVX = Math.abs(s.ballVX);
-
-    // “spin” simples baseado no ponto de impacto
-    const hit =
-      (s.ballY - (s.leftPaddleY + s.paddleHeight / 2)) / (s.paddleHeight / 2);
-    s.ballVY = clamp(hit, -1, 1) * BALL_SPEED * 0.9;
-  }
-
-  // right paddle
-  if (
-    s.ballVX > 0 &&
-    s.ballX + s.ballRadius >= s.rightPaddleX &&
-    s.ballX + s.ballRadius <= s.rightPaddleX + s.paddleWidth &&
-    inRightPaddleY
-  ) {
-    s.ballX = s.rightPaddleX - s.ballRadius;
-    s.ballVX = -Math.abs(s.ballVX);
-
-    const hit =
-      (s.ballY - (s.rightPaddleY + s.paddleHeight / 2)) / (s.paddleHeight / 2);
-    s.ballVY = clamp(hit, -1, 1) * BALL_SPEED * 0.9;
-  }
-
-  // scoring
-  if (s.ballX + s.ballRadius < 0) {
-    // direita marcou
+  // golo (fora do campo)
+  if (s.ballX + s.ballSize < 0) {
+    // passou lado esquerdo -> ponto para direita
     room.scores.right += 1;
-
-    if (room.scores.right >= room.maxScore) {
-      finishGame(room, { reason: 'score' });
-      return;
-    }
-    resetBall(room, -1);
-  } else if (s.ballX - s.ballRadius > s.width) {
-    // esquerda marcou
+    handleScore(room, 'right');
+  } else if (s.ballX > s.width) {
+    // passou lado direito -> ponto para esquerda
     room.scores.left += 1;
+    handleScore(room, 'left');
+  }
 
-    if (room.scores.left >= room.maxScore) {
-      finishGame(room, { reason: 'score' });
-      return;
+  broadcastRoomState(room);
+}
+
+function checkPaddleCollision(room: GameRoom): void {
+  const s = room.state;
+
+  // caixa da bola
+  const ballLeft = s.ballX;
+  const ballRight = s.ballX + s.ballSize;
+  const ballTop = s.ballY;
+  const ballBottom = s.ballY + s.ballSize;
+
+  // paddle esquerda
+  const paddleLeftX1 = 0;
+  const paddleLeftX2 = s.paddleWidth;
+  const paddleLeftY1 = s.leftY;
+  const paddleLeftY2 = s.leftY + s.paddleHeight;
+
+  if (
+    ballLeft <= paddleLeftX2 &&
+    ballRight >= paddleLeftX1 &&
+    ballBottom >= paddleLeftY1 &&
+    ballTop <= paddleLeftY2 &&
+    s.ballVX < 0
+  ) {
+    s.ballX = s.paddleWidth;
+    s.ballVX *= -1;
+  }
+
+  // paddle direita
+  const paddleRightX2 = s.width;
+  const paddleRightX1 = s.width - s.paddleWidth;
+  const paddleRightY1 = s.rightY;
+  const paddleRightY2 = s.rightY + s.paddleHeight;
+
+  if (
+    ballRight >= paddleRightX1 &&
+    ballLeft <= paddleRightX2 &&
+    ballBottom >= paddleRightY1 &&
+    ballTop <= paddleRightY2 &&
+    s.ballVX > 0
+  ) {
+    s.ballX = s.width - s.paddleWidth - s.ballSize;
+    s.ballVX *= -1;
+  }
+}
+
+function handleScore(room: GameRoom, scorer: Side): void {
+  // reset bola para o lado de quem sofreu o golo
+  resetBall(room, scorer === 'left' ? 'right' : 'left');
+
+  if (room.scores.left >= room.maxScore || room.scores.right >= room.maxScore) {
+    finishGame(room);
+  }
+}
+
+function finishGame(room: GameRoom, forfeitLoserId?: string): void {
+  if (room.status === 'finished') return;
+  room.status = 'finished';
+  stopLoop(room);
+
+  let winnerSide: Side | null = null;
+  if (forfeitLoserId && room.left && room.right) {
+    if (room.left.userId === forfeitLoserId) winnerSide = 'right';
+    else if (room.right.userId === forfeitLoserId) winnerSide = 'left';
+  } else if (room.scores.left > room.scores.right) {
+    winnerSide = 'left';
+  } else if (room.scores.right > room.scores.left) {
+    winnerSide = 'right';
+  }
+
+  const winnerUserId =
+    winnerSide === 'left'
+      ? room.left?.userId
+      : winnerSide === 'right'
+      ? room.right?.userId
+      : undefined;
+
+  // manda último snapshot de estado
+  broadcastRoomState(room);
+
+  if (winnerUserId) {
+    const payload = {
+      type: 'game:finished' as const,
+      roomId: room.id,
+      winnerUserId,
+      scores: room.scores,
+      isTournament: room.isTournament,
+      tournamentId: room.tournamentId ?? null,
+      matchId: room.matchId ?? null,
+    };
+
+    if (room.left) sendToUser(room.left.userId, payload);
+    if (room.right) sendToUser(room.right.userId, payload);
+
+    if (room.isTournament && room.tournamentId && room.matchId) {
+      const update = reportMatchResultByRoomId(room.id, winnerUserId);
+      if (update) {
+        emitTournamentUpdate(update.tournament);
+        emitTournamentsChanged();
+      }
     }
-    resetBall(room, 1);
   }
 
-  sendRoomState(room);
+  // limpar mapping user -> room
+  if (room.left) userToRoom.delete(room.left.userId);
+  if (room.right) userToRoom.delete(room.right.userId);
+  rooms.delete(room.id);
 }
 
-function getRoomForUser(userId: string): GameRoom | null {
-  const rid = userToRoom.get(userId);
-  if (!rid) return null;
-  const room = rooms.get(rid);
-  if (!room) {
-    userToRoom.delete(userId);
-    return null;
+function ensureRoomForJoin(userId: string, msg: GameMessage): GameRoom | null {
+  const uid = normalizeId(userId);
+  if (!uid) return null;
+
+  const requestedRoomId =
+    typeof (msg as any).roomId === 'string'
+      ? ((msg as any).roomId as string)
+      : undefined;
+
+  // Se já estiver numa sala, devolvemos essa
+  const existingRoomId = userToRoom.get(uid);
+  if (existingRoomId) {
+    const r = rooms.get(existingRoomId);
+    if (r) {
+      if (!r.ready) r.ready = { left: false, right: false };
+      return r;
+    }
+    userToRoom.delete(uid);
   }
-  return room;
-}
 
-function ensureRoomForJoin(userId: string, requestedRoomId?: string): { room: GameRoom; side?: Side } {
-  // 1) roomId especificado => pode ser torneio / lobby / private room
+  // Caso venha com roomId, tentamos ver se é match de torneio
   if (requestedRoomId) {
     const matchInfo = getMatchByRoomId(requestedRoomId);
-
-    // 1.a) É match de torneio
     if (matchInfo) {
       const { tournament, match } = matchInfo;
-
-      const isP1 = match.player1Id === userId;
-      const isP2 = match.player2Id === userId;
-
-      if (!isP1 && !isP2) {
-        throw new Error('You are not a player of this match (or match not ready yet).');
+      // check se o jogador pertence ao match
+      const p1 = normalizeId(match.player1Id);
+      const p2 = normalizeId(match.player2Id);
+      if (p1 !== uid && p2 !== uid) {
+        // não é jogador legítimo deste match
+        return null;
       }
 
       let room = rooms.get(requestedRoomId);
@@ -394,296 +451,286 @@ function ensureRoomForJoin(userId: string, requestedRoomId?: string): { room: Ga
         room = {
           id: requestedRoomId,
           status: 'waiting',
-          left: null,
-          right: null,
           state: createInitialState(),
           scores: { left: 0, right: 0 },
+          ready: { left: false, right: false },
           maxScore: MAX_SCORE_DEFAULT,
-          loop: null,
           isTournament: true,
           tournamentId: tournament.id,
           matchId: match.id,
-          isPublic: false,
-          createdAt: Date.now(),
         };
         rooms.set(room.id, room);
       }
-
-      return { room, side: isP1 ? 'left' : 'right' };
+      if (!room.ready) room.ready = { left: false, right: false };
+      return room;
     }
 
-    // 1.b) Não é torneio => lobby_* ou sala privada
+    // fallback: se parecer room de torneio, marcar como tal mesmo sem mapping
+    const parsedTournament = parseTournamentRoomId(requestedRoomId);
+    if (parsedTournament) {
+      let room = rooms.get(requestedRoomId);
+      if (!room) {
+        room = {
+          id: requestedRoomId,
+          status: 'waiting',
+          state: createInitialState(),
+          scores: { left: 0, right: 0 },
+          ready: { left: false, right: false },
+          maxScore: MAX_SCORE_DEFAULT,
+          isTournament: true,
+          tournamentId: parsedTournament.tournamentId,
+          matchId: parsedTournament.matchId,
+        };
+        rooms.set(room.id, room);
+      }
+      if (!room.ready) room.ready = { left: false, right: false };
+      return room;
+    }
+
+    // não é torneio -> sala ad-hoc
     let room = rooms.get(requestedRoomId);
     if (!room) {
-      const isLobby = requestedRoomId.startsWith('lobby_');
-
       room = {
         id: requestedRoomId,
         status: 'waiting',
-        left: null,
-        right: null,
         state: createInitialState(),
         scores: { left: 0, right: 0 },
+        ready: { left: false, right: false },
         maxScore: MAX_SCORE_DEFAULT,
-        loop: null,
         isTournament: false,
-        isPublic: isLobby,
-        createdAt: Date.now(),
       };
       rooms.set(room.id, room);
     }
-
-    return { room };
+    if (!room.ready) room.ready = { left: false, right: false };
+    return room;
   }
 
-  // 2) quick matchmaking: procura sala não pública e não torneio com slot livre
+  // Sem roomId -> matchmaking muito simples
+  // 1) tenta encontrar sala à espera de segundo jogador
   for (const room of rooms.values()) {
-    if (room.isTournament) continue;
-    if (room.isPublic) continue;
-    if (room.status !== 'waiting') continue;
-
-    const leftOk = !room.left || room.left.userId === userId;
-    const rightOk = !room.right || room.right.userId === userId;
-
-    if (!leftOk || !rightOk) continue;
-
-    if (!room.left) return { room, side: 'left' };
-    if (!room.right) return { room, side: 'right' };
+    if (
+      !room.isTournament &&
+      room.status === 'waiting' &&
+      ((!room.left && room.right && room.right.userId !== userId) ||
+        (!room.right && room.left && room.left.userId !== userId) ||
+        (!room.left && !room.right))
+    ) {
+      return room;
+    }
   }
 
-  // 3) cria nova sala de quick play
-  const rid = `match_${Math.random().toString(36).slice(2, 10)}`;
+  // 2) cria nova sala
+  const randomId = `match_${Math.random().toString(36).slice(2, 10)}`;
   const room: GameRoom = {
-    id: rid,
+    id: randomId,
     status: 'waiting',
-    left: null,
-    right: null,
     state: createInitialState(),
     scores: { left: 0, right: 0 },
+    ready: { left: false, right: false },
     maxScore: MAX_SCORE_DEFAULT,
-    loop: null,
     isTournament: false,
-    isPublic: false,
-    createdAt: Date.now(),
   };
   rooms.set(room.id, room);
-  return { room, side: 'left' };
+  return room;
 }
 
-function setPlayer(room: GameRoom, userId: string, side?: Side): void {
-  // se já está na room, mantém
-  if (room.left?.userId === userId || room.right?.userId === userId) {
-    userToRoom.set(userId, room.id);
-    return;
-  }
+function setPlayerInRoom(room: GameRoom, userId: string): Side | null {
+  const uid = normalizeId(userId);
+  if (!uid) return null;
 
-  // se side foi pedido (torneio), respeita
-  if (side === 'left') {
-    if (room.left && room.left.userId !== userId) throw new Error('Left slot already taken');
-    room.left = { userId, side: 'left', input: 'none' };
-    userToRoom.set(userId, room.id);
-    return;
-  }
-  if (side === 'right') {
-    if (room.right && room.right.userId !== userId) throw new Error('Right slot already taken');
-    room.right = { userId, side: 'right', input: 'none' };
-    userToRoom.set(userId, room.id);
-    return;
-  }
+  if (room.left && room.left.userId === uid) return 'left';
+  if (room.right && room.right.userId === uid) return 'right';
 
-  // sem side: ocupa o primeiro slot livre
   if (!room.left) {
-    room.left = { userId, side: 'left', input: 'none' };
-    userToRoom.set(userId, room.id);
-    return;
+    room.left = { userId: uid, side: 'left', input: 'none' };
+    room.ready.left = false;
+    userToRoom.set(uid, room.id);
+    return 'left';
   }
-  if (!room.right) {
-    room.right = { userId, side: 'right', input: 'none' };
-    userToRoom.set(userId, room.id);
-    return;
+  if (!room.right && room.left.userId !== uid) {
+    room.right = { userId: uid, side: 'right', input: 'none' };
+    room.ready.right = false;
+    userToRoom.set(uid, room.id);
+    return 'right';
   }
-
-  throw new Error('Room is full');
+  return null;
 }
 
-function removePlayer(room: GameRoom, userId: string): void {
-  if (room.left?.userId === userId) room.left = null;
-  if (room.right?.userId === userId) room.right = null;
-  userToRoom.delete(userId);
+function handleJoin(userId: string, socket: WebSocket, msg: GameMessage): void {
+  const room = ensureRoomForJoin(userId, msg);
+  if (!room) {
+    if (socket.readyState === socket.OPEN) {
+      socket.send(
+        JSON.stringify({
+          type: 'game:error',
+          message: 'Unable to join game room',
+        }),
+      );
+    }
+    return;
+  }
 
-  // se ficou só right, move para left (melhor UX em lobbies)
-  if (!room.left && room.right) {
-    room.left = { ...room.right, side: 'left' };
-    room.right = null;
+  const side = setPlayerInRoom(room, userId);
+  if (!side) {
+    if (socket.readyState === socket.OPEN) {
+      socket.send(
+        JSON.stringify({
+          type: 'game:error',
+          message: 'Room is full',
+        }),
+      );
+    }
+    return;
+  }
+
+  // enviar snapshot inicial
+  debugToUser(String(userId), 'join', {
+    roomId: room.id,
+    isTournament: room.isTournament,
+    left: room.left?.userId ?? null,
+    right: room.right?.userId ?? null,
+  });
+  broadcastRoomState(room);
+  // Envia um ACK explícito de join para já fixar o lado no cliente e espelhar o estado atual
+  sendToUser(String(userId), {
+    type: 'game:joined',
+    roomId: room.id,
+    yourSide: side,
+    ready: { ...room.ready },
+    players: {
+      left: room.left?.userId ?? null,
+      right: room.right?.userId ?? null,
+    },
+    status: room.status,
+  });
+  startLoopIfReady(room);
+}
+
+function handleReady(userId: string): void {
+  const uid = normalizeId(userId);
+  if (!uid) return;
+  const roomId = userToRoom.get(uid);
+  if (!roomId) return;
+  const room = rooms.get(roomId);
+  if (!room || room.status !== 'waiting') return;
+
+  if (room.left && room.left.userId === uid) {
+    room.ready.left = true;
+  } else if (room.right && room.right.userId === uid) {
+    room.ready.right = true;
+  }
+
+  sendReadyUpdate(room);
+
+  debugToUser(uid, 'ready', {
+    roomId: room.id,
+    readyLeft: room.ready.left,
+    readyRight: room.ready.right,
+  });
+
+  broadcastRoomState(room);
+  startLoopIfReady(room);
+}
+
+function handleStart(userId: string): void {
+  const uid = normalizeId(userId);
+  if (!uid) return;
+  const roomId = userToRoom.get(uid);
+  if (!roomId) return;
+  const room = rooms.get(roomId);
+  if (!room || room.status !== 'waiting') return;
+  if (!room.left || !room.right) {
+    sendToUser(uid, {
+      type: 'game:error',
+      message: 'Both players must be in the room to start.',
+    });
+    return;
+  }
+
+  debugToUser(uid, 'start', {
+    roomId: room.id,
+    left: room.left?.userId ?? null,
+    right: room.right?.userId ?? null,
+  });
+
+  // força ambos como prontos e inicia
+  room.ready.left = true;
+  room.ready.right = true;
+  broadcastRoomState(room);
+  startLoopIfReady(room);
+}
+
+function handleInput(userId: string, msg: GameMessage): void {
+  const uid = normalizeId(userId);
+  if (!uid) return;
+  const roomId = userToRoom.get(uid);
+  if (!roomId) return;
+  const room = rooms.get(roomId);
+  if (!room) return;
+
+  const direction = (msg as any).direction;
+  let dir: Direction = 'none';
+  if (direction === 'up' || direction === 'down' || direction === 'none') {
+    dir = direction;
+  }
+
+  if (room.left && room.left.userId === uid) {
+    room.left.input = dir;
+  } else if (room.right && room.right.userId === uid) {
+    room.right.input = dir;
   }
 }
 
 function handleLeave(userId: string): void {
-  const room = getRoomForUser(userId);
-  if (!room) return;
-
-  // se já estava a jogar => forfeit e fecha
-  if (room.status === 'playing') {
-    finishGame(room, { forfeitLoserId: userId, reason: 'forfeit' });
+  const uid = normalizeId(userId);
+  if (!uid) return;
+  const roomId = userToRoom.get(uid);
+  if (!roomId) return;
+  const room = rooms.get(roomId);
+  if (!room) {
+    userToRoom.delete(uid);
     return;
   }
 
-  // se ainda estava à espera:
-  // - em torneio, tratamos como forfeit também (se já houver opponent definido)
-  if (room.isTournament) {
-    // tenta determinar winner pelo match
-    const info = getMatchByRoomId(room.id);
-    const p1 = info?.match.player1Id ?? null;
-    const p2 = info?.match.player2Id ?? null;
-
-    // se existe opponent definido, damos win a esse
-    const forcedWinner =
-      p1 && p1 !== userId ? p1 : p2 && p2 !== userId ? p2 : null;
-
-    if (forcedWinner) {
-      finishGame(room, { forcedWinnerId: forcedWinner, reason: 'forfeit' });
-      return;
-    }
-  }
-
-  // caso normal: remove o jogador; se a sala ficar vazia, apaga
-  removePlayer(room, userId);
-  sendRoomState(room);
-
-  if (!room.left && !room.right) {
-    rooms.delete(room.id);
-  }
+  finishGame(room, uid);
 }
 
 export function handleDisconnect(userId: string): void {
+  // Para já tratamos desconexão como abandono da partida
   handleLeave(userId);
 }
 
-export function handleGameMessage(userId: string, socket: WebSocket, msg: any): void {
-  try {
-    if (!msg || typeof msg.type !== 'string') {
-      safeSend(socket, { type: 'game:error', message: 'Missing message type' });
-      return;
-    }
-
-    switch (msg.type) {
-      case 'game:join': {
-        const requestedRoomId =
-          typeof msg.roomId === 'string' ? (msg.roomId as string) : undefined;
-
-        // se já estava noutra sala, sai (forfeit)
-        const current = getRoomForUser(userId);
-        if (current && current.id !== requestedRoomId) {
-          handleLeave(userId);
-        }
-
-        const { room, side } = ensureRoomForJoin(userId, requestedRoomId);
-        setPlayer(room, userId, side);
-
-        sendRoomState(room);
-        startLoopIfReady(room);
-        return;
+// API pública usada em routes.ts
+export function handleGameMessage(
+  userId: string,
+  socket: WebSocket,
+  msg: GameMessage,
+): void {
+  switch (msg.type) {
+    case 'game:join':
+      handleJoin(userId, socket, msg);
+      break;
+    case 'game:input':
+      handleInput(userId, msg);
+      break;
+    case 'game:ready':
+      handleReady(userId);
+      break;
+    case 'game:start':
+      handleStart(userId);
+      break;
+    case 'game:leave':
+      handleLeave(userId);
+      break;
+    default:
+      if (socket.readyState === socket.OPEN) {
+        socket.send(
+          JSON.stringify({
+            type: 'game:error',
+            message: `Unknown game message type: ${msg.type}`,
+          }),
+        );
       }
-
-      case 'game:input': {
-        const dirRaw = msg.direction;
-        const dir: InputDir = dirRaw === 'up' || dirRaw === 'down' || dirRaw === 'none' ? dirRaw : 'none';
-
-        const room = getRoomForUser(userId);
-        if (!room) {
-          safeSend(socket, { type: 'game:error', message: 'Not in a room' });
-          return;
-        }
-        if (room.left?.userId === userId) room.left.input = dir;
-        else if (room.right?.userId === userId) room.right.input = dir;
-        else safeSend(socket, { type: 'game:error', message: 'Not a player of this room' });
-
-        return;
-      }
-
-      case 'game:leave': {
-        handleLeave(userId);
-        return;
-      }
-
-      default:
-        safeSend(socket, { type: 'game:error', message: `Unknown game msg: ${msg.type}` });
-    }
-  } catch (err) {
-    safeSend(socket, {
-      type: 'game:error',
-      message: (err as Error).message ?? 'Unknown error',
-    });
+      break;
   }
-}
-
-// ===== Lobby API (para o routes.ts) =====
-
-export function listLobbies(): LobbySummary[] {
-  const out: LobbySummary[] = [];
-
-  for (const room of rooms.values()) {
-    if (room.isTournament) continue;
-    if (!room.isPublic) continue;
-    if (room.status !== 'waiting') continue;
-
-    const players: string[] = [];
-    if (room.left) players.push(room.left.userId);
-    if (room.right && room.right.userId !== room.left?.userId) players.push(room.right.userId);
-
-    const summary: LobbySummary = {
-      roomId: room.id,
-      status: room.status,
-      players,
-      createdAt: room.createdAt,
-    };
-
-    if (room.name !== undefined) summary.name = room.name;
-    if (room.left?.userId !== undefined) summary.ownerId = room.left.userId;
-
-    out.push(summary);
-  }
-
-  out.sort((a, b) => a.createdAt - b.createdAt);
-  return out;
-}
-
-export function createLobbyForUser(userId: string, name?: string): LobbySummary {
-  // se já estava num jogo/sala, sai (forfeit se estiver a jogar)
-  handleLeave(userId);
-
-  const lobbyId = `lobby_${Math.random().toString(36).slice(2, 10)}`;
-
-  const room: GameRoom = {
-    id: lobbyId,
-    status: 'waiting',
-    left: { userId, side: 'left', input: 'none' },
-    right: null,
-    state: createInitialState(),
-    scores: { left: 0, right: 0 },
-    maxScore: MAX_SCORE_DEFAULT,
-    loop: null,
-    isTournament: false,
-    isPublic: true,
-    createdAt: Date.now(),
-  };
-
-  if (name !== undefined) {
-    room.name = name;
-  }
-
-  rooms.set(room.id, room);
-  userToRoom.set(userId, room.id);
-
-  const summary: LobbySummary = {
-    roomId: room.id,
-    status: room.status,
-    players: [userId],
-    createdAt: room.createdAt,
-    ownerId: userId,
-  };
-
-  if (room.name !== undefined) summary.name = room.name;
-
-  return summary;
 }

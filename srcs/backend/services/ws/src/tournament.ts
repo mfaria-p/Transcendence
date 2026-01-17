@@ -24,11 +24,13 @@ export interface Tournament {
   players: string[];
   matches: TournamentMatch[];
   winnerId?: string;
+  visibility: 'public' | 'private';
+  joinCode?: string;
   createdAt: number;
   updatedAt: number;
 }
 
-// Storage em memória
+// Armazenamento em memória
 const tournaments = new Map<string, Tournament>();
 // Map roomId -> (tournamentId, matchId)
 const roomToTournament = new Map<string, { tournamentId: string; matchId: string }>();
@@ -41,12 +43,22 @@ function genId(prefix: string): string {
   return `${prefix}_${crypto.randomUUID()}`;
 }
 
-function isPowerOfTwo(n: number): boolean {
-  return n > 0 && (n & (n - 1)) === 0;
+function generateJoinCode(): string {
+  // 6-char uppercase hex code (easy to share/type)
+  return crypto.randomBytes(3).toString('hex').toUpperCase();
 }
 
-export function listTournaments(): Tournament[] {
-  return Array.from(tournaments.values());
+function codesMatch(a: string | undefined, b: string | undefined): boolean {
+  if (!a || !b) return false;
+  return a.trim().toUpperCase() === b.trim().toUpperCase();
+}
+
+export function listTournaments(viewerId?: string): Tournament[] {
+  const uid = viewerId ?? '';
+
+  return Array.from(tournaments.values())
+    .filter((t) => t.visibility === 'public' || t.ownerId === uid || t.players.includes(uid))
+    .sort((a, b) => (b.updatedAt ?? b.createdAt) - (a.updatedAt ?? a.createdAt));
 }
 
 export function getTournament(id: string): Tournament | undefined {
@@ -57,20 +69,27 @@ export function createTournament(input: {
   ownerId: string;
   name?: string;
   maxPlayers?: number;
+  isPrivate?: boolean;
 }): Tournament {
-  const maxPlayers =
-    typeof input.maxPlayers === 'number' && input.maxPlayers > 1 ? input.maxPlayers : 4;
+  const maxPlayers = input.maxPlayers && input.maxPlayers > 1 ? input.maxPlayers : 4;
+  const isPrivate = Boolean(input.isPrivate);
+  const visibility: 'public' | 'private' = isPrivate ? 'private' : 'public';
 
   const t: Tournament = {
     id: genId('t'),
     ownerId: input.ownerId,
     maxPlayers,
+    visibility,
     status: 'waiting',
     players: [input.ownerId],
     matches: [],
     createdAt: now(),
     updatedAt: now(),
   };
+
+  if (isPrivate) {
+    t.joinCode = generateJoinCode();
+  }
 
   if (input.name !== undefined) {
     t.name = input.name;
@@ -80,24 +99,74 @@ export function createTournament(input: {
   return t;
 }
 
-export function joinTournament(tournamentId: string, userId: string): Tournament {
+export function joinTournament(tournamentId: string, userId: string, joinCode?: string): Tournament {
   const t = tournaments.get(tournamentId);
   if (!t) {
     throw new Error('Tournament not found');
   }
-  if (t.status !== 'waiting') {
-    throw new Error('Tournament already started');
-  }
   if (t.players.includes(userId)) {
     return t;
   }
-  if (t.players.length >= t.maxPlayers) {
-    throw new Error('Tournament full');
+
+  if (t.visibility === 'private' && t.ownerId !== userId) {
+    if (!codesMatch(t.joinCode, joinCode)) {
+      throw new Error('Invalid or missing join code');
+    }
   }
 
-  t.players.push(userId);
-  t.updatedAt = now();
-  return t;
+  // Cenário normal: torneio ainda não começou.
+  if (t.status === 'waiting') {
+    if (t.players.length >= t.maxPlayers) {
+      throw new Error('Tournament full');
+    }
+
+    t.players.push(userId);
+    t.updatedAt = now();
+    return t;
+  }
+
+  // Permitir join tardio apenas para torneios 1v1 já iniciados que têm vaga aberta.
+  if (t.status === 'running' && t.maxPlayers === 2) {
+    if (t.players.length >= t.maxPlayers) {
+      throw new Error('Tournament full');
+    }
+
+    const pendingWithSlot = t.matches.find(
+      (m) =>
+        m.status === 'pending' &&
+        (m.player1Id === null || m.player1Id === undefined || m.player2Id === null || m.player2Id === undefined),
+    );
+
+    if (!pendingWithSlot) {
+      throw new Error('No available match to join');
+    }
+
+    t.players.push(userId);
+    if (!pendingWithSlot.player1Id) {
+      pendingWithSlot.player1Id = userId;
+    } else {
+      pendingWithSlot.player2Id = userId;
+    }
+    t.updatedAt = now();
+    return t;
+  }
+
+  throw new Error('Tournament already started');
+}
+
+export function joinTournamentWithCode(tournamentId: string, userId: string, joinCode?: string): Tournament {
+  const t = tournaments.get(tournamentId);
+  if (!t) {
+    throw new Error('Tournament not found');
+  }
+
+  return joinTournament(tournamentId, userId, joinCode);
+}
+
+export function findTournamentByJoinCode(code: string): Tournament | undefined {
+  if (!code || code.trim().length === 0) return undefined;
+  const normalized = code.trim().toUpperCase();
+  return Array.from(tournaments.values()).find((t) => t.visibility === 'private' && t.joinCode && t.joinCode.toUpperCase() === normalized);
 }
 
 function createMatch(
@@ -138,12 +207,8 @@ function createMatch(
 }
 
 /**
- * Gera um bracket completo para N jogadores, onde N é potência de 2:
- * 2, 4, 8, 16, ...
- *
- * Regras:
- * - Não há byes.
- * - Usa a ordem atual de t.players (se quiseres, podes baralhar antes).
+ * Gera matches iniciais.
+ * Suporta apenas torneios com 2 ou 4 jogadores.
  */
 export function startTournament(tournamentId: string): Tournament {
   const t = tournaments.get(tournamentId);
@@ -154,70 +219,85 @@ export function startTournament(tournamentId: string): Tournament {
     throw new Error('Tournament already started');
   }
 
-  const playerCount = t.players.length;
+  // Caminho 1v1: podemos iniciar com apenas um jogador (host entra na sala e espera oponente).
+  if (t.maxPlayers === 2) {
+    if (t.players.length < 1) {
+      throw new Error('Not enough players (need at least 1)');
+    }
+    if (t.players.length > t.maxPlayers) {
+      throw new Error('Tournament full');
+    }
 
-  if (playerCount < 2) {
-    throw new Error('Not enough players (need at least 2)');
-  }
-  if (!isPowerOfTwo(playerCount)) {
-    throw new Error(
-      'Tournament must start with a number of players that is a power of 2 (2, 4, 8, 16, ...)',
-    );
-  }
+    const players = [...t.players];
+    const matches: TournamentMatch[] = [];
 
-  // Se quiseres randomizar os confrontos:
-  // const players = [...t.players].sort(() => Math.random() - 0.5);
-  const players = [...t.players];
-
-  const matches: TournamentMatch[] = [];
-
-  // Round 1 (players diretos)
-  let prevRound: TournamentMatch[] = [];
-  for (let i = 0; i < playerCount; i += 2) {
-    const m = createMatch(
+    createMatch(
       t,
       {
-        player1Id: players[i] ?? null,
-        player2Id: players[i + 1] ?? null,
+        player1Id: players[0] ?? null,
+        player2Id: players[1] ?? null,
+        isFinal: true,
       },
       matches,
     );
-    prevRound.push(m);
+
+    t.matches = matches;
+    t.status = 'running';
+    t.updatedAt = now();
+    return t;
   }
 
-  // Rounds seguintes (dependem dos winners)
-  while (prevRound.length > 1) {
-    const nextRound: TournamentMatch[] = [];
-    const nextIsFinal = prevRound.length === 2;
+  // Caminho 4 jogadores mantém a lógica original.
+  if (t.players.length < 2) {
+    throw new Error('Not enough players (need at least 2)');
+  }
+  if (t.players.length !== 2 && t.players.length !== 4) {
+    throw new Error('This implementation supports tournaments with 2 or 4 players only');
+  }
 
-    for (let i = 0; i < prevRound.length; i += 2) {
-      const a = prevRound[i];
-      const b = prevRound[i + 1];
+  const players = [...t.players];
+  const matches: TournamentMatch[] = [];
 
-      // TS + runtime safety (noUncheckedIndexedAccess)
-      if (!a || !b) {
-        throw new Error('Internal error: invalid tournament bracket generation');
-      }
+  if (players.length === 2) {
+    // final direta
+    createMatch(
+      t,
+      {
+        player1Id: players[0] ?? null,
+        player2Id: players[1] ?? null,
+        isFinal: true,
+      },
+      matches,
+    );
+  } else {
+    // 4 jogadores: duas meias-finais + final
+    const semi1 = createMatch(
+      t,
+      {
+        player1Id: players[0] ?? null,
+        player2Id: players[1] ?? null,
+      },
+      matches,
+    );
+    const semi2 = createMatch(
+      t,
+      {
+        player1Id: players[2] ?? null,
+        player2Id: players[3] ?? null,
+      },
+      matches,
+    );
 
-      // Não passar isFinal: undefined (exactOptionalPropertyTypes)
-      const opts: {
-        sourceMatch1Id: string;
-        sourceMatch2Id: string;
-        isFinal?: boolean;
-      } = {
-        sourceMatch1Id: a.id,
-        sourceMatch2Id: b.id,
-      };
-
-      if (nextIsFinal) {
-        opts.isFinal = true;
-      }
-
-      const m = createMatch(t, opts, matches);
-      nextRound.push(m);
-    }
-
-    prevRound = nextRound;
+    // final (sem jogadores definidos ainda; vêm dos winners das semis)
+    createMatch(
+      t,
+      {
+        isFinal: true,
+        sourceMatch1Id: semi1.id,
+        sourceMatch2Id: semi2.id,
+      },
+      matches,
+    );
   }
 
   t.matches = matches;
@@ -242,9 +322,25 @@ export function getMatchByRoomId(
 }
 
 /**
- * Atualiza winner + avança a árvore.
- * - Se o match é final: fecha torneio.
- * - Caso contrário: coloca o winner no match pai (onde sourceMatch1Id/2Id apontam).
+ * Marks a match as "playing" based on the game room id.
+ *
+ * This is used by the game server when the authoritative loop starts.
+ */
+export function markMatchPlayingByRoomId(roomId: string): Tournament | undefined {
+  const info = getMatchByRoomId(roomId);
+  if (!info) return undefined;
+
+  const { tournament, match } = info;
+  if (match.status !== 'finished' && match.status !== 'playing') {
+    match.status = 'playing';
+    tournament.updatedAt = now();
+  }
+  return tournament;
+}
+
+/**
+ * Chamado pelo módulo de jogo quando um match termina.
+ * Atualiza winner + avança a árvore (final).
  */
 export function reportMatchResultByRoomId(
   roomId: string,
@@ -260,7 +356,6 @@ export function reportMatchResultByRoomId(
   if (!info) return undefined;
 
   const { tournament, match } = info;
-
   if (match.status === 'finished') {
     return { tournament, match };
   }
@@ -275,6 +370,7 @@ export function reportMatchResultByRoomId(
     tournament.status = 'finished';
     tournament.winnerId = winnerId;
   } else {
+    // procurar match dependente deste (ex.: final)
     for (const m of tournament.matches) {
       if (m.sourceMatch1Id === match.id) {
         m.player1Id = winnerId;
@@ -286,6 +382,8 @@ export function reportMatchResultByRoomId(
     }
   }
 
-  if (finalMatch) return { tournament, match, finalMatch };
+  if (finalMatch) {
+    return { tournament, match, finalMatch };
+  }
   return { tournament, match };
 }

@@ -7,19 +7,8 @@
   <title>Transcendence - Profile</title>
 </head>
 <body class="bg-gray-900 text-white min-h-screen flex flex-col">
-  <!-- Navigation -->
-  <nav class="bg-gray-800 border-b border-gray-700">
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-      <div class="flex justify-between h-16">
-        <div class="flex items-center">
-          <a href="./index.html" class="text-2xl font-bold text-green-400">TRANSCENDENCE</a>
-        </div>
-        <div id="authContainer" class="flex items-center gap-3">
-          <!-- Populated by profile.js -->
-        </div>
-      </div>
-    </div>
-  </nav>
+  <!-- Global Header -->
+  <div id="globalHeader"></div>
 
   <!-- Main Content -->
   <div class="flex-1 flex items-center justify-center px-4 py-12">
@@ -41,7 +30,9 @@
         <div id="searchResults" class="mt-2"></div>
       </div>
 
-      <h1 class="text-3xl font-bold text-green-400 mb-8 text-center">My Profile</h1>
+      <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-8">
+        <h1 class="text-3xl font-bold text-green-400 text-center sm:text-left">My Profile</h1>
+      </div>
       
       <!-- Profile Avatar -->
       <div class="flex flex-col items-center mb-8">
@@ -175,6 +166,31 @@
           <!-- Populated by JavaScript -->
         </div>
       </div>
+
+      <!-- Logout Button -->
+      <div class="mt-6 flex justify-center">
+        <button 
+          id="logoutBtn"
+          class="w-full sm:w-auto bg-red-600 hover:bg-red-700 text-white font-semibold px-8 py-2 rounded shadow-lg transition"
+        >
+          Logout
+        </button>
+      </div>
+
+      <!-- Delete Account Section -->
+      <div class="mt-8 bg-gray-800 rounded-lg p-6 border-2 border-red-600">
+        <h2 class="text-2xl font-bold text-red-400 mb-4">Danger Zone</h2>
+        <p class="text-gray-300 mb-4">
+          Once you delete your account, there is no going back. This will permanently delete your profile, friends, and all associated data.
+        </p>
+        <button 
+          id="deleteAccountBtn" 
+          class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-6 rounded transition duration-200"
+        >
+          Delete Account
+        </button>
+      </div>
+
     </div>
   </div>
 
@@ -220,5 +236,9 @@
   </div>
 
   <script type="module" src="./profile.js"></script>
+  <script type="module">
+    import { initFooter } from './shared/footer.js';
+    initFooter();
+  </script>
 </body>
 </html>

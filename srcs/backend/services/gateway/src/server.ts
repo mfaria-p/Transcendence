@@ -4,14 +4,11 @@ import cors from '@fastify/cors';
 import rateLimit from '@fastify/rate-limit';
 import replyFrom from '@fastify/reply-from';
 import jwtPlugin from '@pkg/lib-auth';
-import * as dotenv from 'dotenv';
-
-dotenv.config();
 
 const {
   GATEWAY_PORT = '3000',
   AUTH_URL = 'http://auth:3001',
-  USERS_URL = 'http://users:3002',
+  USERS_URL = 'http://user:3002',
   REALTIME_URL = 'http://ws:3003',
 } = process.env;
 

@@ -2,6 +2,90 @@ let ws: WebSocket | null = null;
 let reconnectTimer: number | null = null;
 let manualClose = false;
 
+type PresenceListener = (event: 'online' | 'offline', userId: string) => void;
+const presenceListeners: Set<PresenceListener> = new Set();
+
+type TournamentsChangedListener = () => void;
+const tournamentsChangedListeners: Set<TournamentsChangedListener> = new Set();
+
+type TournamentUpdateListener = (tournament: unknown) => void;
+const tournamentUpdateListeners: Set<TournamentUpdateListener> = new Set();
+
+type UserEventListener = (event: string, data?: unknown) => void;
+const userEventListeners: Set<UserEventListener> = new Set();
+
+export function addPresenceListener(listener: PresenceListener): void {
+  presenceListeners.add(listener);
+}
+
+export function removePresenceListener(listener: PresenceListener): void {
+  presenceListeners.delete(listener);
+}
+
+export function addTournamentsChangedListener(listener: TournamentsChangedListener): void {
+  tournamentsChangedListeners.add(listener);
+}
+
+export function removeTournamentsChangedListener(listener: TournamentsChangedListener): void {
+  tournamentsChangedListeners.delete(listener);
+}
+
+export function addTournamentUpdateListener(listener: TournamentUpdateListener): void {
+  tournamentUpdateListeners.add(listener);
+}
+
+export function removeTournamentUpdateListener(listener: TournamentUpdateListener): void {
+  tournamentUpdateListeners.delete(listener);
+}
+
+export function addUserEventListener(listener: UserEventListener): void {
+  userEventListeners.add(listener);
+}
+
+export function removeUserEventListener(listener: UserEventListener): void {
+  userEventListeners.delete(listener);
+}
+
+function notifyPresenceListeners(event: 'online' | 'offline', userId: string): void {
+  presenceListeners.forEach(listener => {
+    try {
+      listener(event, userId);
+    } catch (error) {
+      console.error('[Presence WS] Error in listener:', error);
+    }
+  });
+}
+
+function notifyTournamentsChangedListeners(): void {
+  tournamentsChangedListeners.forEach(listener => {
+    try {
+      listener();
+    } catch (error) {
+      console.error('[Realtime WS] Error in tournaments listener:', error);
+    }
+  });
+}
+
+function notifyTournamentUpdateListeners(tournament: unknown): void {
+  tournamentUpdateListeners.forEach(listener => {
+    try {
+      listener(tournament);
+    } catch (error) {
+      console.error('[Realtime WS] Error in tournament update listener:', error);
+    }
+  });
+}
+
+function notifyUserEventListeners(event: string, data?: unknown): void {
+  userEventListeners.forEach(listener => {
+    try {
+      listener(event, data);
+    } catch (error) {
+      console.error('[Realtime WS] Error in user event listener:', error);
+    }
+  });
+}
+
 export function connectPresenceSocket(): void {
   const token = localStorage.getItem('access_token');
   
@@ -18,7 +102,7 @@ export function connectPresenceSocket(): void {
   manualClose = false;
 
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-  const url = `${protocol}//${window.location.host}/ws/?token=${encodeURIComponent(token)}`;
+  const url = `${protocol}//${window.location.host}/ws?token=${encodeURIComponent(token)}`;
   
   console.log('[Presence WS] Attempting to connect to:', url);
   ws = new WebSocket(url);
@@ -49,9 +133,21 @@ export function connectPresenceSocket(): void {
           break;
         case 'presence':
           console.log(`[Presence WS] Presence update: User ${message.userId} is now ${message.event}`);
+          notifyPresenceListeners(message.event, message.userId);
           break;
         case 'pong':
           console.log('[Presence WS] Pong received');
+          break;
+        case 'tournaments:changed':
+          notifyTournamentsChangedListeners();
+          break;
+        case 'tournament:update':
+          notifyTournamentUpdateListeners(message.tournament);
+          break;
+        case 'user:event':
+          if (typeof message.event === 'string') {
+            notifyUserEventListeners(message.event, message.data);
+          }
           break;
         default:
           console.log('[Presence WS] Unknown message type:', message.type);
@@ -107,6 +203,11 @@ export function disconnectPresenceSocket(): void {
     ws.close();
     ws = null;
   }
+
+  presenceListeners.clear();
+  tournamentsChangedListeners.clear();
+  tournamentUpdateListeners.clear();
+  userEventListeners.clear();
   
   console.log('[Presence WS] Disconnected');
 }

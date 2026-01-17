@@ -22,6 +22,7 @@ describe('Signup => Login => Me => Logout', () => {
   let rt1: string = '';
   let rt2: string = '';
   let at: string = '';
+  let at2: string = '';
   let accountId: string = '';
 
   beforeAll(async () => {
@@ -86,9 +87,7 @@ describe('Signup => Login => Me => Logout', () => {
       payload: {username: 'test1', email: 'test@example.com', password: 'hello123'},
     });
     expect(r1.statusCode).toBe(200);
-    const res = r1.json();
-    at = res.at;
-    const account = res.account;
+    const account = r1.json().account;
     accountId = account.id;
 
     expect(account).toMatchObject({username: "test1", email: "test@example.com"})
@@ -238,7 +237,9 @@ describe('Signup => Login => Me => Logout', () => {
       },
     });
     expect(r1.statusCode).toBe(200);
-    const account = r1.json().account;
+    const res = r1.json();
+    expect(res.isOAuthAccount).toBe(false);
+    const account = res.account;
     expect(account).toMatchObject({username: "test1", email: "test@example.com"})
     expect(account).not.toHaveProperty("passwordHash");
   })
@@ -276,6 +277,55 @@ describe('Signup => Login => Me => Logout', () => {
     const account = r1.json().account;
     expect(account).toMatchObject({username: "test2", email: "test2@example.com"})
     expect(account).not.toHaveProperty("passwordHash");
+  })
+
+  it('POST /auth/signup - second account', async () => {
+    const r1 = await app.inject({
+      method: 'POST',
+      url: '/auth/signup',
+      headers: {'content-type': 'application/json'},
+      payload: {username: 'test1', email: 'test@example.com', password: 'hello123'},
+    });
+    expect(r1.statusCode).toBe(200);
+    const account = r1.json().account;
+
+    expect(account).toMatchObject({username: "test1", email: "test@example.com"})
+    expect(account).not.toHaveProperty("passwordHash");
+
+    const newAccount = await app.prisma.account.findUnique({where: {email: 'test@example.com'}});
+    expect(newAccount).toBeDefined();
+    expect(await argon2.verify(newAccount!.passwordHash!, "hello123")).toBe(true);
+  })
+
+  it('POST /auth/login - username', async () => {
+    const r1 = await app.inject({
+      method: 'POST',
+      url: '/auth/login',
+      headers: {'content-type': 'application/json'},
+      payload: {ident: 'test1', password: 'hello123'},
+    });
+    expect(r1.statusCode).toBe(200);
+    const res = r1.json();
+    at2 = res.at;
+    const account = res.account;
+    expect(account).toMatchObject({username: "test1", email: "test@example.com"})
+    expect(account).not.toHaveProperty("passwordHash");
+  })
+
+  it('PUT /auth/me', async () => {
+    const r1 = await app.inject({
+      method: 'PUT',
+      url: '/auth/me',
+      headers: {
+        'Authorization': `Bearer ${at2}`,
+        'content-type': 'application/json',
+      },
+      payload: {
+        username: 'test2',
+        email: 'test2@example.com',
+      },
+    });
+    expect(r1.statusCode).toBe(409);
   })
 
   it('PUT /auth/me/password - missing access token', async () => {
@@ -358,7 +408,7 @@ describe('Signup => Login => Me => Logout', () => {
     });
     expect(r1.statusCode).toBe(200);
     const accounts = r1.json().accounts;
-    expect(accounts).toEqual([{id: accountId, username: 'test2', email: 'test2@example.com'}]);
+    expect(accounts).toContainEqual({id: accountId, username: 'test2', email: 'test2@example.com'});
     expect(accounts.every(o => !("passwordHash" in o))).toBe(true)
   });
 
@@ -367,7 +417,6 @@ describe('Signup => Login => Me => Logout', () => {
       method: 'GET',
       url: `/auth/${accountId}`,
     });
-    console.log(r1.json());
     expect(r1.statusCode).toBe(200);
     const account = r1.json().account;
     expect(account).toMatchObject({id: accountId, username: 'test2', email: 'test2@example.com'});

@@ -24,6 +24,7 @@ export const getMeOpts: FastifySchema = {
         success: {type: 'boolean'},
         message: {type: 'string'},
         account: account,
+        isOAuthAccount: {type: 'boolean'},
       },
       additionalProperties: false,
     },

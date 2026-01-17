@@ -135,11 +135,14 @@ export default async function (app: FastifyInstance): Promise<void> {
     const accountId: string = req.jwtPayload!.id;
     const account: Account | null = await utils.accountFindById(app.prisma, accountId);
     if (!account) return reply.code(401).send({success: false, message: 'Nonexisting account'});
+    const oauthAccount: OAuthAccount | null = await utils.oauthAccountFindByAccountId(app.prisma, accountId);
+    const isOAuth = (!oauthAccount) ? false : true;
 
     return {
       success: true,
       message: 'Account info',
       account: account,
+      isOAuthAccount: isOAuth,
     };
   });
 
@@ -202,41 +205,62 @@ export default async function (app: FastifyInstance): Promise<void> {
     return reply.redirect(url);
   });
 
-  app.get('/google/callback', {}, async (req: FastifyRequest, reply: FastifyReply) => {
-    const { code, state } = req.query as any;
-    if (!code || !state) { //|| !stateStore.has(state)) {
-      return reply.status(400).send({success: false, message: 'Invalid state or missing code'});
-    }
+app.get('/google/callback', {}, async (req: FastifyRequest, reply: FastifyReply) => {
+  const { code, state, error } = req.query as any;
+  
+  // User cancelled the authentication
+  if (error === 'access_denied') {
+    return reply.redirect(`/login.html`);
+  }
+  
+  // Missing required parameters (actual error)
+  if (!code || !state) {
+    return reply.redirect(`/google-callback.html?error=${encodeURIComponent('Invalid authentication request')}`);
+  }
 
-    // stateStore.delete(state);
-
+  try {
     const payload = await utils.googleGetPayload(code);
     if (!payload?.sub || !payload?.email || !payload?.name) {
-      return reply.status(401).send({success: false, message: 'Invalid google payload'});
+      return reply.redirect(`/google-callback.html?error=${encodeURIComponent('Invalid Google account data')}`);
     }
 
     let account: Account | null = await utils.accountFindByEmail(app.prisma, payload.email);
     let oauthAccount: OAuthAccount | null = await utils.oauthAccountFindByProviderAccountId(app.prisma, {sub: payload.sub, provider: OAuthProvider.google});
     if (account && !oauthAccount) {
-      return reply.status(400).send({success: false, message: 'Email already taken'});
-    }
+      return reply.redirect(`/google-callback.html?error=${encodeURIComponent('Email already registered with a different login method')}`);
+    }    
     if (!account) {
-      account = await utils.accountCreate(app.prisma, {username: payload.name, email: payload.email});
+      let username = payload.name
+        .replace(/[^a-zA-Z0-9_]/g, '_')  // Remove invalid characters
+        .substring(0, 20);                 // Max 20 chars
+      
+      if (username.length < 3) {
+        username = `user_${username}`;
+      }
+      
+      let finalUsername = username;
+      let counter = 1;
+      while (await utils.accountFindByUsername(app.prisma, finalUsername)) {
+        finalUsername = `${username.substring(0, 17)}_${counter}`;
+        counter++;
+      }
+      account = await utils.accountCreate(app.prisma, {username: finalUsername, email: payload.email});
       oauthAccount = await utils.oauthAccountCreate(app.prisma, account.id, {sub: payload.sub, provider: OAuthProvider.google});
     }
 
     const at: String = utils.atGenerate(app.jwt, {sub: account.id});
 
-    return {
-      success: true,
-      message: 'Google Account Logged In',
-      account: {
+    const accountData = encodeURIComponent(JSON.stringify({
         id: account.id,
-        username: payload.name,
-        email: payload.email,
-        avatarUrl: payload.picture,
-      },
-      at: at,
-    };
-  });
+        username: account.username,
+        email: account.email,
+        avatarUrl: payload.picture || '',
+      }));
+
+    return reply.redirect(`/google-callback.html?at=${at}&account=${accountData}`);
+  } catch (error: any) {
+    app.log.error({ err: error }, 'Google OAuth callback error');
+    return reply.redirect(`/google-callback.html?error=${encodeURIComponent(error.message || 'Google authentication failed')}`);
+  }
+});
 };

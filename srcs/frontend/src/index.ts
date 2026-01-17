@@ -1,20 +1,8 @@
 import { connectPresenceSocket, disconnectPresenceSocket } from './utils-ws.js';
-import { verifySession, handleLogout } from './utils-api.js';
-
-interface User {
-  id: string;
-  username: string;
-  email: string;
-}
+import { verifySession } from './utils-api.js';
+import { initHeader } from './shared/header.js';
 
 document.addEventListener('DOMContentLoaded', async () => {
-  const authContainer = document.getElementById('authContainer');
-  
-  if (!authContainer) {
-    console.error('Auth container not found!');
-    return;
-  }
-
   const userStr = localStorage.getItem('user');
   const accessToken = localStorage.getItem('access_token');
   
@@ -23,58 +11,83 @@ document.addEventListener('DOMContentLoaded', async () => {
   
   if (userStr && accessToken) {
     try {
-      const user: User = JSON.parse(userStr);
-      
-      // Verify session is still valid
       await verifySession(accessToken);
       
-      console.log('User logged in:', user);
+      console.log('User logged in');
+      initHeader({ active: 'home' });
       connectPresenceSocket();
-      showLoggedInState(authContainer, user);
     } catch (error) {
-      console.error('Error parsing user data or verifying session:', error);
-      clearSessionAndShowLoggedOut(authContainer);
+      console.error('Error verifying session:', error);
+      disconnectPresenceSocket();
+      localStorage.removeItem('access_token');
+      localStorage.removeItem('user');
+      // Re-initialize header without user data
+      initHeader({ active: 'home' });
     }
   } else {
-    console.log('No user found, showing logged out state');
-    showLoggedOutState(authContainer);
+    console.log('No user found');
+    // Initialize header for non-authenticated user
+    initHeader({ active: 'home' });
   }
+
+  setupMenuAutoHide();
+  preventArrowScroll();
 });
 
-function clearSessionAndShowLoggedOut(container: HTMLElement): void {
-  disconnectPresenceSocket();
-  localStorage.removeItem('access_token');
-  localStorage.removeItem('user');
-  showLoggedOutState(container);
+function setupMenuAutoHide(): void {
+  const gameCanvas = document.getElementById('gameCanvas');
+  if (!gameCanvas) return;
+
+  const mqMobile = window.matchMedia('(max-width: 900px)');
+  const mqLandscape = window.matchMedia('(orientation: landscape)');
+  const mqCoarse = window.matchMedia('(pointer: coarse)');
+
+  let lastIntersecting = false;
+
+  const compute = () => {
+    const shouldHide = mqMobile.matches && mqLandscape.matches && mqCoarse.matches && lastIntersecting;
+    document.body.classList.toggle('menu-hidden', shouldHide);
+  };
+
+  const observer = new IntersectionObserver(
+    (entries) => {
+      lastIntersecting = entries.some((entry) => entry.isIntersecting);
+      compute();
+    },
+    { threshold: 0.35 },
+  );
+
+  observer.observe(gameCanvas);
+
+  const handleChange = () => compute();
+  mqMobile.addEventListener('change', handleChange);
+  mqLandscape.addEventListener('change', handleChange);
+  mqCoarse.addEventListener('change', handleChange);
+
+  window.addEventListener('beforeunload', () => {
+    observer.disconnect();
+    mqMobile.removeEventListener('change', handleChange);
+    mqLandscape.removeEventListener('change', handleChange);
+    mqCoarse.removeEventListener('change', handleChange);
+  });
 }
 
-function showLoggedInState(container: HTMLElement, user: User): void {
-  container.innerHTML = `
-    <div class="flex items-center gap-3">
-      <span class="text-gray-300">Welcome, <a href="./profile.html" class="text-green-400 hover:text-green-300 font-bold underline transition duration-200">${user.username}</a></span>
-      <button 
-        id="logoutButton"
-        class="bg-red-600 hover:bg-red-700 text-white text-sm py-1.5 px-4 rounded transition duration-200"
-      >
-        Logout
-      </button>
-    </div>
-  `;
-  
-  const logoutButton = document.getElementById('logoutButton');
-  if (logoutButton) {
-    logoutButton.addEventListener('click', () => handleLogout());
-  }
-}
+function preventArrowScroll(): void {
+  const handler = (event: KeyboardEvent) => {
+    const target = event.target as HTMLElement | null;
 
-function showLoggedOutState(container: HTMLElement): void {
-  console.log('Rendering logged OUT state');
-  container.innerHTML = `
-    <a href="./login.html" class="bg-gray-700 hover:bg-gray-600 text-gray-300 hover:text-white text-sm py-1.5 px-4 rounded transition duration-200">
-      Login
-    </a>
-    <a href="./signup.html" class="bg-gray-700 hover:bg-gray-600 text-gray-300 hover:text-white text-sm py-1.5 px-4 rounded transition duration-200">
-      Sign Up
-    </a>
-  `;
+    // Allow typing/navigation inside form controls or contenteditable elements
+    if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT' || target.isContentEditable)) {
+      return;
+    }
+
+    if (event.key === 'ArrowUp' || event.key === 'ArrowDown' || event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+      event.preventDefault();
+    }
+  };
+
+  window.addEventListener('keydown', handler, { passive: false });
+  window.addEventListener('beforeunload', () => {
+    window.removeEventListener('keydown', handler);
+  });
 }

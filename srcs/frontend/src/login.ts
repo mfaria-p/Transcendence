@@ -1,3 +1,6 @@
+import { initHeader } from './shared/header.js';
+import { provisionProfile } from './utils-api.js';
+
 interface LoginResponse {
   success: boolean;
   message: string;
@@ -6,10 +9,13 @@ interface LoginResponse {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+  initHeader({ active: 'auth' });
+
   const loginForm = document.getElementById('loginForm') as HTMLFormElement;
   const identInput = document.getElementById('ident') as HTMLInputElement;
   const passwordInput = document.getElementById('password') as HTMLInputElement;
   const loginButton = document.getElementById('loginButton') as HTMLButtonElement;
+  const googleLoginButton = document.getElementById('googleLoginButton') as HTMLButtonElement;
   const errorMessage = document.getElementById('errorMessage') as HTMLDivElement;
   const successMessage = document.getElementById('successMessage') as HTMLDivElement;
 
@@ -117,6 +123,26 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
+  // NEW: Google OAuth login
+  googleLoginButton.addEventListener('click', async () => {
+    googleLoginButton.disabled = true;
+    googleLoginButton.textContent = 'Redirecting to Google...';
+    googleLoginButton.classList.add('opacity-50', 'cursor-not-allowed');
+
+    try {
+      // Redirect to backend Google OAuth endpoint
+      window.location.href = '/api/auth/google/login';
+    } catch (error) {
+      console.error('Google login error:', error);
+      errorMessage.textContent = 'Failed to initiate Google login';
+      errorMessage.classList.remove('hidden');
+      
+      googleLoginButton.disabled = false;
+      googleLoginButton.textContent = 'Continue with Google';
+      googleLoginButton.classList.remove('opacity-50', 'cursor-not-allowed');
+    }
+  });
+
   identInput.addEventListener('input', () => {
     errorMessage.classList.add('hidden');
   });
@@ -125,27 +151,3 @@ document.addEventListener('DOMContentLoaded', () => {
     errorMessage.classList.add('hidden');
   });
 });
-
-async function provisionProfile(accessToken: string): Promise<void> {
-  try {
-    console.log('Provisioning profile in user service...');
-    const response = await fetch('/api/user/provision', {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${accessToken}`,
-      },
-      body: JSON.stringify({}), // Empty body, ID comes from JWT
-    });
-
-    if (response.ok) {
-      console.log('Profile provisioned successfully');
-    } else {
-      const errorText = await response.text();
-      console.warn('Failed to provision profile:', response.status, errorText);
-    }
-  } catch (error) {
-    console.error('Profile provision error:', error);
-    throw error;
-  }
-}

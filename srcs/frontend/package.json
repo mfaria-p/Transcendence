@@ -1,25 +1,26 @@
 {
-  "name": "frontend",
-  "version": "1.0.0",
-  "scripts": {
-    "copy:html": "mkdir -p dist && cp src/*.html dist/",
-    "dev:css": "tailwindcss -i src/input.css -o dist/output.css --watch",
-    "dev:ts": "tsc --watch",
-    "dev:liveserver": "sleep 5 && live-server dist --no-cache",
-    "dev": "npm run copy:html && (npm run dev:css & npm run dev:ts & npm run dev:liveserver)",
-    "build:css": "tailwindcss -i src/input.css -o dist/output.css --minify",
-    "build:ts": "tsc",
-    "build": "npm run build:ts && npm run build:css && npm run copy:html",
-    "test": "echo \"Error: no test specified\" && exit 1"
-  },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "description": "",
-  "devDependencies": {
-    "@tailwindcss/cli": "^4.1.13",
-    "live-server": "^1.2.2",
-    "tailwindcss": "^4.1.13",
-    "typescript": "^5.9.2"
-  }
+	"name": "frontend",
+	"version": "1.0.0",
+	"scripts": {
+		"copy:html": "mkdir -p dist && cp src/*.html dist/ && assets_src=; if [ -d src/assets ]; then assets_src=src/assets; elif [ -d assets ]; then assets_src=assets; fi; if [ -n \"$assets_src\" ]; then mkdir -p dist/assets && cp -R $assets_src/. dist/assets/ && find dist/assets -type f -exec chmod 644 {} +; fi",
+		"dev:css": "tailwindcss -i src/input.css -o dist/output.css --watch",
+		"dev:ts": "tsc --watch",
+		"dev:liveserver": "sleep 5 && live-server dist --no-cache",
+		"dev": "npm run copy:html && (npm run dev:css & npm run dev:ts & npm run dev:liveserver)",
+		"build:css": "tailwindcss -i src/input.css -o dist/output.css --minify",
+		"build:ts": "tsc",
+		"build": "npm run build:ts && npm run build:css && npm run copy:html",
+		"test": "echo \"Error: no test specified\" && exit 1"
+	},
+	"keywords": [],
+	"author": "",
+	"license": "ISC",
+	"description": "",
+	"devDependencies": {
+		"@tailwindcss/cli": "^4.1.13",
+		"chokidar-cli": "^3.0.0",
+		"live-server": "^1.2.2",
+		"tailwindcss": "^4.1.13",
+		"typescript": "^5.9.2"
+	}
 }

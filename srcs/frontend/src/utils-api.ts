@@ -9,8 +9,12 @@ export async function verifySession(accessToken: string): Promise<void> {
       },
     });
 
-    if (!response.ok) {
+    if (response.status === 401) {
       throw new Error('Session expired');
+    }
+
+    if (!response.ok) {
+      throw new Error(`Auth check failed (${response.status})`);
     }
   } catch (error) {
     console.error('Session verification failed:', error);
@@ -88,5 +92,25 @@ export async function handleLogout(): Promise<void> {
     localStorage.removeItem('access_token');
     localStorage.removeItem('user');
     window.location.href = './login.html';
+  }
+}
+
+//Provision user profile in user service after authentication
+export async function provisionProfile(accessToken: string): Promise<void> {
+  try {
+    const response = await fetch('/api/user/provision', {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify({}),
+    });
+
+    if (!response.ok) {
+      console.warn('Profile provision failed:', response.status);
+    }
+  } catch (error) {
+    console.error('Profile provision error:', error);
   }
 }

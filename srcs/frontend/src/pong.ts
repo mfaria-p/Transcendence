@@ -16,6 +16,23 @@ interface Ball extends GameObject {
   speed: number;
 }
 
+const AI_DECISION_RATE = 270;      // ms (reaction time)
+const AI_MAX_SPEED = 8;          // max paddle speed
+const AI_ACCELERATION = 0.8;      // smoothness
+const AI_ERROR_RANGE = 80;        // aiming error
+const AI_DEAD_ZONE = 4;           // precision
+
+interface Particle {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  life: number;
+  maxLife: number;
+  color: string;
+  size: number;
+}
+
 class PongGame {
   private canvas: HTMLCanvasElement;
   private ctx: CanvasRenderingContext2D;
@@ -26,7 +43,21 @@ class PongGame {
   private gameRunning = false;
   private player1Score = 0;
   private player2Score = 0;
+  private lastTime = 0;
+  private particles: Particle[] = [];
+  private animationFrame: number | null = null;
+  private touchActive = false;
+  private touchSide: 'left' | 'right' | null = null;
+  private countdownActive = false;
+  private countdownValue = 3;
 
+  private aiPlayer: boolean = true;
+  private aiTargetY: number = 0;
+  private aiVelocity: number = 0;
+  private aiLastDecision: number = 0;
+
+  private readonly PADDLE_SPEED = 400; // px/s 
+  private readonly BALL_SPEED = 550; 
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -38,9 +69,9 @@ class PongGame {
       y: this.canvas.height / 2,
       width: 10,
       height: 10,
-      dx: 15,
-      dy: 3,
-      speed: 15
+      dx: this.BALL_SPEED,
+      dy: this.BALL_SPEED * 0.3,
+      speed: this.BALL_SPEED
     };
 
     // Left paddle
@@ -50,7 +81,7 @@ class PongGame {
       width: 10,
       height: 100,
       dy: 0,
-      speed: 8
+      speed: this.PADDLE_SPEED
     };
 
     // Right paddle
@@ -60,13 +91,75 @@ class PongGame {
       width: 10,
       height: 100,
       dy: 0,
-      speed: 8
+      speed: this.PADDLE_SPEED
     };
 
     this.setupEventListeners();
+    this.setupTouchControls();
+    this.lastTime = performance.now();
+    this.gameLoop(); 
+  }
 
-    // Only draw once at first
-    this.draw();
+  private predictBallY(): number {
+    const { ball, canvas } = this;
+
+    // time until ball reaches AI paddle
+    const distanceX =
+      this.player2.x - ball.x - ball.width;
+    const time = distanceX / ball.dx;
+
+    if (time <= 0) return ball.y;
+
+    let predictedY = ball.y + ball.dy * time;
+
+    // simulate wall bounces
+    const height = canvas.height - ball.height;
+    while (predictedY < 0 || predictedY > height) {
+      if (predictedY < 0) predictedY = -predictedY;
+      else if (predictedY > height)
+        predictedY = height - (predictedY - height);
+    }
+
+    return predictedY + ball.height / 2;
+  }
+
+  public setAIPlayer(hasAIPlayer: boolean): void {
+    this.aiPlayer = hasAIPlayer;
+  }
+
+  private updateAIDecision(): void {
+    const now = performance.now();
+    if (now - this.aiLastDecision < AI_DECISION_RATE) return;
+    this.aiLastDecision = now;
+
+    if (this.ball.dx <= 0) {
+      this.aiTargetY = this.canvas.height / 2;
+      return;
+    }
+
+    const predictedY = this.predictBallY();
+
+    const error = (Math.random() * 2 - 1) * AI_ERROR_RANGE;
+    this.aiTargetY = predictedY + error;
+  }
+
+  private updateAIMovement(): void {
+    const paddleCenter = this.player2.y + this.player2.height / 2;
+    const diff = this.aiTargetY - paddleCenter;
+
+    if (Math.abs(diff) < AI_DEAD_ZONE) {
+      this.aiVelocity *= 0.8;
+      return;
+    }
+
+    this.aiVelocity += Math.sign(diff) * AI_ACCELERATION;
+
+    this.aiVelocity = Math.max(
+      -AI_MAX_SPEED,
+      Math.min(AI_MAX_SPEED, this.aiVelocity)
+    );
+
+    this.player2.y += this.aiVelocity;
   }
 
   private setupEventListeners(): void {
@@ -75,8 +168,9 @@ class PongGame {
 
       if (e.key === " ") {
         e.preventDefault();
-        if (!this.gameRunning) {
-          this.startGame();
+        if (!this.gameRunning && !this.countdownActive) {
+          this.startCountdown();
+          this.hideMobileOverlay();
         }
       }
     });
@@ -86,34 +180,267 @@ class PongGame {
     });
   }
 
+  private setupTouchControls(): void {
+    console.log('[Pong] Setting up touch controls');
+    
+    // Fullscreen button for mobile
+    const fullscreenButton = document.getElementById('fullscreenButton');
+    if (fullscreenButton) {
+      fullscreenButton.addEventListener('click', () => {
+        this.toggleFullscreen();
+      });
+
+      // Listen for fullscreen changes to update button text
+      document.addEventListener('fullscreenchange', () => {
+        this.updateFullscreenButton();
+      });
+    }
+    
+    // Start button
+    const mobileStartButton = document.getElementById('mobileStartButton');
+    if (mobileStartButton) {
+      console.log('[Pong] Mobile start button found');
+      
+      mobileStartButton.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        console.log('[Pong] Mobile start button CLICKED');
+        if (!this.gameRunning && !this.countdownActive) {
+          this.startCountdown();
+          this.hideMobileOverlay();
+        }
+      });
+      
+      mobileStartButton.addEventListener('touchend', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        console.log('[Pong] Mobile start button TOUCHED');
+        if (!this.gameRunning && !this.countdownActive) {
+          this.startCountdown();
+          this.hideMobileOverlay();
+        }
+      });
+    } else {
+      console.warn('[Pong] Mobile start button NOT found');
+    }
+
+    // Touch controls for paddles
+    this.canvas.addEventListener('touchstart', (e) => {
+      e.preventDefault();
+      if (!this.gameRunning) {
+        console.log('[Pong] Touch ignored - game not running');
+        return;
+      }
+      
+      console.log('[Pong] Touch start - game running');
+      
+      const touch = e.touches[0];
+      const rect = this.canvas.getBoundingClientRect();
+      const x = (touch.clientX - rect.left) * (this.canvas.width / rect.width);
+      const y = (touch.clientY - rect.top) * (this.canvas.height / rect.height);
+
+      this.touchActive = true;
+      this.touchSide = x < this.canvas.width / 2 ? 'left' : 'right';
+
+      console.log(`[Pong] Touch on ${this.touchSide} side at y=${y}`);
+      this.updateTouchKeys(y);
+    }, { passive: false });
+
+    this.canvas.addEventListener('touchmove', (e) => {
+      e.preventDefault();
+      if (!this.touchActive || !this.gameRunning) return;
+
+      const touch = e.touches[0];
+      const rect = this.canvas.getBoundingClientRect();
+      const y = (touch.clientY - rect.top) * (this.canvas.height / rect.height);
+
+      this.updateTouchKeys(y);
+    }, { passive: false });
+
+    this.canvas.addEventListener('touchend', (e) => {
+      e.preventDefault();
+      console.log('[Pong] Touch end');
+      this.touchActive = false;
+      this.touchSide = null;
+      
+      // Clear all keys
+      this.keys['w'] = false;
+      this.keys['s'] = false;
+      this.keys['ArrowUp'] = false;
+      this.keys['ArrowDown'] = false;
+    }, { passive: false });
+
+    this.canvas.addEventListener('touchcancel', (e) => {
+      e.preventDefault();
+      this.touchActive = false;
+      this.touchSide = null;
+      this.keys['w'] = false;
+      this.keys['s'] = false;
+      this.keys['ArrowUp'] = false;
+      this.keys['ArrowDown'] = false;
+    }, { passive: false });
+  }
+
+    private hideMobileOverlay(): void {
+    const overlay = document.getElementById('mobileStartOverlay');
+    if (overlay) {
+      overlay.classList.add('hidden');
+      console.log('[Pong] Mobile overlay hidden');
+    }
+  }
+
+  private showMobileOverlay(): void {
+    const overlay = document.getElementById('mobileStartOverlay');
+    if (overlay) {
+      console.log('[Pong] Showing mobile overlay');
+      console.log('[Pong] Window width:', window.innerWidth);
+      console.log('[Pong] Overlay classes before:', overlay.className);
+      
+      // Remove hidden class
+      overlay.classList.remove('hidden');
+      
+      console.log('[Pong] Overlay classes after:', overlay.className);
+
+    } else {
+      console.error('[Pong] Mobile overlay element NOT FOUND!');
+    }
+  }
+
+  private updateTouchKeys(y: number): void {
+    if (!this.touchSide) return;
+
+    // Clear all keys first
+    this.keys['w'] = false;
+    this.keys['s'] = false;
+    this.keys['ArrowUp'] = false;
+    this.keys['ArrowDown'] = false;
+
+    if (this.touchSide === 'left') {
+      const paddle = this.player1;
+      if (y < paddle.y + paddle.height / 2) {
+        this.keys['w'] = true;
+      } else {
+        this.keys['s'] = true;
+      }
+    } else {
+      const paddle = this.player2;
+      if (y < paddle.y + paddle.height / 2) {
+        this.keys['ArrowUp'] = true;
+      } else {
+        this.keys['ArrowDown'] = true;
+      }
+    }
+  }
+
+  private toggleFullscreen(): void {
+    const elem = document.documentElement;
+    
+    if (!document.fullscreenElement) {
+      // Enter fullscreen
+      if (elem.requestFullscreen) {
+        elem.requestFullscreen().catch(err => {
+          console.error('[Pong] Error attempting fullscreen:', err);
+        });
+      }
+      console.log('[Pong] Entering fullscreen mode');
+    } else {
+      // Exit fullscreen
+      if (document.exitFullscreen) {
+        document.exitFullscreen().catch(err => {
+          console.error('[Pong] Error exiting fullscreen:', err);
+        });
+      }
+      console.log('[Pong] Exiting fullscreen mode');
+    }
+  }
+
+  private updateFullscreenButton(): void {
+    const fullscreenButton = document.getElementById('fullscreenButton');
+    if (!fullscreenButton) return;
+
+    const isFullscreen = !!document.fullscreenElement;
+    
+    if (isFullscreen) {
+      fullscreenButton.innerHTML = 'Exit Fullscreen';
+      console.log('[Pong] Updated button: Exit Fullscreen');
+    } else {
+      fullscreenButton.innerHTML = 'Fullscreen';
+      console.log('[Pong] Updated button: Fullscreen');
+    }
+  }
+
+  private startCountdown(): void {
+    this.countdownActive = true;
+    this.countdownValue = 3;
+
+    // Scroll canvas into view and center it
+    this.canvas.scrollIntoView({ 
+      behavior: 'smooth', 
+      block: 'center',
+      inline: 'center'
+    });
+
+    const countdownInterval = setInterval(() => {
+      this.countdownValue--;
+      
+      if (this.countdownValue <= 0) {
+        clearInterval(countdownInterval);
+        this.countdownActive = false;
+        this.startGame(); // Start game after countdown
+      }
+    }, 1000); // 1 second per count
+  }
+
   private startGame(): void {
+    console.log('[Pong] Game starting!');
     this.gameRunning = true;
+    this.lastTime = performance.now();
     this.gameLoop();
   }
 
   private gameLoop(): void {
-    if (!this.gameRunning) return;
+    const currentTime = performance.now();
+    const deltaTime = (currentTime - this.lastTime) / 1000; // Convert to seconds
+    this.lastTime = currentTime;
 
-    this.update();
+    this.updateParticles(deltaTime);
+
+    // Only update game physics when running
+    if (this.gameRunning) {
+      this.update(deltaTime);
+    }
     this.draw();
-    requestAnimationFrame(() => this.gameLoop());
+    this.animationFrame = requestAnimationFrame(() => this.gameLoop());
   }
 
-  private update(): void {
+  public destroy(): void {
+    if (this.animationFrame !== null) {
+      cancelAnimationFrame(this.animationFrame);
+      this.animationFrame = null;
+    }
+  }
+
+  private update(dt: number): void {
     // Move player1 (W/S)
     if (this.keys["w"] || this.keys["W"]) {
-      this.player1.y -= this.player1.speed;
+      this.player1.y -= this.player1.speed * dt;
     }
     if (this.keys["s"] || this.keys["S"]) {
-      this.player1.y += this.player1.speed;
+      this.player1.y += this.player1.speed * dt;
     }
 
     // Move player2 (Arrow keys)
-    if (this.keys["ArrowUp"]) {
-      this.player2.y -= this.player2.speed;
+    if (this.aiPlayer) {
+      this.updateAIDecision();
+      this.updateAIMovement();
     }
-    if (this.keys["ArrowDown"]) {
-      this.player2.y += this.player2.speed;
+    else {
+      if (this.keys["ArrowUp"]) {
+        this.player2.y -= this.player2.speed * dt;
+      }
+      if (this.keys["ArrowDown"]) {
+        this.player2.y += this.player2.speed * dt;
+      }
     }
 
     // Keep paddles inside the canvas
@@ -121,44 +448,77 @@ class PongGame {
     this.player2.y = Math.max(0, Math.min(this.canvas.height - this.player2.height, this.player2.y));
 
     // Move ball
-    this.ball.x += this.ball.dx;
-    this.ball.y += this.ball.dy;
+    this.ball.x += this.ball.dx * dt;
+    this.ball.y += this.ball.dy * dt;
 
     // Ball collision with top/bottom walls
-    if (this.ball.y <= 0 || this.ball.y >= this.canvas.height - this.ball.height) {
-      this.ball.dy = -this.ball.dy; // reverse vertical direction
-      this.ball.dx *= 1.05; // gradually increase ball speed  
+    if (this.ball.y <= 0 && this.ball.dy < 0) {
+      this.ball.y = 0;
+      this.ball.dy = -this.ball.dy;
+    } else if (this.ball.y + this.ball.height >= this.canvas.height && this.ball.dy > 0) {
+      this.ball.y = this.canvas.height - this.ball.height;
+      this.ball.dy = -this.ball.dy;
     }
 
     // Ball collision with left paddle
-    if (this.checkCollision(this.ball, this.player1)) {
+    if (this.checkCollision(this.ball, this.player1) && this.ball.dx < 0) {
       this.ball.dx = Math.abs(this.ball.dx); // always move right
       this.ball.x = this.player1.x + this.player1.width; // push ball out so it doesn't stick
-      this.ball.dx *= 1.05; // gradually increase ball speed  
+      // this.ball.dx *= 1.05; // gradually increase ball speed  
       this.ball.dy = (Math.random() - 0.5) * (0.7 * this.ball.dx);     
     }
 
     // Ball collision with right paddle
-    if (this.checkCollision(this.ball, this.player2)) {
+    if (this.checkCollision(this.ball, this.player2) && this.ball.dx > 0) {
       this.ball.dx = -Math.abs(this.ball.dx); // always move left
       this.ball.x = this.player2.x - this.ball.width; // push ball out
       this.ball.dx *= 1.05; // gradually increase ball speed  
       this.ball.dy = (Math.random() - 0.5) * (0.7 * this.ball.dx);
     }
 
-    // Ball out of bounds (scoring)
+    // Scoring
     if (this.ball.x < 0) {
-      // Player 2 scores
       this.player2Score++;
+      this.createGoalExplosion(this.ball.x, this.ball.y + this.ball.height / 2);
+      this.updateScore();
       this.resetBall();
     } else if (this.ball.x > this.canvas.width) {
-      // Player 1 scores
       this.player1Score++;
+      this.createGoalExplosion(this.ball.x, this.ball.y + this.ball.height / 2);
+      this.updateScore();
       this.resetBall();
     }
+  }
 
-    this.updateScore();
+  private createGoalExplosion(x: number, y: number): void {
+    const colors = ['#ef4444', '#f97316', '#facc15', '#ffffff', '#22d3ee'];
+    const particleCount = 30;
 
+    for (let i = 0; i < particleCount; i++) {
+      const angle = (Math.PI * 2 * i) / particleCount + (Math.random() - 0.5) * 0.5;
+      const speed = 150 + Math.random() * 100;
+      
+      this.particles.push({
+        x,
+        y,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed - 50, // slight upward bias
+        life: 0.8 + Math.random() * 0.4,
+        maxLife: 1.2,
+        color: colors[Math.floor(Math.random() * colors.length)],
+        size: 3 + Math.random() * 4,
+      });
+    }
+  }
+
+  private updateParticles(dt: number): void {
+    this.particles = this.particles.filter(p => {
+      p.x += p.vx * dt;
+      p.y += p.vy * dt;
+      p.vy += 200 * dt; // gravity
+      p.life -= dt;
+      return p.life > 0;
+    });
   }
 
   private checkCollision(rect1: GameObject, rect2: GameObject): boolean {
@@ -171,20 +531,28 @@ class PongGame {
   }
 
   private resetBall(): void {
-    this.ball.x = this.canvas.width / 2;
-    this.ball.y = this.canvas.height / 2;
-    // Ball goes in opposite direction depending on who scored
-    this.ball.dx = this.ball.dx > 0 ? -this.ball.speed : this.ball.speed;
-    // Give ball a random vertical angle
-    this.ball.dy = (Math.random() - 0.5) * 8;
-    this.gameRunning = false; // pause game until space is pressed
+    this.ball.x = this.canvas.width / 2 - this.ball.width / 2;
+    this.ball.y = this.canvas.height / 2 - this.ball.height / 2;
+    
+    // Random angle between -30° and +30°, like in game.ts
+    const angle = (Math.random() * Math.PI) / 3 - Math.PI / 6;
+    const sign = Math.random() < 0.5 ? 1 : -1;
+    
+    this.ball.dx = Math.cos(angle) * this.BALL_SPEED * sign;
+    this.ball.dy = Math.sin(angle) * this.BALL_SPEED;
+
+    this.player1.y = this.canvas.height / 2 - this.player1.height / 2;
+    this.player2.y = this.canvas.height / 2 - this.player2.height / 2;
+    
+    this.gameRunning = false;
+    this.showMobileOverlay();
   }
 
   private updateScore(): void {
-    const player1ScoreEl = document.getElementById('player1Score');
-    const player2ScoreEl = document.getElementById('player2Score');
-    if (player1ScoreEl) player1ScoreEl.textContent = this.player1Score.toString();
-    if (player2ScoreEl) player2ScoreEl.textContent = this.player2Score.toString();
+    const p1Score = document.getElementById('player1Score');
+    const p2Score = document.getElementById('player2Score');
+    if (p1Score) p1Score.textContent = this.player1Score.toString();
+    if (p2Score) p2Score.textContent = this.player2Score.toString();
   }
 
   private draw(): void {
@@ -209,9 +577,32 @@ class PongGame {
     // Draw ball
     this.ctx.fillRect(this.ball.x, this.ball.y, this.ball.width, this.ball.height);
 
+    // Particles
+    for (const p of this.particles) {
+      const alpha = p.life / p.maxLife;
+      this.ctx.globalAlpha = alpha;
+      this.ctx.fillStyle = p.color;
+      this.ctx.beginPath();
+      this.ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+      this.ctx.fill();
+    }
+    this.ctx.globalAlpha = 1;
+
+    if (this.countdownActive) {
+      this.ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+      this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+      
+      this.ctx.fillStyle = '#4ade80';
+      this.ctx.font = 'bold 120px monospace';
+      this.ctx.textAlign = 'center';
+      this.ctx.textBaseline = 'middle';
+      
+      const text = this.countdownValue > 0 ? this.countdownValue.toString() : 'GO!';
+      this.ctx.fillText(text, this.canvas.width / 2, this.canvas.height / 2);
+    }
 
     // If not started yet, show text
-    if (!this.gameRunning) {
+    if (!this.gameRunning && window.innerWidth >= 900) {
       this.ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
       this.ctx.font = '24px monospace';
       this.ctx.textAlign = 'center';
@@ -220,12 +611,21 @@ class PongGame {
   }
 }
 
-
 document.addEventListener("DOMContentLoaded", () => {
-  // This code only runs once the HTML is fully loaded
+  console.log('[Pong] DOM loaded, initializing game');
   const canvas = document.getElementById('gameCanvas') as HTMLCanvasElement;
 
   if (canvas) {
-    new PongGame(canvas); // start the game
+    console.log('[Pong] Canvas found, creating game');
+    const game = new PongGame(canvas);
+
+    const params = new URLSearchParams(location.search);
+    game.setAIPlayer(params.get('mode') === 'ai');
+    
+    window.addEventListener('beforeunload', () => {
+      game.destroy();
+    });
+  } else {
+    console.error('[Pong] Canvas NOT found!');
   }
 });

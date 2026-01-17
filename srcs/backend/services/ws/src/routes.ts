@@ -8,65 +8,60 @@ import {
   isOnline,
   forEachConnection,
 } from './presence.js';
-
-import {
-  handleGameMessage,
-  handleDisconnect,
-  listLobbies,
-  createLobbyForUser,
-} from './game.js';
-import type { LobbySummary } from './game.js';
-
+import { handleGameMessage, handleDisconnect } from './game.js';
 import {
   createTournament,
   joinTournament,
+  joinTournamentWithCode,
   startTournament,
   getTournament,
   listTournaments,
+  findTournamentByJoinCode,
 } from './tournament.js';
+import { emitTournamentUpdate, emitTournamentsChanged, emitUserEvent } from './events.js';
 
-type JwtPayload = {
-  sub?: string;
-  id?: string;
-};
+interface JwtPayload {
+  sub: string;
+}
 
 type ClientMessage =
   | { type: 'ping'; ts?: number }
   | { type: 'subscribe_presence' }
-  | { type: 'lobby:list' }
-  | { type: 'lobby:create'; name?: string }
   | { type: string; [key: string]: unknown };
 
 type ServerMessage =
   | { type: 'hello'; userId: string; onlineUsers: string[] }
   | { type: 'presence'; event: 'online' | 'offline'; userId: string }
   | { type: 'pong'; ts?: number }
-  | { type: 'error'; message: string }
-  | { type: 'lobby:list'; lobbies: LobbySummary[] }
-  | { type: 'lobby:created'; lobby: LobbySummary; lobbies: LobbySummary[] }
-  | { type: 'lobby:update'; lobbies: LobbySummary[] };
+  | { type: 'tournaments:changed'; ts: number }
+  | { type: 'tournament:update'; tournament: unknown; ts: number }
+  | { type: 'user:event'; event: string; data?: unknown; ts: number }
+  | { type: 'error'; message: string };
 
-const WS_OPEN = 1;
+function normalizeId(value: unknown): string | null {
+  if (value === null || value === undefined) return null;
+  return String(value);
+}
 
-function safeSend(socket: WebSocket, msg: unknown): void {
-  if (socket.readyState === WS_OPEN) {
+function safeSend(socket: WebSocket, msg: ServerMessage): void {
+  if (socket.readyState === socket.OPEN) {
     socket.send(JSON.stringify(msg));
   }
 }
 
-function broadcastToAll(payload: unknown): void {
-  forEachConnection((_uid, socket) => safeSend(socket, payload));
-}
+function broadcastPresenceChange(
+  userId: string,
+  event: 'online' | 'offline',
+): void {
+  const message: ServerMessage = {
+    type: 'presence',
+    event,
+    userId,
+  };
 
-function broadcastPresenceChange(userId: string, event: 'online' | 'offline'): void {
-  const message: ServerMessage = { type: 'presence', event, userId };
-  broadcastToAll(message);
-}
-
-function broadcastLobbyUpdate(): void {
-  const lobbies = listLobbies();
-  const payload: ServerMessage = { type: 'lobby:update', lobbies };
-  broadcastToAll(payload);
+  forEachConnection((_uid, socket) => {
+    safeSend(socket, message);
+  });
 }
 
 function extractToken(req: FastifyRequest): string | null {
@@ -82,215 +77,324 @@ function extractToken(req: FastifyRequest): string | null {
   return null;
 }
 
-function getReqUserId(req: FastifyRequest): string {
-  // robusto para jwtPayload.id ou jwtPayload.sub
-  const p = (req as any).jwtPayload as { id?: string; sub?: string } | undefined;
-  const id = p?.id ?? p?.sub;
-  if (!id || typeof id !== 'string') throw new Error('Missing user id');
-  return id;
-}
-
 export default async function routes(app: FastifyInstance): Promise<void> {
   // ---------- HTTP ROUTES ----------
+
   app.get('/health', async () => {
     return { ok: true, service: 'ws' };
   });
 
+  // ---------- INTERNAL (SERVICE-TO-SERVICE) API ----------
+
+  /**
+   * Service-to-service endpoint used by other backend services (e.g. user-service)
+   * to push real-time notifications to connected users.
+   *
+   * Not exposed through the gateway/nginx (only available inside docker network),
+   * and protected with a shared token.
+   */
+  app.post<{
+    Body: { userIds?: unknown; event?: unknown; data?: unknown };
+  }>('/internal/user-event', async (req, reply) => {
+    const expected = process.env.INTERNAL_WS_TOKEN;
+    const provided = req.headers['x-internal-token'];
+    if (!expected || provided !== expected) {
+      return reply.code(401).send({ success: false, error: 'Unauthorized' });
+    }
+
+    const body = req.body ?? {};
+    const userIdsRaw = (body as any).userIds;
+    const eventRaw = (body as any).event;
+    const data = (body as any).data;
+
+    if (!Array.isArray(userIdsRaw) || typeof eventRaw !== 'string' || eventRaw.trim().length === 0) {
+      return reply.code(400).send({
+        success: false,
+        error: 'Expected body { userIds: string[], event: string, data?: any }',
+      });
+    }
+
+    const userIds = userIdsRaw.map((v) => String(v)).filter((v) => v.trim().length > 0);
+    const event = eventRaw.trim();
+
+    emitUserEvent(userIds, event, data);
+    return { success: true };
+  });
+
   app.get('/presence/me', { preHandler: [app.authenticate] }, async (req) => {
-    const userId = getReqUserId(req);
+    const userId = normalizeId(req.jwtPayload!.id);
+    const online = userId ? isOnline(userId) : false;
     return {
       success: true,
       userId,
-      online: isOnline(userId),
+      online,
     };
   });
 
   app.get<{
     Params: { userId: string };
   }>('/presence/:userId', async (req) => {
-    const { userId } = req.params;
-    return { success: true, userId, online: isOnline(userId) };
+    const userId = normalizeId(req.params.userId);
+    const online = userId ? isOnline(userId) : false;
+    return {
+      success: true,
+      userId,
+      online,
+    };
   });
 
   // ---------- TOURNAMENT HTTP API ----------
-  app.get('/tournaments', { preHandler: [app.authenticate] }, async () => {
-    return { success: true, tournaments: listTournaments() };
+
+  app.get('/tournaments', { preHandler: [app.authenticate] }, async (req) => {
+    const userId: string = req.jwtPayload!.id;
+    return {
+      success: true,
+      tournaments: listTournaments(userId),
+    };
   });
 
   app.post<{
-    Body: { name?: string; maxPlayers?: number };
+    Body: { name?: string; maxPlayers?: number; isPrivate?: boolean };
   }>('/tournaments', { preHandler: [app.authenticate] }, async (req, reply) => {
-    const userId = getReqUserId(req);
+    const userId: string = req.jwtPayload!.id;
 
     try {
-      const { name, maxPlayers } = req.body ?? {};
+      const { name, maxPlayers, isPrivate } = req.body ?? {};
 
-      const input: { ownerId: string; name?: string; maxPlayers?: number } = {
+      const input: { ownerId: string; name?: string; maxPlayers?: number; isPrivate?: boolean } = {
         ownerId: userId,
       };
 
-      if (typeof name === 'string') input.name = name;
-      if (typeof maxPlayers === 'number') input.maxPlayers = maxPlayers;
+      if (typeof name === 'string') {
+        input.name = name;
+      }
+      if (typeof maxPlayers === 'number') {
+        input.maxPlayers = maxPlayers;
+      }
+      if (typeof isPrivate === 'boolean') {
+        input.isPrivate = isPrivate;
+      }
 
       const tournament = createTournament(input);
+      // realtime notifications
+      emitTournamentUpdate(tournament);
+      emitTournamentsChanged();
       return { success: true, tournament };
     } catch (err) {
       req.log.error({ err }, 'createTournament failed');
-      return reply.code(400).send({ success: false, error: (err as Error).message });
+      return reply.code(400).send({
+        success: false,
+        error: (err as Error).message,
+      });
+    }
+  });
+
+  app.post<{
+    Body: { code: string };
+  }>('/tournaments/join-by-code', { preHandler: [app.authenticate] }, async (req, reply) => {
+    const userId: string = req.jwtPayload!.id;
+    const { code } = req.body ?? {};
+
+    if (typeof code !== 'string' || code.trim().length === 0) {
+      return reply.code(400).send({ success: false, error: 'Join code is required' });
+    }
+
+    const t = findTournamentByJoinCode(code);
+    if (!t) {
+      return reply.code(404).send({ success: false, error: 'No tournament found for this code' });
+    }
+
+    if (t.status === 'finished') {
+      return reply.code(400).send({ success: false, error: 'Tournament already finished' });
+    }
+
+    try {
+      const tournament = joinTournamentWithCode(t.id, userId, code);
+      emitTournamentUpdate(tournament);
+      emitTournamentsChanged();
+      return { success: true, tournament };
+    } catch (err) {
+      req.log.error({ err }, 'joinTournamentByCode failed');
+      return reply.code(400).send({
+        success: false,
+        error: (err as Error).message,
+      });
     }
   });
 
   app.post<{
     Params: { id: string };
+    Body: { joinCode?: string };
   }>('/tournaments/:id/join', { preHandler: [app.authenticate] }, async (req, reply) => {
-    const userId = getReqUserId(req);
+    const userId: string = req.jwtPayload!.id;
     const { id } = req.params;
+    const { joinCode } = req.body ?? {};
 
     try {
-      const tournament = joinTournament(id, userId);
+      const tournament = joinTournament(id, userId, joinCode);
+      emitTournamentUpdate(tournament);
+      emitTournamentsChanged();
       return { success: true, tournament };
     } catch (err) {
       req.log.error({ err }, 'joinTournament failed');
-      return reply.code(400).send({ success: false, error: (err as Error).message });
+      return reply.code(400).send({
+        success: false,
+        error: (err as Error).message,
+      });
     }
   });
 
   app.post<{
     Params: { id: string };
   }>('/tournaments/:id/start', { preHandler: [app.authenticate] }, async (req, reply) => {
-    const userId = getReqUserId(req);
+    const userId: string = req.jwtPayload!.id;
     const { id } = req.params;
 
     const t = getTournament(id);
-    if (!t) return reply.code(404).send({ success: false, error: 'Tournament not found' });
+    if (!t) {
+      return reply.code(404).send({ success: false, error: 'Tournament not found' });
+    }
     if (t.ownerId !== userId) {
       return reply.code(403).send({ success: false, error: 'Only owner can start the tournament' });
     }
 
     try {
       const tournament = startTournament(id);
+      emitTournamentUpdate(tournament);
+      emitTournamentsChanged();
       return { success: true, tournament };
     } catch (err) {
       req.log.error({ err }, 'startTournament failed');
-      return reply.code(400).send({ success: false, error: (err as Error).message });
+      return reply.code(400).send({
+        success: false,
+        error: (err as Error).message,
+      });
     }
   });
 
   app.get<{
     Params: { id: string };
   }>('/tournaments/:id', { preHandler: [app.authenticate] }, async (req, reply) => {
+    const userId: string = req.jwtPayload!.id;
     const { id } = req.params;
     const tournament = getTournament(id);
     if (!tournament) {
       return reply.code(404).send({ success: false, error: 'Tournament not found' });
     }
+    const canView =
+      tournament.visibility === 'public' ||
+      tournament.ownerId === userId ||
+      tournament.players.includes(userId);
+
+    if (!canView) {
+      return reply.code(403).send({ success: false, error: 'This tournament is private' });
+    }
     return { success: true, tournament };
   });
 
   // ---------- WEBSOCKET ROUTE ----------
-  app.get('/ws', { websocket: true }, async (connection, req: FastifyRequest) => {
-    const socket = (connection as any).socket as WebSocket;
 
-    // 1) Autenticação JWT
-    const rawToken = extractToken(req);
-    if (!rawToken) {
-      socket.close(4001, 'Missing token');
-      return;
-    }
+  app.get(
+    '/ws',
+    { websocket: true },
+    async (connection: unknown, req: FastifyRequest) => {
+      const maybeStream = connection as { socket?: WebSocket };
+      const socket: WebSocket = maybeStream.socket ?? (connection as WebSocket);
 
-    let payload: JwtPayload;
-    try {
-      payload = await app.jwt.verify<JwtPayload>(rawToken);
-    } catch {
-      socket.close(4002, 'Invalid token');
-      return;
-    }
+      // 1) Autenticação por JWT
+      const rawToken = extractToken(req);
+      if (!rawToken) {
+        socket.close(4001, 'Missing token');
+        return;
+      }
 
-    const userId = payload.sub ?? payload.id;
-    if (!userId) {
-      socket.close(4002, 'Invalid token payload');
-      return;
-    }
-
-    const { firstConnection } = addConnection(userId, socket);
-
-    // 2) Hello inicial
-    safeSend(socket, { type: 'hello', userId, onlineUsers: getOnlineUsers() } satisfies ServerMessage);
-
-    if (firstConnection) {
-      broadcastPresenceChange(userId, 'online');
-    }
-
-    // 3) handlers
-    socket.on('message', (buf: Buffer) => {
-      let msg: ClientMessage;
+      let payload: JwtPayload;
       try {
-        msg = JSON.parse(buf.toString('utf8'));
+        payload = await app.jwt.verify<JwtPayload>(rawToken);
       } catch {
-        safeSend(socket, { type: 'error', message: 'Invalid JSON' } satisfies ServerMessage);
+        socket.close(4002, 'Invalid token');
         return;
       }
 
-      if (!msg || typeof msg.type !== 'string') {
-        safeSend(socket, { type: 'error', message: 'Missing message type' } satisfies ServerMessage);
-        return;
+      const userId = normalizeId(payload.sub);
+      if (!userId) {
+        safeSend(socket, { type: 'error', message: 'Invalid user id in token' });
+        return socket.close();
+      }
+      const uid = userId;
+      const { firstConnection } = addConnection(uid, socket);
+
+      // 2) Mensagem inicial
+      safeSend(socket, {
+        type: 'hello',
+        userId: uid,
+        onlineUsers: getOnlineUsers(),
+      });
+
+      if (firstConnection) {
+        broadcastPresenceChange(uid, 'online');
       }
 
-      switch (msg.type) {
-        case 'ping':
-          safeSend(socket, { type: 'pong', ts: (msg as any).ts ?? Date.now() } satisfies ServerMessage);
-          return;
-
-        case 'subscribe_presence':
-          safeSend(socket, { type: 'hello', userId, onlineUsers: getOnlineUsers() } satisfies ServerMessage);
-          return;
-
-        case 'lobby:list': {
-          const lobbies = listLobbies();
-          safeSend(socket, { type: 'lobby:list', lobbies } satisfies ServerMessage);
+      // 3) Handlers
+      socket.on('message', (buf: Buffer) => {
+        let msg: ClientMessage;
+        try {
+          msg = JSON.parse(buf.toString('utf8'));
+        } catch {
+          safeSend(socket, {
+            type: 'error',
+            message: 'Invalid JSON',
+          });
           return;
         }
 
-        case 'lobby:create': {
-          const name = typeof (msg as any).name === 'string' ? ((msg as any).name as string) : undefined;
-
-          const lobby = createLobbyForUser(userId, name);
-          const lobbies = listLobbies();
-
-          safeSend(socket, { type: 'lobby:created', lobby, lobbies } satisfies ServerMessage);
-
-          // broadcast update para todos
-          broadcastLobbyUpdate();
+        if (!msg || typeof msg.type !== 'string') {
+          safeSend(socket, {
+            type: 'error',
+            message: 'Missing message type',
+          });
           return;
         }
 
-        default:
-          if (msg.type.startsWith('game:')) {
-            handleGameMessage(userId, socket, msg as any);
-
-            // Só broadcast de lobby quando JOIN/LEAVE (para não spammar em inputs)
-            if (msg.type === 'game:join' || msg.type === 'game:leave') {
-              broadcastLobbyUpdate();
-            }
+        switch (msg.type) {
+          case 'ping':
+            safeSend(socket, {
+              type: 'pong',
+              ts: (msg as any).ts ?? Date.now(),
+            });
             return;
-          }
 
-          safeSend(socket, { type: 'error', message: `Unknown message type: ${msg.type}` } satisfies ServerMessage);
-      }
-    });
+          case 'subscribe_presence':
+            safeSend(socket, {
+              type: 'hello',
+              userId: uid,
+              onlineUsers: getOnlineUsers(),
+            });
+            return;
 
-    socket.on('close', () => {
-      const { lastConnection } = removeConnection(userId, socket);
+          default:
+            if (msg.type.startsWith('game:')) {
+              handleGameMessage(uid, socket, msg as any);
+              return;
+            }
+            safeSend(socket, {
+              type: 'error',
+              message: `Unknown message type: ${msg.type}`,
+            });
+        }
+      });
 
-      // Só quando o utilizador fica mesmo offline
-      if (lastConnection) {
-        broadcastPresenceChange(userId, 'offline');
-        handleDisconnect(userId);
-      }
-    });
+      socket.on('close', () => {
+        const { lastConnection } = removeConnection(uid, socket);
+        if (lastConnection) {
+          broadcastPresenceChange(uid, 'offline');
+        }
+        handleDisconnect(uid);
+      });
 
-    socket.on('error', (err) => {
-      app.log.error({ err }, 'WebSocket error');
-    });
-  });
+      socket.on('error', (err) => {
+        app.log.error({ err }, 'WebSocket error');
+      });
+    },
+  );
 }

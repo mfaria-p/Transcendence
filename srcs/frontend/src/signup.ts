@@ -1,3 +1,6 @@
+import { initHeader } from './shared/header.js';
+import { provisionProfile } from './utils-api.js';
+
 interface SignupCredentials {
   username: string;
   email: string;
@@ -24,6 +27,8 @@ class SignupManager {
   private passwordRequirements: HTMLElement;
   
   constructor() {
+    initHeader({ active: 'auth' });
+
     this.form = document.getElementById('signupForm') as HTMLFormElement;
     this.usernameInput = document.getElementById('username') as HTMLInputElement;
     this.emailInput = document.getElementById('email') as HTMLInputElement;
@@ -44,11 +49,36 @@ class SignupManager {
     });
 
     // Real-time password validation
-    this.passwordInput.addEventListener('input', () => this.updatePasswordRequirements());
+    this.passwordInput.addEventListener('input', () => {
+      this.updatePasswordRequirements();
+      // Also check if passwords match when changing the first password
+      if (this.confirmPasswordInput.value) {
+        this.validatePasswordMatch();
+      }
+    });
     this.passwordInput.addEventListener('focus', () => {
       this.passwordRequirements.classList.remove('hidden');
     });
     this.confirmPasswordInput.addEventListener('input', () => this.validatePasswordMatch());
+
+    // Clear errors when user starts typing
+    this.usernameInput.addEventListener('input', () => {
+      this.clearInputError(this.usernameInput);
+      this.hideMessages(); 
+    });
+    
+    this.emailInput.addEventListener('input', () => {
+      this.clearInputError(this.emailInput);
+      this.hideMessages(); 
+    });
+
+    this.passwordInput.addEventListener('input', () => {
+      this.hideMessages(); // Hide general error message
+    });
+    
+    this.confirmPasswordInput.addEventListener('input', () => {
+      this.hideMessages(); // Hide general error message
+    });
   }
 
   private async handleSignup(): Promise<void> {
@@ -100,10 +130,9 @@ class SignupManager {
               }));
               console.log('Stored user from login');
               
-              const provisionSuccess = await this.provisionProfile(loginResponse.at);
-              if (!provisionSuccess) {
-                console.warn('Profile provision failed, but continuing with signup');
-              }
+              await provisionProfile(loginResponse.at).catch(err => {
+                console.warn('Profile provision failed:', err);
+              });
             }
             
             this.showSuccess('Account created successfully! Redirecting...');
@@ -212,13 +241,18 @@ class SignupManager {
     this.updateRequirement('req-uppercase', hasUppercase);
     this.updateRequirement('req-lowercase', hasLowercase);
     this.updateRequirement('req-number', hasNumber);
+
+    // Clear any existing error if all requirements are met
+    if (hasMinLength && hasUppercase && hasLowercase && hasNumber) {
+      this.clearInputError(this.passwordInput);
+    }
   }
 
   private updateRequirement(id: string, isValid: boolean): void {
     const element = document.getElementById(id);
     if (!element) return;
     
-    const indicator = element.querySelector('.indicator');
+    const indicator = element.querySelector('.auth-req-indicator');
     const text = element.querySelector('span:last-child');
     
     if (indicator) {
@@ -240,6 +274,12 @@ class SignupManager {
     const password = this.passwordInput.value;
     const confirmPassword = this.confirmPasswordInput.value;
     
+    // Only validate if confirmPassword has been entered
+    if (!confirmPassword) {
+      this.clearInputError(this.confirmPasswordInput);
+      return false;
+    }
+
     if (password !== confirmPassword) {
       this.setInputError(this.confirmPasswordInput, 'Passwords do not match');
       return false;
@@ -358,32 +398,6 @@ class SignupManager {
       throw new Error(err?.message || 'Network error');
     } finally {
       clearTimeout(timeoutId);
-    }
-  }
-
-  private async provisionProfile(accessToken: string): Promise<boolean> {
-    try {
-      console.log('Provisioning profile in user service...');
-      const response = await fetch('/api/user/provision', {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${accessToken}`,
-        },
-        body: JSON.stringify({}), // Empty body - ID comes from JWT
-      });
-
-      if (response.ok) {
-        console.log('Profile provisioned successfully');
-        return true;
-      } else {
-        const errorText = await response.text();
-        console.error('Failed to provision profile:', response.status, errorText);
-        return false;
-      }
-    } catch (error) {
-      console.error('Profile provision error:', error);
-      return false;
     }
   }
 

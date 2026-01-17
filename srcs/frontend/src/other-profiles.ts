@@ -1,5 +1,6 @@
-import { connectPresenceSocket, disconnectPresenceSocket } from './utils-ws.js';
+import { connectPresenceSocket, disconnectPresenceSocket, addPresenceListener } from './utils-ws.js';
 import { verifySession, clearSessionAndRedirect, handleApiCall, showMessage, handleLogout } from './utils-api.js';
+import { initHeader } from './shared/header.js';
 
 interface User {
   id: string;
@@ -45,9 +46,11 @@ class UserProfileViewer {
       this.currentUser = JSON.parse(userStr);
       
       await verifySession(this.accessToken);
+
+      initHeader({ active: 'profile' });
       
-      this.setupAuthContainer();
       connectPresenceSocket();
+      this.setupPresenceListener();
       
       const urlParams = new URLSearchParams(window.location.search);
       this.userId = urlParams.get('id');
@@ -69,20 +72,38 @@ class UserProfileViewer {
     }
   }
 
-  private setupAuthContainer(): void {
-    const authContainer = document.getElementById('authContainer');
-    if (!authContainer || !this.currentUser) return;
+  private setupPresenceListener(): void {
+    addPresenceListener((event, userId) => {
+      console.log(`[Other-Profile] Presence update: ${userId} is now ${event}`);
+      
+      // Only update if it's the user we're viewing
+      if (userId === this.userId) {
+        this.isOnline = event === 'online';
+        this.updateStatusBadge(event === 'online');
+      }
+    });
+  }
 
-    authContainer.innerHTML = `
-      <a href="./index.html" class="text-gray-300 hover:text-white transition">Game</a>
-      <span class="text-gray-400">|</span>
-      <span class="text-gray-300">Welcome, <a href="./profile.html" class="text-green-400 hover:text-green-300 font-bold underline transition duration-200">${this.currentUser.username}</a></span>
-      <button id="logoutButton" class="bg-red-600 hover:bg-red-700 text-white text-sm py-1.5 px-4 rounded transition duration-200">
-        Logout
-      </button>
-    `;
+  private updateStatusBadge(isOnline: boolean): void {
+    const statusBadge = document.getElementById('statusBadge');
+    
+    if (!statusBadge) {
+      console.warn('Status badge element not found');
+      return;
+    }
 
-    document.getElementById('logoutButton')?.addEventListener('click', () => handleLogout());
+    // Only show badge if they are friends
+    if (this.friendshipStatus !== 'friend') {
+      statusBadge.classList.add('hidden');
+      return;
+    }
+
+    // Update badge color
+    statusBadge.classList.remove('hidden', 'bg-green-500', 'bg-gray-500');
+    statusBadge.classList.add(isOnline ? 'bg-green-500' : 'bg-gray-500');
+    statusBadge.title = isOnline ? 'Online' : 'Offline';
+    
+    console.log(`Updated ${this.userId} status badge to ${isOnline ? 'ONLINE (green)' : 'OFFLINE (gray)'}`);
   }
 
   private async loadUserProfile(userId: string): Promise<void> {
@@ -154,7 +175,6 @@ class UserProfileViewer {
     const emailEl = document.getElementById('userEmail');
     const avatarEl = document.getElementById('userAvatarPlaceholder');
     const avatarImg = document.getElementById('userAvatarImage') as HTMLImageElement;
-    const statusBadge = document.getElementById('statusBadge');
 
     console.log('=== Display Profile Debug ===');
     console.log('Username:', this.viewedUser.username);
@@ -174,24 +194,7 @@ class UserProfileViewer {
       avatarEl.textContent = this.viewedUser.username.charAt(0).toUpperCase();
     }
 
-    if (statusBadge) {
-      if (this.friendshipStatus === 'friend') {
-        statusBadge.classList.remove('hidden', 'bg-gray-500', 'bg-green-500');
-
-        if (this.isOnline) {
-          statusBadge.classList.add('bg-green-500');
-          statusBadge.title = 'Online';
-          console.log('Friend is ONLINE (green badge)');
-        } else {
-          statusBadge.classList.add('bg-gray-500');
-          statusBadge.title = 'Offline';
-          console.log('Friend is OFFLINE (gray badge)');
-        }
-      } else {
-        statusBadge.classList.add('hidden');
-        console.log('Not friends, badge hidden');
-      }
-    }
+    this.updateStatusBadge(this.isOnline);
   }
 
   private async checkFriendshipStatus(): Promise<void> {
