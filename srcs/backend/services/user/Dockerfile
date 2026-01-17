@@ -13,7 +13,6 @@ COPY packages/lib-docs ./packages/lib-docs
 COPY services/user ./services/user
 
 ENV DATABASE_URL=file:/app/prisma/data/profile.db
-RUN pnpm --filter "@svc/user" exec prisma migrate deploy --schema /app/services/user/prisma/schema.prisma
 RUN pnpm --filter "@svc/user" exec prisma generate --schema /app/services/user/prisma/schema.prisma
 RUN mv ./services/user/src/generated/prisma/libquery_engine-linux-musl-openssl-*.so.node ./services/user/prisma
 
@@ -26,6 +25,8 @@ WORKDIR /app
 COPY --from=build /out .
 
 ENV DATABASE_URL=file:/app/prisma/data/profile.db
+RUN npm install prisma@6.17.0
+RUN npx prisma migrate deploy --schema /app/prisma/schema.prisma
 RUN mkdir -p /app/prisma/data
 RUN chown -R node:node /app/prisma/data
 
