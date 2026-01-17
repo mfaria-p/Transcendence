@@ -1,4 +1,5 @@
 import { initHeader } from './shared/header.js';
+import { verifySession, clearSessionAndRedirect, showMessage } from './utils-api.js';
 
 interface User {
   id: string;
@@ -32,6 +33,24 @@ class QuickMatchPage {
       localStorage.removeItem('user');
       localStorage.removeItem('access_token');
       window.location.href = './login.html';
+      return;
+    }
+
+    try {
+      await verifySession(token);
+    } catch (error) {
+      if (error instanceof Error && error.message === 'Session expired') {
+        showMessage('Session expired. Redirecting to login...', 'error');
+        setTimeout(() => {
+          clearSessionAndRedirect();
+        }, 2000);
+        return;
+      }
+      console.warn('Session check failed, redirecting to login:', error);
+      showMessage('Authentication error. Please login again.', 'error');
+      setTimeout(() => {
+        clearSessionAndRedirect();
+      }, 2000);
       return;
     }
 
