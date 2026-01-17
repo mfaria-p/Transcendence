@@ -1,4 +1,5 @@
 import { initHeader } from './shared/header.js';
+import { verifySession, clearSessionAndRedirect } from './utils-api.js';
 
 interface User {
 	id: string;
@@ -1733,7 +1734,7 @@ function showMessage(message: string, type: 'success' | 'error'): void {
 	}, 2500);
 }
 
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
 	const params = new URLSearchParams(window.location.search);
 	const roomId = getRoomIdFromUrl();
 	const isQuickMatch = params.get('mode') === 'quick' || !roomId;
@@ -1756,6 +1757,29 @@ document.addEventListener('DOMContentLoaded', () => {
 		return;
 	}
 
+	// Verify session before proceeding
+    try {
+        console.log('[match] Verifying session...');
+        await verifySession(token);
+        console.log('[match] Session verified successfully');
+    } catch (error) {
+        console.error('[match] Session verification failed:', error);
+        if (error instanceof Error && error.message === 'Session expired') {
+            showMessage('Session expired. Redirecting to login...', 'error');
+            setTimeout(() => {
+                clearSessionAndRedirect();
+            }, 2000);
+            return;
+        }
+        // For any other error, also redirect to login
+        console.error('[match] Unexpected error during session verification, redirecting to login');
+        showMessage('Authentication error. Please login again.', 'error');
+        setTimeout(() => {
+            clearSessionAndRedirect();
+        }, 2000);
+        return;
+    }
+
 	initHeader({ active: isQuickMatch ? 'quick' : 'tournaments' });
 
 	const normalizedUser = normalizeUser(user);
@@ -1765,10 +1789,6 @@ document.addEventListener('DOMContentLoaded', () => {
 	setupMenuAutoHide();
 });
 
-// Configure your Lottie sources here. Set to a URL (string) or leave as inline JSON.
-// Example: const WIN_LOTTIE_SRC = '/static/win.json'; const LOSE_LOTTIE_SRC = '/static/lose.json';
-// Use your custom Lottie file (relative path so it works under the same origin)
-// If your app is served under a sub-path, keep this absolute-from-site-root. Ensure dist/assets/win.json exists in the built image.
 const WIN_LOTTIE_SRC: string | object = '/assets/win.json';
 const LOSE_LOTTIE_SRC: string | object = '/assets/lose.json';
 
