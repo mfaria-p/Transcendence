@@ -57,6 +57,7 @@ services:
       - JWT_SECRET=${JWT_SECRET}
       - GOOGLE_OAUTH_CLIENT_ID=${GOOGLE_OAUTH_CLIENT_ID}
       - GOOGLE_OAUTH_CLIENT_SECRET=${GOOGLE_OAUTH_CLIENT_SECRET}
+      - GOOGLE_OAUTH_REDIRECT_URI=https://localhost:9000/api/auth/google/callback
       - NODE_ENV=production
     expose:
       - "3001"
