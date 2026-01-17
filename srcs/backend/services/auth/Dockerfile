@@ -27,6 +27,6 @@ COPY --from=build /out .
 ENV DATABASE_URL=file:/app/prisma/data/account.db
 RUN mkdir -p /app/prisma/data
 RUN chown -R node:node /app/prisma/data
-RUN npx prisma migrate deploy --schema /app//prisma/schema.prisma
+RUN npx prisma@6.17.0 migrate deploy --schema /app//prisma/schema.prisma
 
 CMD ["node","dist/server.js"]
