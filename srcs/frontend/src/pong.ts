@@ -602,7 +602,7 @@ class PongGame {
     }
 
     // If not started yet, show text
-    if (!this.gameRunning && !this.aiPlayer && window.innerWidth >= 900) {
+    if (!this.gameRunning && window.innerWidth >= 900) {
       this.ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
       this.ctx.font = '24px monospace';
       this.ctx.textAlign = 'center';
