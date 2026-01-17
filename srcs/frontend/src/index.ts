@@ -34,30 +34,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   setupMenuAutoHide();
   preventArrowScroll();
-  toggleAiInstructions(isAiMode);
 });
-
-function toggleAiInstructions(isAiMode: boolean): void {
-  const desktopInstructions = document.querySelector('.desktop-instructions');
-  const mobileInstructions = document.querySelector('.mobile-instructions');
-  const aiInstructions = document.getElementById('ai-instructions');
-
-  if (isAiMode) {
-    desktopInstructions?.classList.add('hidden');
-    mobileInstructions?.classList.add('hidden');
-    aiInstructions?.classList.remove('hidden');
-    if (desktopInstructions) (desktopInstructions as HTMLElement).style.display = 'none';
-    if (mobileInstructions) (mobileInstructions as HTMLElement).style.display = 'none';
-    if (aiInstructions) aiInstructions.style.display = 'block';
-  } else {
-    desktopInstructions?.classList.remove('hidden');
-    mobileInstructions?.classList.remove('hidden');
-    aiInstructions?.classList.add('hidden');
-    if (desktopInstructions) (desktopInstructions as HTMLElement).style.display = '';
-    if (mobileInstructions) (mobileInstructions as HTMLElement).style.display = '';
-    if (aiInstructions) aiInstructions.style.display = 'none';
-  }
-}
 
 function setupMenuAutoHide(): void {
   const gameCanvas = document.getElementById('gameCanvas');

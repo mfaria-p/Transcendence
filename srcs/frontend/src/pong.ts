@@ -616,7 +616,21 @@ document.addEventListener("DOMContentLoaded", () => {
     const game = new PongGame(canvas);
 
     const params = new URLSearchParams(location.search);
-    game.setAIPlayer(params.get('mode') === 'ai');
+    const isAIMode = params.get('mode') === 'ai';
+    game.setAIPlayer(isAIMode);
+    
+    // Update instructions based on mode
+    if (isAIMode) {
+      const playerControls = document.getElementById('playerControls');
+      const mobileControls = document.getElementById('mobileControls');
+      
+      if (playerControls) {
+        playerControls.innerHTML = 'You are the left Player<br>Keys: W/S';
+      }
+      if (mobileControls) {
+        mobileControls.innerHTML = 'Tap the left screen to control your paddle';
+      }
+    }
     
     window.addEventListener('beforeunload', () => {
       game.destroy();
