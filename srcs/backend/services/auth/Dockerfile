@@ -13,7 +13,6 @@ COPY packages/lib-docs ./packages/lib-docs
 COPY services/auth ./services/auth
 
 ENV DATABASE_URL=file:/app/prisma/data/account.db
-RUN pnpm --filter "@svc/auth" exec prisma migrate deploy --schema /app/services/auth/prisma/schema.prisma
 RUN pnpm --filter "@svc/auth" exec prisma generate --schema /app/services/auth/prisma/schema.prisma
 RUN mv ./services/auth/src/generated/prisma/libquery_engine-linux-musl-openssl-*.so.node ./services/auth/prisma
 
@@ -28,5 +27,6 @@ COPY --from=build /out .
 ENV DATABASE_URL=file:/app/prisma/data/account.db
 RUN mkdir -p /app/prisma/data
 RUN chown -R node:node /app/prisma/data
+RUN pnpm --filter "@svc/auth" exec prisma migrate deploy --schema /app/services/auth/prisma/schema.prisma
 
 CMD ["node","dist/server.js"]
