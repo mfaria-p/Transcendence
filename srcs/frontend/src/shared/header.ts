@@ -66,8 +66,8 @@ function buildMenuEntries(hasSession: boolean): MenuEntry[] {
   return [
     sessionEntry,
     { label: 'TOURNAMENTS', href: './tournaments.html', color: 'magenta', iconClass: 'icon-trophy' },
-    { label: 'ARCADE', href: './index.html', color: 'green', iconClass: 'icon-gamepad' },
-    { label: 'PLAY vs AI', href: './match.html', color: 'amber', iconClass: 'icon-robot' },
+    { label: 'ARCADE', href: './index.html?mode=2p', color: 'green', iconClass: 'icon-gamepad' },
+    { label: 'PLAY vs AI', href: './index.html?mode=ai', color: 'amber', iconClass: 'icon-robot' },
     { label: '1v1 MATCH', href: './multiplayer.html', color: 'purple', iconClass: 'icon-web' },
   ];
 }

@@ -123,6 +123,10 @@ class PongGame {
     return predictedY + ball.height / 2;
   }
 
+  public setAIPlayer(hasAIPlayer: boolean): void {
+    this.aiPlayer = hasAIPlayer;
+  }
+
   private updateAIDecision(): void {
     const now = performance.now();
     if (now - this.aiLastDecision < AI_DECISION_RATE) return;
@@ -614,6 +618,9 @@ document.addEventListener("DOMContentLoaded", () => {
   if (canvas) {
     console.log('[Pong] Canvas found, creating game');
     const game = new PongGame(canvas);
+
+    const params = new URLSearchParams(location.search);
+    game.setAIPlayer(params.get('mode') === 'ai');
     
     window.addEventListener('beforeunload', () => {
       game.destroy();
