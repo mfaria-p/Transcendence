@@ -150,7 +150,7 @@ _This project has been created as part of the 42 curriculum by luguimar, ecorona
   - **Implementation:** Google OAuth flow in `auth` service.
 - **Minor (1 pt):** Tournaments — **Owner:** pevieira, luguimar
   - **Justification:** Extends gameplay with competitive brackets.
-  - **Implementation:** [Describe tournament flow]
+  - **Implementation:** Users create public or private tournaments (2 or 4 players), join via list or invite code, and the UI tracks status (waiting/running/finished). When full, the organizer can start (auto-start for 2‑player), matches are generated, and players are redirected to the correct match room; history shows recent winners and finished brackets.
 
 **Point total:** 16 points (6 Majors + 4 Minors)
 
@@ -175,7 +175,9 @@ _This project has been created as part of the 42 curriculum by luguimar, ecorona
 
 - **Where used:** UI copy refinement, small code adjustments, and documentation drafting.
 - **How used:** Brainstorming, summarization, and incremental edits reviewed by the team.
-- **Which parts:** Bug fixing in frontend and backend, README updates, and minor refactors.
+- **Which parts:** Minor bug fixing suggestions, refactoring ideas, and documentation text only. No core logic or project architecture was generated automatically.
+
+Isto protege-vos numa defesa oral.
 
 ## Known Limitations
 
