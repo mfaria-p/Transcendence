@@ -39,8 +39,6 @@ _This project has been created as part of the 42 curriculum by luguimar, ecorona
 
 ## Team Information
 
-[List each member from the first line.]
-
 - **luguimar** — **Role(s):** [PO/Dev]
   - **Responsibilities:** Backend development and service integration.
 - **ecorona-** — **Role(s):** [Tech Lead/Dev]
