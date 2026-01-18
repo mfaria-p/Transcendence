@@ -63,7 +63,6 @@ class UserProfileViewer {
 
       await this.loadUserProfile(this.userId);
     } catch (error) {
-      console.error('Init error:', error);
       showMessage('Session expired. Redirecting to login...', 'error');
       
       setTimeout(() => {
@@ -88,7 +87,6 @@ class UserProfileViewer {
     const statusBadge = document.getElementById('statusBadge');
     
     if (!statusBadge) {
-      console.warn('Status badge element not found');
       return;
     }
 
@@ -158,7 +156,6 @@ class UserProfileViewer {
       this.displayProfile();
       this.displayFriendActions();
     } catch (error) {
-      console.error('Load user profile error:', error);
       if (error instanceof Error && error.message === 'Session expired') {
         return;
       }
@@ -250,7 +247,6 @@ class UserProfileViewer {
 
       this.friendshipStatus = 'none';
     } catch (error) {
-      console.error('Check friendship status error:', error);
       this.friendshipStatus = 'none';
     }
   }
@@ -332,7 +328,6 @@ class UserProfileViewer {
       }
     } catch (error) {
       if (error instanceof Error && error.message !== 'Session expired') {
-        console.error('Send friend request error:', error);
         showMessage('Failed to send friend request', 'error');
       }
     }
@@ -356,7 +351,6 @@ class UserProfileViewer {
       }
     } catch (error) {
       if (error instanceof Error && error.message !== 'Session expired') {
-        console.error('Cancel friend request error:', error);
         showMessage('Failed to cancel friend request', 'error');
       }
     }
@@ -381,7 +375,6 @@ class UserProfileViewer {
       }
     } catch (error) {
       if (error instanceof Error && error.message !== 'Session expired') {
-        console.error('Accept friend request error:', error);
         showMessage('Failed to accept friend request', 'error');
       }
     }
@@ -405,7 +398,6 @@ class UserProfileViewer {
       }
     } catch (error) {
       if (error instanceof Error && error.message !== 'Session expired') {
-        console.error('Decline friend request error:', error);
         showMessage('Failed to decline friend request', 'error');
       }
     }
@@ -432,7 +424,6 @@ class UserProfileViewer {
       }
     } catch (error) {
       if (error instanceof Error && error.message !== 'Session expired') {
-        console.error('Remove friend error:', error);
         showMessage('Failed to remove friend', 'error');
       }
     }

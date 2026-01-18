@@ -42,7 +42,6 @@ class ProfileManager {
         if (error instanceof Error && error.message === 'Session expired') {
           throw error; // will be handled below
         }
-        console.warn('Session check failed, keeping stored session (non-expiring error):', error);
       }
       
       // Initialize global header
@@ -57,7 +56,6 @@ class ProfileManager {
       this.loadFriendRequests();
       this.loadFriends();
     } catch (error) {
-      console.error('Init error:', error);
       
       if (error instanceof Error && error.message === 'Session expired') {
         showMessage('Session expired. Redirecting to login...', 'error');
@@ -88,7 +86,6 @@ class ProfileManager {
     const friendElement = document.querySelector(`[data-friend-id="${friendId}"]`);
     
     if (!friendElement) {
-      console.warn(`Could not find friend element for ${friendId}`);
       return;
     }
 
@@ -103,7 +100,6 @@ class ProfileManager {
       
       console.log(`Updated ${friendId} badge to ${isOnline ? 'ONLINE (green)' : 'OFFLINE (gray)'}`);
     } else {
-      console.warn(`Could not find status-badge for friend ${friendId}`);
     }
   }
 
@@ -130,7 +126,6 @@ class ProfileManager {
       }
 
       if (response.status >= 500) {
-        console.warn('User service unavailable while loading profile:', response.status);
         showMessage('User service indisponível. Tenta novamente em breve.', 'error');
         return;
       }
@@ -140,7 +135,6 @@ class ProfileManager {
       if (error instanceof Error && error.message === 'Session expired') {
         return;
       }
-      console.error('Load profile error:', error);
       showMessage('Não foi possível carregar o perfil agora.', 'error');
     }
   }
@@ -310,7 +304,6 @@ class ProfileManager {
       }
     } catch (error) {
       if (error instanceof Error && error.message !== 'Session expired') {
-        console.error('Save avatar error:', error);
         showMessage('Failed to update profile picture', 'error');
       }
     }
@@ -390,7 +383,6 @@ class ProfileManager {
       }
     } catch (error) {
       if (error instanceof Error && error.message !== 'Session expired') {
-        console.error('Save username error:', error);
         showMessage('Failed to update username', 'error');
       }
     }
@@ -465,7 +457,6 @@ class ProfileManager {
       }
     } catch (error) {
       if (error instanceof Error && error.message !== 'Session expired') {
-        console.error('Save email error:', error);
         showMessage('Failed to update email', 'error');
       }
     }
@@ -591,7 +582,6 @@ class ProfileManager {
       }
     } catch (error) {
       if (error instanceof Error && error.message !== 'Session expired') {
-        console.error('Save password error:', error);
         showMessage('Failed to update password', 'error');
       }
     }
@@ -674,7 +664,6 @@ class ProfileManager {
       }
     } catch (error) {
       if (error instanceof Error && error.message !== 'Session expired') {
-        console.error('Search users error:', error);
         showMessage('Failed to search users', 'error');
       }
     }
@@ -778,7 +767,6 @@ class ProfileManager {
 
             friendRequestsList.appendChild(requestDiv);
           } catch (error) {
-            console.error('Failed to fetch user info:', error);
           }
         }
       } else {
@@ -786,7 +774,6 @@ class ProfileManager {
       }
     } catch (error) {
       if (error instanceof Error && error.message !== 'Session expired') {
-        console.error('Load friend requests error:', error);
         showMessage('Failed to load friend requests', 'error');
       }
     }
@@ -808,7 +795,6 @@ class ProfileManager {
       }
     } catch (error) {
       if (error instanceof Error && error.message !== 'Session expired') {
-        console.error('Accept friend request error:', error);
         showMessage('Failed to accept friend request', 'error');
       }
     }
@@ -829,7 +815,6 @@ class ProfileManager {
       }
     } catch (error) {
       if (error instanceof Error && error.message !== 'Session expired') {
-        console.error('Decline friend request error:', error);
         showMessage('Failed to decline friend request', 'error');
       }
     }
@@ -939,7 +924,6 @@ class ProfileManager {
             
             friendsList.appendChild(friendDiv);
           } catch (error) {
-            console.error('Failed to fetch friend profile:', error);
           }
         }
       } else {
@@ -947,7 +931,6 @@ class ProfileManager {
       }
     } catch (error) {
       if (error instanceof Error && error.message !== 'Session expired') {
-        console.error('Load friends error:', error);
         showMessage('Failed to load friends', 'error');
       }
     }
@@ -970,7 +953,6 @@ class ProfileManager {
       }
     } catch (error) {
       if (error instanceof Error && error.message !== 'Session expired') {
-        console.error('Remove friend error:', error);
         showMessage('Failed to remove friend', 'error');
       }
     }
@@ -1013,7 +995,6 @@ class ProfileManager {
       }
     } catch (error) {
       if (error instanceof Error && error.message !== 'Session expired') {
-        console.error('Delete account error:', error);
         showMessage('Failed to delete account', 'error');
       }
     }

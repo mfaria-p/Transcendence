@@ -18,7 +18,6 @@ function notifyPresenceListeners(event: 'online' | 'offline', userId: string): v
     try {
       listener(event, userId);
     } catch (error) {
-      console.error('[Presence WS] Error in listener:', error);
     }
   });
 }
@@ -41,7 +40,6 @@ export function connectPresenceSocket(): void {
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
   const url = `${protocol}//${window.location.host}/ws?token=${encodeURIComponent(token)}`;
   
-  console.log('[Presence WS] Attempting to connect to:', url);
   ws = new WebSocket(url);
 
   ws.onopen = () => {
@@ -49,7 +47,6 @@ export function connectPresenceSocket(): void {
     if (reconnectTimer) {
       window.clearTimeout(reconnectTimer);
       reconnectTimer = null;
-      console.log('[Presence WS] Cleared reconnect timer');
     }
     
     // Send subscribe message
@@ -59,7 +56,6 @@ export function connectPresenceSocket(): void {
   };
 
   ws.onmessage = (event) => {
-    console.log('[Presence WS] Message received:', event.data);
     try {
       const message = JSON.parse(event.data);
       console.log('[Presence WS] Parsed message:', message);
@@ -79,17 +75,10 @@ export function connectPresenceSocket(): void {
           console.log('[Presence WS] Unknown message type:', message.type);
       }
     } catch (error) {
-      console.error('[Presence WS] Failed to parse message:', error);
     }
   };
 
   ws.onerror = (error) => {
-    console.error('[Presence WS] WebSocket error:', error);
-    console.error('[Presence WS] Error details:', {
-      readyState: ws?.readyState,
-      url: ws?.url,
-      protocol: ws?.protocol
-    });
   };
 
   ws.onclose = (event) => {
@@ -103,7 +92,6 @@ export function connectPresenceSocket(): void {
     ws = null;
     
     if (!manualClose && localStorage.getItem('access_token')) {
-      console.log('[Presence WS] Will attempt to reconnect in 2 seconds...');
       reconnectTimer = window.setTimeout(() => {
         console.log('[Presence WS] Attempting reconnection...');
         connectPresenceSocket();
@@ -121,7 +109,6 @@ export function disconnectPresenceSocket(): void {
   if (reconnectTimer) {
     window.clearTimeout(reconnectTimer);
     reconnectTimer = null;
-    console.log('[Presence WS] Cleared reconnect timer');
   }
 
   if (ws) {

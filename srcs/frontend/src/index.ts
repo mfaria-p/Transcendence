@@ -19,7 +19,6 @@ document.addEventListener('DOMContentLoaded', async () => {
       initHeader({ active: 'home' });
       connectPresenceSocket();
     } catch (error) {
-      console.error('Error verifying session:', error);
       disconnectPresenceSocket();
       localStorage.removeItem('access_token');
       localStorage.removeItem('user');

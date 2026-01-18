@@ -301,7 +301,6 @@ class TournamentMatchPage {
 				right: normalizeId(match.player2Id),
 			});
 		} catch (err) {
-			console.warn('snapshot fetch failed', err);
 		}
 	}
 
@@ -342,7 +341,6 @@ class TournamentMatchPage {
 			this.handleSocketClose();
 		});
 		socket.addEventListener('error', (event) => {
-			console.error('[match] WebSocket error', event);
 			this.showInlineMessage('Realtime connection error.', 'error');
 		});
 	}
@@ -741,8 +739,7 @@ class TournamentMatchPage {
 			this.shouldReconnect = false;
 			try {
 				this.socket?.close();
-			} catch (err) {
-				console.warn('quick wait cancel close socket failed', err);
+			} catch {
 			}
 			this.setQuickWaitVisible(false);
 			window.location.href = './multiplayer.html';
@@ -857,7 +854,6 @@ class TournamentMatchPage {
 				this.resultAnimationInstance.setSpeed(0.9);
 			}
 		} catch (err) {
-			console.warn('Failed to play result animation', err);
 		}
 	}
 
@@ -959,8 +955,6 @@ class TournamentMatchPage {
 				console.log('[match] Ready button clicked!');
 				this.sendReadySignal();
 			});
-		} else {
-			console.error('[match] Ready button NOT found!');
 		}
 	}
 
@@ -1124,7 +1118,6 @@ class TournamentMatchPage {
 				this.userNameCache.set(id, display);
 				this.updatePlayers({ ...this.players });
 			} catch (err) {
-				console.warn('Failed to fetch username for', id, err);
 			} finally {
 				this.fetchingNames.delete(id);
 			}
@@ -1153,7 +1146,6 @@ class TournamentMatchPage {
 			const data = await res.json().catch(() => null);
 			return (data as any)?.tournament ?? null;
 		} catch (err) {
-			console.warn('fetchTournament failed', err);
 			return null;
 		}
 	}
@@ -1181,8 +1173,7 @@ class TournamentMatchPage {
 			try {
 				await navigator.clipboard.writeText(code);
 				this.showInlineMessage('Invite code copied!', 'success');
-			} catch (err) {
-				console.warn('copy code failed', err);
+			} catch {
 				this.showInlineMessage('Could not copy code.', 'error');
 			}
 		});
@@ -1327,8 +1318,7 @@ class TournamentMatchPage {
 			url.searchParams.set('roomId', roomId);
 			if (this.isQuickMatch) url.searchParams.set('mode', 'quick');
 			window.history.replaceState({}, '', url.toString());
-		} catch (err) {
-			console.warn('Failed to update URL with room id', err);
+		} catch {
 		}
 	}
 
@@ -1524,8 +1514,7 @@ class TournamentMatchPage {
 			if (normalizeId(tournament.winnerId) !== this.normalizedUser.id) return;
 			this.championShownFor.add(payload.tournamentId);
 			await this.showChampionOverlay(tournament.name ?? 'Tournament');
-		} catch (err) {
-			console.warn('Error while checking tournament champion', err);
+		} catch {
 		}
 	}
 
@@ -1541,8 +1530,7 @@ class TournamentMatchPage {
 			if (normalizeId(tournament.winnerId) === this.normalizedUser.id) return;
 			this.loserShownFor.add(payload.tournamentId);
 			await this.showLoserOverlay(tournament.name ?? 'Tournament');
-		} catch (err) {
-			console.warn('Failed to show loser overlay', err);
+		} catch {
 		}
 	}
 
@@ -1602,8 +1590,7 @@ class TournamentMatchPage {
 			if (typeof this.championAnimationInstance.setSpeed === 'function') {
 				this.championAnimationInstance.setSpeed(0.8);
 			}
-		} catch (err) {
-			console.warn('Could not play champion animation', err);
+		} catch {
 		}
 	}
 
@@ -1631,8 +1618,7 @@ class TournamentMatchPage {
 			if (typeof this.loserAnimationInstance.setSpeed === 'function') {
 				this.loserAnimationInstance.setSpeed(0.8);
 			}
-		} catch (err) {
-			console.warn('Could not play loser animation', err);
+		} catch {
 		}
 	}
 
@@ -1643,8 +1629,7 @@ class TournamentMatchPage {
 				const res = await fetch(src);
 				if (!res.ok) throw new Error(`Failed to fetch lottie: ${res.status}`);
 				return await res.json();
-			} catch (err) {
-				console.warn('Failed to fetch lottie from URL', src, err);
+			} catch {
 				return null;
 			}
 		}
@@ -1711,8 +1696,7 @@ function renderAuth(container: HTMLElement, user: User): void {
 	logoutButton?.addEventListener('click', async () => {
 		try {
 			await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' });
-		} catch (err) {
-			console.error('logout error', err);
+		} catch {
 		} finally {
 			localStorage.removeItem('access_token');
 			localStorage.removeItem('user');
@@ -1751,8 +1735,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 	let user: User;
 	try {
 		user = JSON.parse(userStr) as User;
-	} catch (err) {
-		console.error('Error reading user from localStorage', err);
+	} catch {
 		localStorage.removeItem('user');
 		localStorage.removeItem('access_token');
 		window.location.href = './login.html';
@@ -1765,7 +1748,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         await verifySession(token);
         console.log('[match] Session verified successfully');
     } catch (error) {
-        console.error('[match] Session verification failed:', error);
         if (error instanceof Error && error.message === 'Session expired') {
             showMessage('Session expired. Redirecting to login...', 'error');
             setTimeout(() => {
@@ -1774,7 +1756,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             return;
         }
         // For any other error, also redirect to login
-        console.error('[match] Unexpected error during session verification, redirecting to login');
         showMessage('Authentication error. Please login again.', 'error');
         setTimeout(() => {
             clearSessionAndRedirect();

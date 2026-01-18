@@ -215,8 +215,6 @@ class PongGame {
           this.hideMobileOverlay();
         }
       });
-    } else {
-      console.warn('[Pong] Mobile start button NOT found');
     }
 
     // Touch controls for paddles
@@ -296,8 +294,6 @@ class PongGame {
       
       console.log('[Pong] Overlay classes after:', overlay.className);
 
-    } else {
-      console.error('[Pong] Mobile overlay element NOT FOUND!');
     }
   }
 
@@ -333,16 +329,14 @@ class PongGame {
     if (!document.fullscreenElement) {
       // Enter fullscreen
       if (elem.requestFullscreen) {
-        elem.requestFullscreen().catch(err => {
-          console.error('[Pong] Error attempting fullscreen:', err);
+        elem.requestFullscreen().catch(() => {
         });
       }
       console.log('[Pong] Entering fullscreen mode');
     } else {
       // Exit fullscreen
       if (document.exitFullscreen) {
-        document.exitFullscreen().catch(err => {
-          console.error('[Pong] Error exiting fullscreen:', err);
+        document.exitFullscreen().catch(() => {
         });
       }
       console.log('[Pong] Exiting fullscreen mode');
@@ -636,6 +630,5 @@ document.addEventListener("DOMContentLoaded", () => {
       game.destroy();
     });
   } else {
-    console.error('[Pong] Canvas NOT found!');
   }
 });

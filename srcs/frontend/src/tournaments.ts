@@ -81,7 +81,6 @@ class TournamentsPage {
         }, 2000);
         return;
       }
-      console.warn('Session check failed, proceeding anyway (non-expiring error):', error);
     }
 
     initHeader({ active: 'tournaments' });
@@ -147,7 +146,6 @@ class TournamentsPage {
       this.renderTournaments(ongoingSorted);
       this.renderHistory(finishedSorted);
     } catch (error) {
-      console.error('loadTournaments error:', error);
       this.showMessage('Unable to load tournaments.', 'error');
     } finally {
       this.isLoading = false;
@@ -395,7 +393,6 @@ class TournamentsPage {
       this.renderTournaments(this.tournamentsCache);
       this.renderHistory(this.historyCache);
     } catch (err) {
-      console.warn('Failed to fetch player name', userId, err);
     } finally {
       this.fetchingNames.delete(userId);
     }
@@ -418,7 +415,6 @@ class TournamentsPage {
         el.textContent = display;
       }
     } catch (err) {
-      console.warn('Failed to fetch winner name', winnerId, err);
     } finally {
       this.fetchingNames.delete(winnerId);
     }
@@ -549,7 +545,6 @@ class TournamentsPage {
 
       await this.loadTournaments();
     } catch (error) {
-      console.error('createTournament error:', error);
       this.showMessage((error as Error).message ?? 'Error creating tournament.', 'error');
     }
   }
@@ -633,7 +628,6 @@ class TournamentsPage {
 
       await this.loadTournaments();
     } catch (error) {
-      console.error('joinPrivateTournament error:', error);
       this.showMessage((error as Error).message ?? 'Could not join.', 'error');
     } finally {
       if (btn) {
@@ -684,7 +678,6 @@ class TournamentsPage {
 
       await this.loadTournaments();
     } catch (error) {
-      console.error('joinTournament error:', error);
       this.showMessage((error as Error).message ?? 'Error joining tournament.', 'error');
     } finally {
       if (button) {
@@ -732,7 +725,6 @@ class TournamentsPage {
       await this.loadTournaments();
       return tournament;
     } catch (error) {
-      console.error('startTournament error:', error);
       this.showMessage((error as Error).message ?? 'Error starting tournament.', 'error');
       return null;
     } finally {
@@ -831,7 +823,6 @@ class TournamentsPage {
       const data = await res.json().catch(() => null);
       return (data?.tournament as Tournament) ?? null;
     } catch (err) {
-      console.warn('fetchTournament failed', err);
       return null;
     }
   }
@@ -843,6 +834,8 @@ class TournamentsPage {
     const match = this.getCurrentMatchForUser(resolved);
     if (match) {
       window.location.href = `./match.html?roomId=${match.roomId}`;
+    } else {
+      this.showMessage('No active match found. Please try again.', 'error');
     }
   }
 

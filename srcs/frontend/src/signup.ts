@@ -130,9 +130,7 @@ class SignupManager {
               }));
               console.log('Stored user from login');
               
-              await provisionProfile(loginResponse.at).catch(err => {
-                console.warn('Profile provision failed:', err);
-              });
+              provisionProfile(loginResponse.at).catch(() => {});
             }
             
             this.showSuccess('Account created successfully! Redirecting...');
@@ -147,7 +145,6 @@ class SignupManager {
             }, 2000);
           }
         } catch (loginError: any) {
-          console.error('Auto-login error:', loginError);
           this.showSuccess('Account created! Please log in to continue.');
           setTimeout(() => {
             window.location.replace('./login.html');
@@ -163,7 +160,6 @@ class SignupManager {
         this.showError(errorMessage);
       }
     } catch (error: any) {
-      console.error('Signup error:', error);
       this.showError(error.message || 'Connection error. Please try again.');
     } finally {
       this.setLoading(false);

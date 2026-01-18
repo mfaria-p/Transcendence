@@ -46,7 +46,6 @@ class QuickMatchPage {
         }, 2000);
         return;
       }
-      console.warn('Session check failed, redirecting to login:', error);
       showMessage('Authentication error. Please login again.', 'error');
       setTimeout(() => {
         clearSessionAndRedirect();

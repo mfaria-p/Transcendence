@@ -37,7 +37,6 @@ function readSession(): { user: StoredUser | null; hasSession: boolean } {
     const parsed = JSON.parse(userStr) as StoredUser;
     return { user: parsed, hasSession: true };
   } catch (err) {
-    console.warn('Failed to parse stored user', err);
     localStorage.removeItem('user');
     return { user: null, hasSession: false };
   }
