@@ -1,4 +1,6 @@
 import crypto from 'node:crypto';
+import type WebSocket from 'ws';
+import { forEachConnection } from './presence.js';
 
 export type TournamentStatus = 'waiting' | 'running' | 'finished';
 export type MatchStatus = 'pending' | 'playing' | 'finished';
@@ -65,12 +67,32 @@ export function getTournament(id: string): Tournament | undefined {
   return tournaments.get(id);
 }
 
+function safeSend(socket: WebSocket, payload: unknown): void {
+  if (socket.readyState === socket.OPEN) {
+    socket.send(JSON.stringify(payload));
+  }
+}
+
+function broadcastTournamentSnapshot(): void {
+  forEachConnection((userId, socket) => {
+    const view = listTournaments(userId);
+    safeSend(socket, { type: 'tournaments:update', tournaments: view });
+  });
+}
+
 export function createTournament(input: {
   ownerId: string;
   name?: string;
   maxPlayers?: number;
   isPrivate?: boolean;
 }): Tournament {
+  // Block multiple concurrent 4-player tournaments per owner until they leave
+  for (const t of tournaments.values()) {
+    if (t.ownerId === input.ownerId && t.maxPlayers === 4 && t.status === 'waiting') {
+      throw new Error('You already have a 4-player tournament waiting; leave it before creating another');
+    }
+  }
+
   const maxPlayers = input.maxPlayers && input.maxPlayers > 1 ? input.maxPlayers : 4;
   const isPrivate = Boolean(input.isPrivate);
   const visibility: 'public' | 'private' = isPrivate ? 'private' : 'public';
@@ -96,6 +118,7 @@ export function createTournament(input: {
   }
 
   tournaments.set(t.id, t);
+  broadcastTournamentSnapshot();
   return t;
 }
 
@@ -122,6 +145,7 @@ export function joinTournament(tournamentId: string, userId: string, joinCode?: 
 
     t.players.push(userId);
     t.updatedAt = now();
+    broadcastTournamentSnapshot();
     return t;
   }
 
@@ -148,6 +172,7 @@ export function joinTournament(tournamentId: string, userId: string, joinCode?: 
       pendingWithSlot.player2Id = userId;
     }
     t.updatedAt = now();
+    broadcastTournamentSnapshot();
     return t;
   }
 
@@ -182,6 +207,7 @@ export function leaveTournament(tournamentId: string, userId: string): Tournamen
 
   if (t.players.length === 0) {
     tournaments.delete(tournamentId);
+    broadcastTournamentSnapshot();
     return null;
   }
 
@@ -190,6 +216,7 @@ export function leaveTournament(tournamentId: string, userId: string): Tournamen
   }
 
   t.updatedAt = now();
+  broadcastTournamentSnapshot();
   return t;
 }
 
@@ -247,6 +274,11 @@ export function startTournament(tournamentId: string): Tournament {
   }
   if (t.status !== 'waiting') {
     throw new Error('Tournament already started');
+  }
+
+  // For 4-player tournaments, require full lobby before starting
+  if (t.maxPlayers === 4 && t.players.length < t.maxPlayers) {
+    throw new Error('Tournament needs 4 players to start');
   }
 
   // Caminho 1v1: podemos iniciar com apenas um jogador (host entra na sala e espera oponente).
@@ -333,6 +365,7 @@ export function startTournament(tournamentId: string): Tournament {
   t.matches = matches;
   t.status = 'running';
   t.updatedAt = now();
+  broadcastTournamentSnapshot();
   return t;
 }
 
@@ -396,7 +429,9 @@ export function reportMatchResultByRoomId(
   }
 
   if (finalMatch) {
+    broadcastTournamentSnapshot();
     return { tournament, match, finalMatch };
   }
+  broadcastTournamentSnapshot();
   return { tournament, match };
 }

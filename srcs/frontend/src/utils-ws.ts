@@ -5,12 +5,23 @@ let manualClose = false;
 type PresenceListener = (event: 'online' | 'offline', userId: string) => void;
 const presenceListeners: Set<PresenceListener> = new Set();
 
+type TournamentsListener = (payload: { tournaments: unknown[] }) => void;
+const tournamentsListeners: Set<TournamentsListener> = new Set();
+
 export function addPresenceListener(listener: PresenceListener): void {
   presenceListeners.add(listener);
 }
 
 export function removePresenceListener(listener: PresenceListener): void {
   presenceListeners.delete(listener);
+}
+
+export function addTournamentsListener(listener: TournamentsListener): void {
+  tournamentsListeners.add(listener);
+}
+
+export function removeTournamentsListener(listener: TournamentsListener): void {
+  tournamentsListeners.delete(listener);
 }
 
 function notifyPresenceListeners(event: 'online' | 'offline', userId: string): void {
@@ -70,6 +81,14 @@ export function connectPresenceSocket(): void {
           break;
         case 'pong':
           console.log('[Presence WS] Pong received');
+          break;
+        case 'tournaments:update':
+          tournamentsListeners.forEach((listener) => {
+            try {
+              listener({ tournaments: message.tournaments ?? [] });
+            } catch (err) {
+            }
+          });
           break;
         default:
           console.log('[Presence WS] Unknown message type:', message.type);

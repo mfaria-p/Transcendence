@@ -1,5 +1,6 @@
 import { initHeader } from './shared/header.js';
 import { verifySession, clearSessionAndRedirect, showMessage } from './utils-api.js';
+import { connectPresenceSocket, addTournamentsListener } from './utils-ws.js';
 
 interface User {
   id: string;
@@ -52,6 +53,9 @@ class TournamentsPage {
       this.leaveTournamentKeepalive(this.waitingTournamentId);
     }
   };
+  private tournamentsWsListener = (payload: { tournaments: Tournament[] }): void => {
+    this.processTournaments(payload.tournaments ?? []);
+  };
 
   constructor() {
     void this.init();
@@ -91,6 +95,8 @@ class TournamentsPage {
     initHeader({ active: 'tournaments' });
     window.addEventListener('beforeunload', this.handleBeforeUnload);
     this.setupEventListeners();
+    connectPresenceSocket();
+    addTournamentsListener(this.tournamentsWsListener);
     await this.loadTournaments();
   }
 
@@ -112,6 +118,29 @@ class TournamentsPage {
     });
   }
 
+  private processTournaments(tournaments: Tournament[]): void {
+    const cutoffMs = 21 * 60 * 1000;
+    const now = Date.now();
+
+    const ongoing = tournaments.filter((t) => {
+      const referenceTs = t.updatedAt ?? t.createdAt ?? 0;
+      const age = now - referenceTs;
+      const isStaleWaiting = t.status === 'waiting' && age > cutoffMs;
+      return t.status !== 'finished' && !isStaleWaiting;
+    });
+    const finishedSorted = tournaments
+      .filter((t) => t.status === 'finished')
+      .sort((a, b) => (b.updatedAt ?? b.createdAt) - (a.updatedAt ?? a.createdAt))
+      .slice(0, 10);
+
+    const ongoingSorted = [...ongoing].sort((a, b) => (b.updatedAt ?? b.createdAt) - (a.updatedAt ?? a.createdAt));
+
+    this.tournamentsCache = ongoingSorted;
+    this.historyCache = finishedSorted;
+    this.renderTournaments(ongoingSorted);
+    this.renderHistory(finishedSorted);
+  }
+
   private async loadTournaments(): Promise<void> {
     if (!this.accessToken || this.isLoading) return;
     this.isLoading = true;
@@ -131,26 +160,7 @@ class TournamentsPage {
       const data = await response.json();
       const tournaments: Tournament[] = data.tournaments ?? [];
 
-      const cutoffMs = 21 * 60 * 1000;
-      const now = Date.now();
-
-      const ongoing = tournaments.filter((t) => {
-        const referenceTs = t.updatedAt ?? t.createdAt ?? 0;
-        const age = now - referenceTs;
-        const isStaleWaiting = t.status === 'waiting' && age > cutoffMs;
-        return t.status !== 'finished' && !isStaleWaiting;
-      });
-      const finishedSorted = tournaments
-        .filter((t) => t.status === 'finished')
-        .sort((a, b) => (b.updatedAt ?? b.createdAt) - (a.updatedAt ?? a.createdAt))
-        .slice(0, 10);
-
-      const ongoingSorted = [...ongoing].sort((a, b) => (b.updatedAt ?? b.createdAt) - (a.updatedAt ?? a.createdAt));
-
-      this.tournamentsCache = ongoingSorted;
-      this.historyCache = finishedSorted;
-      this.renderTournaments(ongoingSorted);
-      this.renderHistory(finishedSorted);
+      this.processTournaments(tournaments);
     } catch (error) {
       this.showMessage('Unable to load tournaments.', 'error');
     } finally {
@@ -167,6 +177,33 @@ class TournamentsPage {
       refreshButton.classList.toggle('cursor-not-allowed', isLoading);
     }
   }
+
+  private startListPolling(): void {
+    if (this.listPollingInterval !== null) {
+      window.clearInterval(this.listPollingInterval);
+    }
+
+    this.listPollingInterval = window.setInterval(() => {
+      if (document.visibilityState === 'hidden') return;
+      void this.loadTournaments();
+    }, this.listPollingMs);
+  }
+
+  private stopListPolling(): void {
+    if (this.listPollingInterval !== null) {
+      window.clearInterval(this.listPollingInterval);
+      this.listPollingInterval = null;
+    }
+  }
+
+  private handleVisibilityChange = (): void => {
+    if (document.visibilityState === 'hidden') {
+      this.stopListPolling();
+    } else {
+      this.startListPolling();
+      void this.loadTournaments();
+    }
+  };
 
   private renderTournaments(tournaments: Tournament[]): void {
     const list = document.getElementById('tournamentsList');
@@ -864,7 +901,7 @@ class TournamentsPage {
 
     if (!this.waitingOverlay) {
       const overlay = document.createElement('div');
-      overlay.className = 'fixed bottom-4 right-4 z-50 bg-gray-900 border border-green-500/60 shadow-2xl rounded-xl p-4 w-72';
+      overlay.className = 'fixed bottom-4 left-4 z-50 bg-gray-900 border border-green-500/60 shadow-2xl rounded-xl p-4 w-72';
       overlay.innerHTML = `
         <p class="text-sm text-green-300 font-semibold">Waiting for players...</p>
         <p id="waitingCounter" class="text-2xl font-bold text-white mt-1"></p>
