@@ -93,6 +93,13 @@ export function createTournament(input: {
     }
   }
 
+  // Block creating any tournament while the user is queued in a waiting 4-player tournament (owner or not)
+  for (const t of tournaments.values()) {
+    if (t.status === 'waiting' && t.maxPlayers === 4 && t.players.includes(input.ownerId)) {
+      throw new Error('Leave your current 4-player tournament before creating a new one');
+    }
+  }
+
   const maxPlayers = input.maxPlayers && input.maxPlayers > 1 ? input.maxPlayers : 4;
   const isPrivate = Boolean(input.isPrivate);
   const visibility: 'public' | 'private' = isPrivate ? 'private' : 'public';

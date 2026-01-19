@@ -901,7 +901,7 @@ class TournamentsPage {
 
     if (!this.waitingOverlay) {
       const overlay = document.createElement('div');
-      overlay.className = 'fixed bottom-4 left-4 z-50 bg-gray-900 border border-green-500/60 shadow-2xl rounded-xl p-4 w-72';
+      overlay.className = 'fixed bottom-4 left-6 z-50 bg-gray-900 border border-green-500/60 shadow-2xl rounded-xl p-4 w-72';
       overlay.innerHTML = `
         <p class="text-sm text-green-300 font-semibold">Waiting for players...</p>
         <p id="waitingCounter" class="text-2xl font-bold text-white mt-1"></p>
