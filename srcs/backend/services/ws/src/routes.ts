@@ -13,6 +13,7 @@ import {
   createTournament,
   joinTournament,
   joinTournamentWithCode,
+  leaveTournament,
   startTournament,
   getTournament,
   listTournaments,
@@ -215,6 +216,27 @@ export default async function routes(app: FastifyInstance): Promise<void> {
       return { success: true, tournament };
     } catch (err) {
       req.log.error({ err }, 'startTournament failed');
+      return reply.code(400).send({
+        success: false,
+        error: (err as Error).message,
+      });
+    }
+  });
+
+  app.post<{
+    Params: { id: string };
+  }>('/tournaments/:id/leave', { preHandler: [app.authenticate] }, async (req, reply) => {
+    const userId: string = req.jwtPayload!.id;
+    const { id } = req.params;
+
+    try {
+      const tournament = leaveTournament(id, userId);
+      if (!tournament) {
+        return { success: true, deleted: true };
+      }
+      return { success: true, tournament };
+    } catch (err) {
+      req.log.error({ err }, 'leaveTournament failed');
       return reply.code(400).send({
         success: false,
         error: (err as Error).message,

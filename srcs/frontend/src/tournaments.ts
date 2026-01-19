@@ -47,6 +47,11 @@ class TournamentsPage {
   private waitingTournamentId: string | null = null;
   private waitingOwnerAutoStartTriggered = false;
   private privateCodeBanner: HTMLDivElement | null = null;
+  private handleBeforeUnload = (): void => {
+    if (this.waitingTournamentId) {
+      this.leaveTournamentKeepalive(this.waitingTournamentId);
+    }
+  };
 
   constructor() {
     void this.init();
@@ -84,6 +89,7 @@ class TournamentsPage {
     }
 
     initHeader({ active: 'tournaments' });
+    window.addEventListener('beforeunload', this.handleBeforeUnload);
     this.setupEventListeners();
     await this.loadTournaments();
   }
@@ -190,6 +196,7 @@ class TournamentsPage {
         ((tournament.status === 'waiting' && hasOpenSlot) ||
           (tournament.status === 'running' && tournament.maxPlayers === 2 && hasOpenSlot));
       const canStart = isOwner && tournament.status === 'waiting' && tournament.players.length >= 2;
+      const canLeave = isParticipant && tournament.status === 'waiting';
       const activeMatch = this.getCurrentMatchForUser(tournament);
 
       const statusClasses = this.getStatusClasses(tournament.status);
@@ -237,6 +244,7 @@ class TournamentsPage {
           <div class="flex flex-wrap gap-3">
             ${canJoin ? '<button data-action="join" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg transition">Join</button>' : ''}
             ${canStart ? '<button data-action="start" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition">Start</button>' : ''}
+            ${canLeave ? '<button data-action="leave" class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg transition">Leave</button>' : ''}
             ${activeMatch ? `<a href="./match.html?roomId=${activeMatch.roomId}" data-action="enter-room" class="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg transition">Enter room</a>` : ''}
             <button data-action="details" class="bg-gray-700 hover:bg-gray-600 text-white px-4 py-2 rounded-lg transition">Details</button>
           </div>
@@ -262,6 +270,11 @@ class TournamentsPage {
       const startButton = card.querySelector('[data-action="start"]') as HTMLButtonElement | null;
       startButton?.addEventListener('click', () => {
         void this.startTournament(tournament.id, startButton);
+      });
+
+      const leaveButton = card.querySelector('[data-action="leave"]') as HTMLButtonElement | null;
+      leaveButton?.addEventListener('click', () => {
+        void this.leaveTournament(tournament.id, leaveButton);
       });
 
       const copyBtn = card.querySelector(`[data-copy-code="${tournament.id}"]`) as HTMLButtonElement | null;
@@ -687,6 +700,71 @@ class TournamentsPage {
     }
   }
 
+  private leaveTournamentKeepalive(tournamentId: string): void {
+    if (!this.accessToken) return;
+    fetch(`/api/realtime/tournaments/${tournamentId}/leave`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${this.accessToken}`,
+      },
+      body: '{}',
+      keepalive: true,
+    }).catch(() => {
+      /* ignore */
+    });
+  }
+
+  private async leaveTournament(
+    tournamentId: string,
+    button?: HTMLButtonElement | null,
+    options?: { silent?: boolean },
+  ): Promise<boolean> {
+    if (!this.accessToken) return false;
+
+    if (button) {
+      button.disabled = true;
+      button.classList.add('opacity-50', 'cursor-not-allowed');
+    }
+
+    try {
+      const response = await fetch(`/api/realtime/tournaments/${tournamentId}/leave`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${this.accessToken}`,
+        },
+        body: '{}',
+      });
+
+      const data = await response.json().catch(() => null);
+      if (!response.ok) {
+        throw new Error(data?.error ?? 'Unable to leave the tournament');
+      }
+
+      if (this.waitingTournamentId === tournamentId) {
+        this.stopWaitingPopup();
+      }
+
+      await this.loadTournaments();
+
+      if (!options?.silent) {
+        this.showMessage('You left the tournament.', 'success');
+      }
+      return true;
+    } catch (error) {
+      if (!options?.silent) {
+        this.showMessage((error as Error).message ?? 'Error leaving tournament.', 'error');
+      }
+      return false;
+    } finally {
+      if (button) {
+        button.disabled = false;
+        button.classList.remove('opacity-50', 'cursor-not-allowed');
+      }
+    }
+  }
+
   private async startTournament(
     tournamentId: string,
     button?: HTMLButtonElement | null,
@@ -746,7 +824,10 @@ class TournamentsPage {
     const poll = async (): Promise<void> => {
       if (!this.waitingTournamentId || this.waitingTournamentId !== tournament.id) return;
       const latest = await this.fetchTournament(tournament.id);
-      if (!latest) return;
+      if (!latest) {
+        this.stopWaitingPopup();
+        return;
+      }
 
       this.renderWaitingOverlay(latest);
 
@@ -788,6 +869,7 @@ class TournamentsPage {
         <p class="text-sm text-green-300 font-semibold">Waiting for players...</p>
         <p id="waitingCounter" class="text-2xl font-bold text-white mt-1"></p>
         <p class="text-xs text-gray-400 mt-2">You will be redirected automatically when the lobby is full.</p>
+        <button id="leaveWaitingButton" class="mt-3 w-full bg-red-600 hover:bg-red-700 text-white px-3 py-2 rounded transition">Leave queue</button>
       `;
       document.body.appendChild(overlay);
       this.waitingOverlay = overlay;
@@ -796,6 +878,13 @@ class TournamentsPage {
     const counter = this.waitingOverlay.querySelector('#waitingCounter');
     if (counter) {
       counter.textContent = `Players: ${count} / ${cap}`;
+    }
+
+    const leaveBtn = this.waitingOverlay.querySelector('#leaveWaitingButton') as HTMLButtonElement | null;
+    if (leaveBtn) {
+      leaveBtn.onclick = () => {
+        void this.leaveTournament(tournament.id, leaveBtn);
+      };
     }
   }
 

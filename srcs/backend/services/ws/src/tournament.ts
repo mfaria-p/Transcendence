@@ -163,6 +163,36 @@ export function joinTournamentWithCode(tournamentId: string, userId: string, joi
   return joinTournament(tournamentId, userId, joinCode);
 }
 
+export function leaveTournament(tournamentId: string, userId: string): Tournament | null {
+  const t = tournaments.get(tournamentId);
+  if (!t) {
+    throw new Error('Tournament not found');
+  }
+
+  if (t.status !== 'waiting') {
+    throw new Error('Tournament already started');
+  }
+
+  const idx = t.players.indexOf(userId);
+  if (idx === -1) {
+    return t;
+  }
+
+  t.players.splice(idx, 1);
+
+  if (t.players.length === 0) {
+    tournaments.delete(tournamentId);
+    return null;
+  }
+
+  if (t.ownerId === userId) {
+    t.ownerId = t.players[0] ?? t.ownerId;
+  }
+
+  t.updatedAt = now();
+  return t;
+}
+
 export function findTournamentByJoinCode(code: string): Tournament | undefined {
   if (!code || code.trim().length === 0) return undefined;
   const normalized = code.trim().toUpperCase();
