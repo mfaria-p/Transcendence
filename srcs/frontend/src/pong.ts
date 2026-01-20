@@ -126,6 +126,7 @@ class PongGame {
 
     const height = canvas.height - ball.height;
 
+    // misread ball speed threshold
     if (this.ball.dx < 800 || Math.random() < this.AI_READ_BOUNCE_CHANCE) {
       while (predictedY < 0 || predictedY > height) {
         if (predictedY < 0) predictedY = -predictedY;
@@ -158,6 +159,7 @@ class PongGame {
     const diffY = this.aiTargetY - paddleCenter;
 
 
+    // deadzone
     if (diffY > 10)
       this.player2.y += this.PADDLE_SPEED * dt;
     else if (diffY < -10)
