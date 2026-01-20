@@ -198,11 +198,13 @@ export default async function (app: FastifyInstance): Promise<void> {
     };
   });
 
+  let stateStore = new Set<string>;
+
   app.get('/google/login', {}, async (req: FastifyRequest, reply: FastifyReply) => {
     const state = randomBytes(16).toString('hex');
     const url = utils.googleBuildAuthUrl(state);
 
-    // stateStore.set(state);
+    stateStore.add(state);
 
     return reply.redirect(url);
   });
@@ -216,9 +218,11 @@ app.get('/google/callback', {}, async (req: FastifyRequest, reply: FastifyReply)
   }
   
   // Missing required parameters (actual error)
-  if (!code || !state) {
+  if (!code || !state || !stateStore.has(state)) {
     return reply.redirect(`/google-callback.html?error=${encodeURIComponent('Invalid authentication request')}`);
   }
+
+  stateStore.delete(state);
 
   try {
     const payload = await utils.googleGetPayload(code);
