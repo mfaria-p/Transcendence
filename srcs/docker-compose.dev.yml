@@ -35,6 +35,7 @@ services:
       - USERS_URL=http://user:3002
       - REALTIME_URL=http://ws:3003
       - JWT_SECRET=${JWT_SECRET}
+      - COOKIE_SECRET=${COOKIE_SECRET}
       - NODE_ENV=development
     expose:
       - "3000"

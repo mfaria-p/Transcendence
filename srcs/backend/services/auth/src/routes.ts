@@ -39,7 +39,7 @@ export default async function (app: FastifyInstance): Promise<void> {
     await utils.rtCreate(app.prisma, rt, account!.id);
 
     reply.setCookie(RT_COOKIE, rt, {
-      httpOnly: true, secure: true, sameSite: 'lax', path: '/api/auth', maxAge: 30 * 24 * 60 * 60,
+      httpOnly: true, secure: true, sameSite: 'lax', path: '/api/auth', maxAge: 30 * 24 * 60 * 60, signed: true,
     });
 
     return {
@@ -51,14 +51,19 @@ export default async function (app: FastifyInstance): Promise<void> {
   });
 
   app.post('/refresh', {schema: schemas.postRefreshOpts}, async (req: FastifyRequest, reply: FastifyReply) => {
-    process.stderr.write(`[REFRESH] ${JSON.stringify(req.cookies)}\n`);
-    const rt: any = req.cookies[RT_COOKIE];
-    process.stderr.write(`[REFRESH] ${rt}\n`);
-    if (!rt) return reply.code(401).send({
+    const rtRaw: string | undefined = req.cookies[RT_COOKIE];
+    if (!rtRaw) return reply.code(401).send({
       sucess: false,
       message: 'Missing refresh token',
     });
 
+    const { valid, value: rt }  = req.unsignCookie(rtRaw);
+    if (!valid || !rt) {
+      return reply.code(401).send({
+        success: false,
+        message: 'invalid signed cookie'
+      });
+    }
     const rtHash: string = utils.rtHash(rt);
     const rtRecord: RefreshToken | null = await utils.rtVerifyHash(app.prisma, rtHash);
     if (!rtRecord) return reply.code(401).send({

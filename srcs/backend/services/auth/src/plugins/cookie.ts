@@ -5,5 +5,8 @@ import fp from 'fastify-plugin';
 import cookie from '@fastify/cookie';
 
 export default fp(async (auth: FastifyInstance) => {
-  await auth.register(cookie, {hook: 'onRequest'});
+  await auth.register(cookie, {
+    hook: 'onRequest',
+    secret: process.env.COOKIE_SECRET!,
+  });
 });

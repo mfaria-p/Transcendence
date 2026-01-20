@@ -55,6 +55,7 @@ services:
     environment:
       - AUTH_PORT=3001
       - JWT_SECRET=${JWT_SECRET}
+      - COOKIE_SECRET=${COOKIE_SECRET}
       - GOOGLE_OAUTH_CLIENT_ID=${GOOGLE_OAUTH_CLIENT_ID}
       - GOOGLE_OAUTH_CLIENT_SECRET=${GOOGLE_OAUTH_CLIENT_SECRET}
       - GOOGLE_OAUTH_REDIRECT_URI=https://localhost:9000/api/auth/google/callback
