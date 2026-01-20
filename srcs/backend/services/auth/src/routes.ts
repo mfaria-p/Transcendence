@@ -65,19 +65,24 @@ export default async function (app: FastifyInstance): Promise<void> {
       });
     }
     const rtHash: string = utils.rtHash(rt);
-    const rtRecord: RefreshToken | null = await utils.rtVerifyHash(app.prisma, rtHash);
-    if (!rtRecord) return reply.code(401).send({
-      success: false,
-      message: 'Invalid or expired refresh token',
-    });
-
-    await utils.rtDeleteByHash(app.prisma, rtHash);
+    let rtRecord: RefreshToken | null = null;
+    try {
+      rtRecord = await utils.rtVerifyHash(app.prisma, rtHash);
+    } catch (_) {}
+    if (!rtRecord) {
+      return reply.code(401).send({
+        success: false,
+        message: 'Invalid or expired refresh token',
+      });
+    }
+    else
+      await utils.rtDeleteByHash(app.prisma, rtHash);
     const rtNew: string = utils.rtGenerate();
     await utils.rtCreate(app.prisma, rtNew, rtRecord.accountId);
     const at: string = utils.atGenerate(app.jwt, {sub: rtRecord.accountId});
 
     reply.setCookie(RT_COOKIE, rtNew, {
-      httpOnly: true, secure: true, sameSite: 'lax', path: '/api/auth', maxAge: 30 * 24 * 60 * 60,
+      httpOnly: true, secure: true, sameSite: 'lax', path: '/api/auth', maxAge: 30 * 24 * 60 * 60, signed: true,
     });
 
     return {
