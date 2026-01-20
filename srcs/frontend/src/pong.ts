@@ -46,14 +46,16 @@ class PongGame {
   private countdownValue = 3;
 
   private aiPlayer: boolean = true;
+  private aiFirstMove: boolean = false;
   private aiTargetY: number = 0;
+  private aiReactionCooldown: number = 0;
 
   private readonly PADDLE_SPEED = 400; // px/s 
   private readonly BALL_SPEED = 550; 
 
-  private readonly AI_DEAD_ZONE = 50;      // aiming error
-  private readonly AI_BALL_CHASE_CHANCE = 0;
-  private readonly AI_READ_BOUNCE_CHANCE = 0;
+  private readonly AI_READ_BOUNCE_CHANCE = 0.9;
+  private readonly AI_ERROR_RANGE = 50;
+  private readonly AI_REACTION_TIME_S = 0.3;
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -99,8 +101,14 @@ class PongGame {
   public setAIPlayer(hasAIPlayer: boolean): void {
     this.aiPlayer = hasAIPlayer;
   }
+  
+  private resetAIPlayer(): void {
+    this.aiFirstMove = false;
+    this.aiTargetY = 0;
+    this.aiReactionCooldown = 0;
+  }
 
-  private predictBallY(dt: number): number {
+  private predictBallY(): number {
     const { ball, canvas } = this;
 
     // time until ball reaches AI paddle
@@ -125,36 +133,34 @@ class PongGame {
       }
     }
 
-    return predictedY + ball.height / 2;
+    const error = (Math.random() * 2 - 1) * this.AI_ERROR_RANGE;
+
+    return predictedY + ball.height / 2 + error;
   }
 
-  private updateAIDecision(dt: number): void {
+  private updateAIDecision(): void {
     if (this.ball.dx <= 0) {
       this.aiTargetY = this.canvas.height / 2;
       return;
     }
 
-    let predictedY: number;
-    if (Math.random() < this.AI_BALL_CHASE_CHANCE)
-      predictedY = this.ball.y;
-    else
-      predictedY = this.predictBallY(dt);
-
-    this.aiTargetY = predictedY;
+    this.aiReactionCooldown = this.AI_REACTION_TIME_S;
+    this.aiTargetY = this.predictBallY();
   }
 
   private updateAIMovement(dt: number): void {
+    if (this.aiReactionCooldown > 0) {
+      this.aiReactionCooldown -= dt;
+      return;
+    }
     const paddleCenter = this.player2.y + this.player2.height / 2;
     const diffY = this.aiTargetY - paddleCenter;
-    const diffX = Math.abs(this.ball.x - this.player2.x);
 
 
-    if (diffX < 600) {
-      if (diffY > this.AI_DEAD_ZONE)
-        this.player2.y += this.PADDLE_SPEED * dt;
-      else if (diffY < -this.AI_DEAD_ZONE)
-        this.player2.y -= this.PADDLE_SPEED * dt;
-    }
+    if (diffY > 10)
+      this.player2.y += this.PADDLE_SPEED * dt;
+    else if (diffY < -10)
+      this.player2.y -= this.PADDLE_SPEED * dt;
   }
 
   private setupEventListeners(): void {
@@ -420,9 +426,12 @@ class PongGame {
 
     // Move player2 (Arrow keys)
     if (this.aiPlayer) {
-      if (Math.random() < 0.2)
-        this.updateAIDecision(dt);
       this.updateAIMovement(dt);
+      if (!this.aiFirstMove) {
+        if (this.ball.dx > 0)
+          this.updateAIDecision();
+        this.aiFirstMove = true;
+      }
     }
     else {
       if (this.keys["ArrowUp"]) {
@@ -454,8 +463,9 @@ class PongGame {
     if (this.checkCollision(this.ball, this.player1) && this.ball.dx < 0) {
       this.ball.dx = Math.abs(this.ball.dx); // always move right
       this.ball.x = this.player1.x + this.player1.width; // push ball out so it doesn't stick
-      // this.ball.dx *= 1.05; // gradually increase ball speed  
+      this.ball.dx *= 1.05; // gradually increase ball speed  
       this.ball.dy = (Math.random() - 0.5) * (0.7 * this.ball.dx);     
+      this.updateAIDecision();
     }
 
     // Ball collision with right paddle
@@ -464,17 +474,20 @@ class PongGame {
       this.ball.x = this.player2.x - this.ball.width; // push ball out
       this.ball.dx *= 1.05; // gradually increase ball speed  
       this.ball.dy = (Math.random() - 0.5) * (0.7 * this.ball.dx);
+      this.aiTargetY = this.canvas.height / 2;
     }
 
     // Scoring
     if (this.ball.x < 0) {
       this.player2Score++;
       this.createGoalExplosion(this.ball.x, this.ball.y + this.ball.height / 2);
+      this.resetAIPlayer();
       this.updateScore();
       this.resetBall();
     } else if (this.ball.x > this.canvas.width) {
       this.player1Score++;
       this.createGoalExplosion(this.ball.x, this.ball.y + this.ball.height / 2);
+      this.resetAIPlayer();
       this.updateScore();
       this.resetBall();
     }
