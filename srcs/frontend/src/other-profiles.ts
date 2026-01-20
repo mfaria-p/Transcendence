@@ -38,9 +38,8 @@ class UserProfileViewer {
 
   private async init(): Promise<void> {
     const userStr = localStorage.getItem('user');
-    this.accessToken()! = localStorage.getItem('access_token');
 
-    if (!userStr || !this.accessToken()!) {
+    if (!userStr || !this.accessToken()) {
       window.location.href = './login.html';
       return;
     }
