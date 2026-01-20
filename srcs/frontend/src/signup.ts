@@ -343,14 +343,15 @@ class SignupManager {
       }
 
       return data as SignupResponse;
-    } catch (err: any) {
-      if (err.name === 'AbortError') {
-        throw new Error('Request timed out. Please try again.');
+    } catch (err) {
+      if (err instanceof Error) {
+        if (err.name === 'AbortError') {
+          throw new Error('Request timed out. Please try again.');
+        }
+        throw new Error(err.message || 'Network error');
       }
-      throw new Error(err?.message || 'Network error');
-    } finally {
-      clearTimeout(timeoutId);
-    }
+      throw new Error('Network error');
+}
   }
 
   private async loginAfterSignup(username: string, password: string): Promise<any> {
@@ -387,13 +388,14 @@ class SignupManager {
       }
 
       return data;
-    } catch (err: any) {
-      if (err.name === 'AbortError') {
-        throw new Error('Request timed out. Please try again.');
+    } catch (err) {
+      if (err instanceof Error) {
+        if (err.name === 'AbortError') {
+          throw new Error('Request timed out. Please try again.');
+        }
+        throw new Error(err.message || 'Network error');
       }
-      throw new Error(err?.message || 'Network error');
-    } finally {
-      clearTimeout(timeoutId);
+      throw new Error('Network error');
     }
   }
 
