@@ -52,10 +52,11 @@ class PongGame {
 
   private readonly PADDLE_SPEED = 400; // px/s 
   private readonly BALL_SPEED = 550; 
+  private readonly MAX_BALL_SPEED = 1100; 
 
   private readonly AI_READ_BOUNCE_CHANCE = 0.9;
-  private readonly AI_ERROR_RANGE = 50;
-  private readonly AI_REACTION_TIME_S = 0.3;
+  private readonly AI_ERROR_RANGE = 60;
+  private readonly AI_REACTION_TIME_S = 0.35;
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -125,7 +126,7 @@ class PongGame {
 
     const height = canvas.height - ball.height;
 
-    if (Math.random() < this.AI_READ_BOUNCE_CHANCE) {
+    if (this.ball.dx < 800 || Math.random() < this.AI_READ_BOUNCE_CHANCE) {
       while (predictedY < 0 || predictedY > height) {
         if (predictedY < 0) predictedY = -predictedY;
         else if (predictedY > height)
@@ -133,7 +134,7 @@ class PongGame {
       }
     }
 
-    const error = (Math.random() * 2 - 1) * this.AI_ERROR_RANGE;
+    const error = (Math.random() - Math.random()) * this.AI_ERROR_RANGE; // triangular
 
     return predictedY + ball.height / 2 + error;
   }
@@ -463,7 +464,12 @@ class PongGame {
     if (this.checkCollision(this.ball, this.player1) && this.ball.dx < 0) {
       this.ball.dx = Math.abs(this.ball.dx); // always move right
       this.ball.x = this.player1.x + this.player1.width; // push ball out so it doesn't stick
-      this.ball.dx *= 1.05; // gradually increase ball speed  
+      if (this.ball.dx >= this.MAX_BALL_SPEED) {
+        this.ball.dx = this.MAX_BALL_SPEED;
+      }
+      else {
+        this.ball.dx *= 1.05; // gradually increase ball speed  
+      }
       this.ball.dy = (Math.random() - 0.5) * (0.7 * this.ball.dx);     
       this.updateAIDecision();
     }
@@ -472,7 +478,12 @@ class PongGame {
     if (this.checkCollision(this.ball, this.player2) && this.ball.dx > 0) {
       this.ball.dx = -Math.abs(this.ball.dx); // always move left
       this.ball.x = this.player2.x - this.ball.width; // push ball out
-      this.ball.dx *= 1.05; // gradually increase ball speed  
+      if (this.ball.dx >= this.MAX_BALL_SPEED) {
+        this.ball.dx = this.MAX_BALL_SPEED;
+      }
+      else {
+        this.ball.dx *= 1.05; // gradually increase ball speed  
+      }
       this.ball.dy = (Math.random() - 0.5) * (0.7 * this.ball.dx);
       this.aiTargetY = this.canvas.height / 2;
     }
