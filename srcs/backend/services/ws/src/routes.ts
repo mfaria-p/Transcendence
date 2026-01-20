@@ -264,6 +264,56 @@ export default async function routes(app: FastifyInstance): Promise<void> {
     return { success: true, tournament };
   });
 
+
+
+  // Internal endpoint: allow backend services to push user-scoped realtime events
+  // (e.g., friend request updates) without exposing this functionality to clients.
+  app.post<{
+    Body: { userIds: string[]; event: string; payload?: unknown };
+  }>('/internal/user-event', async (req, reply) => {
+    const expected = process.env.INTERNAL_WS_TOKEN;
+    const providedHeader = req.headers['x-internal-token'];
+    const provided = Array.isArray(providedHeader) ? providedHeader[0] : providedHeader;
+
+    if (!expected || provided !== expected) {
+      return reply.code(403).send({ success: false, error: 'Forbidden' });
+    }
+
+    const { userIds, event, payload } = (req.body ?? {}) as {
+      userIds?: unknown;
+      event?: unknown;
+      payload?: unknown;
+    };
+
+    if (!Array.isArray(userIds) || typeof event !== 'string' || event.trim().length === 0) {
+      return reply.code(400).send({
+        success: false,
+        error: 'Invalid body. Expected { userIds: string[], event: string, payload?: any }',
+      });
+    }
+
+    const targets = new Set(userIds.map(String).filter(Boolean));
+    if (targets.size === 0) {
+      return reply.send({ success: true, delivered: 0 });
+    }
+
+    const msg = JSON.stringify({
+      type: 'user:event',
+      event,
+      payload,
+      ts: Date.now(),
+    });
+
+    let delivered = 0;
+    forEachConnection((uid, socket) => {
+      if (!targets.has(uid)) return;
+      if (socket.readyState !== socket.OPEN) return;
+      socket.send(msg);
+      delivered += 1;
+    });
+
+    return reply.send({ success: true, delivered });
+  });
   // ---------- WEBSOCKET ROUTE ----------
 
   app.get(

@@ -1,4 +1,4 @@
-import { connectPresenceSocket, disconnectPresenceSocket, addPresenceListener } from './utils-ws.js';
+import { connectPresenceSocket, disconnectPresenceSocket, addPresenceListener, addUserEventListener } from './utils-ws.js';
 import { verifySession, clearSessionAndRedirect, handleApiCall, showMessage, handleLogout } from './utils-api.js';
 import { initHeader } from './shared/header.js';
 
@@ -18,6 +18,7 @@ class ProfileManager {
   private currentProfile: Profile | null = null;
   private friendOnlineStatus: Map<string, boolean> = new Map();
   private isOAuthAccount: boolean = false;
+  private userEventsDebounce: number | null = null;
 
   constructor() {
     this.init();
@@ -52,6 +53,7 @@ class ProfileManager {
       connectPresenceSocket();
 
       this.setupPresenceListener();
+      this.setupUserEventListener();
       
       await this.loadProfile();
       this.setupEventListeners();
@@ -82,6 +84,25 @@ class ProfileManager {
       this.updateFriendStatusBadge(userId, event === 'online');
     });
   }
+
+  private setupUserEventListener(): void {
+    addUserEventListener((eventName) => {
+      if (!eventName) return;
+
+      // Only handle events that can affect this page UI
+      if (!eventName.startsWith("friend") && !eventName.startsWith("profile")) return;
+
+      // Debounce UI reloads in case multiple events arrive quickly
+      if (this.userEventsDebounce !== null) {
+        window.clearTimeout(this.userEventsDebounce);
+      }
+      this.userEventsDebounce = window.setTimeout(() => {
+        void this.loadFriendRequests();
+        void this.loadFriends();
+      }, 200);
+    });
+  }
+
 
   private updateFriendStatusBadge(friendId: string, isOnline: boolean): void {
     // Find ALL elements with this friend ID (there might be multiple contexts)
@@ -284,7 +305,7 @@ class ProfileManager {
     }
 
     try {
-      const response = await handleApiCall(this.accessToken()!), '/api/user/provision', {
+      const response = await handleApiCall(this.accessToken()!, '/api/user/provision', {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -353,7 +374,7 @@ class ProfileManager {
     }
 
     try {
-      const response = await handleApiCall(this.accessToken()!), '/api/auth/me', {
+      const response = await handleApiCall(this.accessToken()!, '/api/auth/me', {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',

@@ -79,7 +79,10 @@ type KnownServerMessage =
 	| { type: 'hello'; userId: string }
 	| { type: 'pong'; ts?: number }
 	| { type: 'presence'; event: string; userId: string }
+	| { type: 'tournaments:update'; tournaments: unknown[] }
+	| { type: 'user:event'; event: string; payload?: unknown }
 	| { type: 'tournament:update'; tournament: unknown };
+
 
 interface TournamentMatchSummary {
 	id: string;
@@ -188,7 +191,7 @@ class TournamentMatchPage {
 	private readonly isQuickMatch: boolean;
 	private roomId: string | null;
 	private readonly initialRoomFromUrl: string | null;
-	private nextMatchInterval: number | null = null;
+	private waitingNextMatchSourceMatchId: string | null = null;
 	private nextMatchOverlay: HTMLDivElement | null = null;
 	private redirectingToNextMatch = false;
 	private quickWaitOverlay: HTMLElement | null = null;
@@ -372,6 +375,10 @@ class TournamentMatchPage {
 			case 'debug':
 				this.handleDebug(payload);
 				return;
+			case 'tournaments:update':
+				this.handleTournamentsUpdate(payload.tournaments ?? []);
+				return;
+			case 'user:event':
 			case 'hello':
 			case 'pong':
 			case 'presence':
@@ -1193,6 +1200,26 @@ class TournamentMatchPage {
 	private startWaitingForNextMatch(tournament: TournamentSummary, currentMatchId: string): void {
 		this.stopWaitingForNextMatch();
 		this.redirectingToNextMatch = false;
+		this.waitingNextMatchSourceMatchId = currentMatchId;
+
+		// Render immediately using the snapshot we already have.
+		this.updateNextMatchWaitState(tournament);
+	}
+
+	private handleTournamentsUpdate(tournaments: unknown[]): void {
+		if (!this.waitingNextMatchSourceMatchId || !this.tournamentId) return;
+
+		const found = (tournaments as unknown[]).find(
+			(item) => item && typeof item === 'object' && (item as any).id === this.tournamentId,
+		) as TournamentSummary | undefined;
+
+		if (!found) return;
+		this.updateNextMatchWaitState(found);
+	}
+
+	private updateNextMatchWaitState(tournament: TournamentSummary): void {
+		const currentMatchId = this.waitingNextMatchSourceMatchId;
+		if (!currentMatchId) return;
 
 		const render = (state: { count: number; cap: number }) => {
 			if (!this.nextMatchOverlay) {
@@ -1216,47 +1243,34 @@ class TournamentMatchPage {
 			}
 		};
 
-		const poll = async (): Promise<void> => {
-			const latest = await this.fetchTournament(tournament.id);
-			if (!latest) return;
-
-			const nextMatch = latest.matches.find((m) =>
+		const nextMatch = tournament.matches.find(
+			(m) =>
 				(m.sourceMatch1Id === currentMatchId || m.sourceMatch2Id === currentMatchId) &&
-				(m.status === 'pending' || m.status === 'playing' || m.status === 'finished')
-			);
+				(m.status === 'pending' || m.status === 'playing' || m.status === 'finished'),
+		);
 
-			if (!nextMatch) {
-				return;
+		if (!nextMatch) return;
+
+		const playersReady = [nextMatch.player1Id, nextMatch.player2Id].filter(Boolean).length;
+		render({ count: playersReady, cap: 2 });
+
+		const hasRoom = Boolean(nextMatch.roomId && nextMatch.roomId.trim().length > 0);
+		const readyForFinal = hasRoom && playersReady >= 2;
+
+		if (!this.redirectingToNextMatch && (readyForFinal || nextMatch.status === 'playing' || nextMatch.status === 'finished')) {
+			this.redirectingToNextMatch = true;
+			this.stopWaitingForNextMatch();
+			if (hasRoom) {
+				this.showWinnerRedirectOverlay();
+				setTimeout(() => {
+					window.location.href = `./match.html?roomId=${nextMatch.roomId}`;
+				}, 5000);
 			}
-
-			const playersReady = [nextMatch.player1Id, nextMatch.player2Id].filter(Boolean).length;
-			render({ count: playersReady, cap: 2 });
-
-			const hasRoom = Boolean(nextMatch.roomId && nextMatch.roomId.trim().length > 0);
-			const readyForFinal = hasRoom && playersReady >= 2;
-			if (!this.redirectingToNextMatch && (readyForFinal || nextMatch.status === 'playing' || nextMatch.status === 'finished')) {
-				this.redirectingToNextMatch = true;
-				this.stopWaitingForNextMatch();
-				if (hasRoom) {
-					this.showWinnerRedirectOverlay();
-					setTimeout(() => {
-						window.location.href = `./match.html?roomId=${nextMatch.roomId}`;
-					}, 5000);
-				}
-			}
-		};
-
-		void poll();
-		this.nextMatchInterval = window.setInterval(() => {
-			void poll();
-		}, 3000);
+		}
 	}
 
 	private stopWaitingForNextMatch(): void {
-		if (this.nextMatchInterval !== null) {
-			window.clearInterval(this.nextMatchInterval);
-			this.nextMatchInterval = null;
-		}
+		this.waitingNextMatchSourceMatchId = null;
 		if (this.nextMatchOverlay) {
 			this.nextMatchOverlay.remove();
 			this.nextMatchOverlay = null;

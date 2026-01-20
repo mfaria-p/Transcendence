@@ -75,6 +75,8 @@ services:
       - USER_PORT=3002
       - DATABASE_URL=file:/app/prisma/data/profile.db
       - JWT_SECRET=${JWT_SECRET}
+      - REALTIME_INTERNAL_URL=http://ws:3003
+      - INTERNAL_WS_TOKEN=${INTERNAL_WS_TOKEN}
       - NODE_ENV=development
     expose:
       - "3002"
@@ -88,6 +90,7 @@ services:
     environment:
       - WS_PORT=3003
       - JWT_SECRET=${JWT_SECRET}
+      - INTERNAL_WS_TOKEN=${INTERNAL_WS_TOKEN}
       - NODE_ENV=development
     expose:
       - "3003"

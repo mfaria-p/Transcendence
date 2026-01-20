@@ -43,9 +43,9 @@ class TournamentsPage {
   private tournamentsCache: Tournament[] = [];
   private historyCache: Tournament[] = [];
   private waitingOverlay: HTMLDivElement | null = null;
-  private waitingInterval: number | null = null;
   private waitingTournamentId: string | null = null;
   private waitingOwnerAutoStartTriggered = false;
+  private waitingAutoStartIfOwner = false;
   private privateCodeBanner: HTMLDivElement | null = null;
   private handleBeforeUnload = (): void => {
     if (this.waitingTournamentId) {
@@ -53,7 +53,9 @@ class TournamentsPage {
     }
   };
   private tournamentsWsListener = (payload: { tournaments: unknown[] }): void => {
-    this.processTournaments((payload.tournaments ?? []) as Tournament[]);
+    const tournaments = (payload.tournaments ?? []) as Tournament[];
+    this.processTournaments(tournaments);
+    this.handleWaitingTournamentUpdate(tournaments);
   };
   private listPollingInterval: number | null = null;
   private listPollingMs = 5000;
@@ -860,44 +862,54 @@ class TournamentsPage {
     this.stopWaitingPopup();
     this.waitingTournamentId = tournament.id;
     this.waitingOwnerAutoStartTriggered = false;
+    this.waitingAutoStartIfOwner = options?.autoStartIfOwner ?? false;
+
     this.renderWaitingOverlay(tournament);
 
-    const poll = async (): Promise<void> => {
-      if (!this.waitingTournamentId || this.waitingTournamentId !== tournament.id) return;
-      const latest = await this.fetchTournament(tournament.id);
-      if (!latest) {
-        this.stopWaitingPopup();
-        return;
-      }
-
-      this.renderWaitingOverlay(latest);
-
-      if (latest.status === 'running') {
-        this.stopWaitingPopup();
-        await this.redirectToMatch(latest);
-        return;
-      }
-
-      const playerCount = latest.players.length;
-      const cap = latest.maxPlayers;
-      const isOwner = this.currentUser?.id === latest.ownerId;
-      if (
-        options?.autoStartIfOwner &&
-        isOwner &&
-        !this.waitingOwnerAutoStartTriggered &&
-        latest.status === 'waiting' &&
-        playerCount >= cap
-      ) {
-        this.waitingOwnerAutoStartTriggered = true;
-        await this.startTournament(latest.id, null, { redirectAfterStart: false, skipMessage: true });
-      }
-    };
-
-    void poll();
-    this.waitingInterval = window.setInterval(() => {
-      void poll();
-    }, 3000);
+    // Handle current state immediately (e.g., tournament already full).
+    this.handleWaitingTournamentUpdate([tournament]);
   }
+
+  private handleWaitingTournamentUpdate(tournaments: Tournament[]): void {
+    if (!this.waitingTournamentId) return;
+
+    const latest = tournaments.find((t) => t && typeof t === "object" && (t as Tournament).id === this.waitingTournamentId) as
+      | Tournament
+      | undefined;
+
+    if (!latest) {
+      // If we no longer see this tournament, stop waiting.
+      this.stopWaitingPopup();
+      return;
+    }
+
+    this.renderWaitingOverlay(latest);
+
+    if (latest.status === "running") {
+      void this.redirectToMatch(latest);
+      return;
+    }
+
+    if (latest.status !== "waiting") {
+      this.stopWaitingPopup();
+      return;
+    }
+
+    const playerCount = latest.players.length;
+    const cap = latest.maxPlayers;
+    const isOwner = this.currentUser?.id === latest.ownerId;
+
+    if (
+      this.waitingAutoStartIfOwner &&
+      isOwner &&
+      !this.waitingOwnerAutoStartTriggered &&
+      playerCount >= cap
+    ) {
+      this.waitingOwnerAutoStartTriggered = true;
+      void this.startTournament(latest.id, null, { redirectAfterStart: false, skipMessage: true });
+    }
+  }
+
 
   private renderWaitingOverlay(tournament: Tournament): void {
     const count = tournament.players.length;
@@ -930,12 +942,9 @@ class TournamentsPage {
   }
 
   private stopWaitingPopup(): void {
-    if (this.waitingInterval !== null) {
-      window.clearInterval(this.waitingInterval);
-      this.waitingInterval = null;
-    }
     this.waitingTournamentId = null;
     this.waitingOwnerAutoStartTriggered = false;
+    this.waitingAutoStartIfOwner = false;
     if (this.waitingOverlay) {
       this.waitingOverlay.remove();
       this.waitingOverlay = null;
