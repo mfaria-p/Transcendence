@@ -180,7 +180,10 @@ export default async function (app: FastifyInstance): Promise<void> {
   app.get('/:id', {schema: schemas.getAccountByIdOpts}, async (req: FastifyRequest, reply: FastifyReply) => {
     const {id} = req.params as {id: string};
 
-    const account = await utils.accountFindById(app.prisma, id);
+    let account: Account | null = null;
+    try {
+      account = await utils.accountFindById(app.prisma, id);
+    } catch (_) {}
     if (!account) return reply.code(404).send({
       sucess: false,
       message: 'Nonexistent Account',
