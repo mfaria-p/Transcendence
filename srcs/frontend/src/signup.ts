@@ -130,9 +130,7 @@ class SignupManager {
               }));
               console.log('Stored user from login');
               
-              await provisionProfile(loginResponse.at).catch(err => {
-                console.warn('Profile provision failed:', err);
-              });
+              provisionProfile(loginResponse.at).catch(() => {});
             }
             
             this.showSuccess('Account created successfully! Redirecting...');
@@ -147,7 +145,6 @@ class SignupManager {
             }, 2000);
           }
         } catch (loginError: any) {
-          console.error('Auto-login error:', loginError);
           this.showSuccess('Account created! Please log in to continue.');
           setTimeout(() => {
             window.location.replace('./login.html');
@@ -163,7 +160,6 @@ class SignupManager {
         this.showError(errorMessage);
       }
     } catch (error: any) {
-      console.error('Signup error:', error);
       this.showError(error.message || 'Connection error. Please try again.');
     } finally {
       this.setLoading(false);
@@ -347,14 +343,15 @@ class SignupManager {
       }
 
       return data as SignupResponse;
-    } catch (err: any) {
-      if (err.name === 'AbortError') {
-        throw new Error('Request timed out. Please try again.');
+    } catch (err) {
+      if (err instanceof Error) {
+        if (err.name === 'AbortError') {
+          throw new Error('Request timed out. Please try again.');
+        }
+        throw new Error(err.message || 'Network error');
       }
-      throw new Error(err?.message || 'Network error');
-    } finally {
-      clearTimeout(timeoutId);
-    }
+      throw new Error('Network error');
+}
   }
 
   private async loginAfterSignup(username: string, password: string): Promise<any> {
@@ -391,13 +388,14 @@ class SignupManager {
       }
 
       return data;
-    } catch (err: any) {
-      if (err.name === 'AbortError') {
-        throw new Error('Request timed out. Please try again.');
+    } catch (err) {
+      if (err instanceof Error) {
+        if (err.name === 'AbortError') {
+          throw new Error('Request timed out. Please try again.');
+        }
+        throw new Error(err.message || 'Network error');
       }
-      throw new Error(err?.message || 'Network error');
-    } finally {
-      clearTimeout(timeoutId);
+      throw new Error('Network error');
     }
   }
 

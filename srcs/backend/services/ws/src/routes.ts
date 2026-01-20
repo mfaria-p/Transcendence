@@ -13,12 +13,12 @@ import {
   createTournament,
   joinTournament,
   joinTournamentWithCode,
+  leaveTournament,
   startTournament,
   getTournament,
   listTournaments,
   findTournamentByJoinCode,
 } from './tournament.js';
-import { emitTournamentUpdate, emitTournamentsChanged, emitUserEvent } from './events.js';
 
 interface JwtPayload {
   sub: string;
@@ -33,9 +33,6 @@ type ServerMessage =
   | { type: 'hello'; userId: string; onlineUsers: string[] }
   | { type: 'presence'; event: 'online' | 'offline'; userId: string }
   | { type: 'pong'; ts?: number }
-  | { type: 'tournaments:changed'; ts: number }
-  | { type: 'tournament:update'; tournament: unknown; ts: number }
-  | { type: 'user:event'; event: string; data?: unknown; ts: number }
   | { type: 'error'; message: string };
 
 function normalizeId(value: unknown): string | null {
@@ -82,43 +79,6 @@ export default async function routes(app: FastifyInstance): Promise<void> {
 
   app.get('/health', async () => {
     return { ok: true, service: 'ws' };
-  });
-
-  // ---------- INTERNAL (SERVICE-TO-SERVICE) API ----------
-
-  /**
-   * Service-to-service endpoint used by other backend services (e.g. user-service)
-   * to push real-time notifications to connected users.
-   *
-   * Not exposed through the gateway/nginx (only available inside docker network),
-   * and protected with a shared token.
-   */
-  app.post<{
-    Body: { userIds?: unknown; event?: unknown; data?: unknown };
-  }>('/internal/user-event', async (req, reply) => {
-    const expected = process.env.INTERNAL_WS_TOKEN;
-    const provided = req.headers['x-internal-token'];
-    if (!expected || provided !== expected) {
-      return reply.code(401).send({ success: false, error: 'Unauthorized' });
-    }
-
-    const body = req.body ?? {};
-    const userIdsRaw = (body as any).userIds;
-    const eventRaw = (body as any).event;
-    const data = (body as any).data;
-
-    if (!Array.isArray(userIdsRaw) || typeof eventRaw !== 'string' || eventRaw.trim().length === 0) {
-      return reply.code(400).send({
-        success: false,
-        error: 'Expected body { userIds: string[], event: string, data?: any }',
-      });
-    }
-
-    const userIds = userIdsRaw.map((v) => String(v)).filter((v) => v.trim().length > 0);
-    const event = eventRaw.trim();
-
-    emitUserEvent(userIds, event, data);
-    return { success: true };
   });
 
   app.get('/presence/me', { preHandler: [app.authenticate] }, async (req) => {
@@ -176,9 +136,6 @@ export default async function routes(app: FastifyInstance): Promise<void> {
       }
 
       const tournament = createTournament(input);
-      // realtime notifications
-      emitTournamentUpdate(tournament);
-      emitTournamentsChanged();
       return { success: true, tournament };
     } catch (err) {
       req.log.error({ err }, 'createTournament failed');
@@ -210,8 +167,6 @@ export default async function routes(app: FastifyInstance): Promise<void> {
 
     try {
       const tournament = joinTournamentWithCode(t.id, userId, code);
-      emitTournamentUpdate(tournament);
-      emitTournamentsChanged();
       return { success: true, tournament };
     } catch (err) {
       req.log.error({ err }, 'joinTournamentByCode failed');
@@ -232,8 +187,6 @@ export default async function routes(app: FastifyInstance): Promise<void> {
 
     try {
       const tournament = joinTournament(id, userId, joinCode);
-      emitTournamentUpdate(tournament);
-      emitTournamentsChanged();
       return { success: true, tournament };
     } catch (err) {
       req.log.error({ err }, 'joinTournament failed');
@@ -260,11 +213,30 @@ export default async function routes(app: FastifyInstance): Promise<void> {
 
     try {
       const tournament = startTournament(id);
-      emitTournamentUpdate(tournament);
-      emitTournamentsChanged();
       return { success: true, tournament };
     } catch (err) {
       req.log.error({ err }, 'startTournament failed');
+      return reply.code(400).send({
+        success: false,
+        error: (err as Error).message,
+      });
+    }
+  });
+
+  app.post<{
+    Params: { id: string };
+  }>('/tournaments/:id/leave', { preHandler: [app.authenticate] }, async (req, reply) => {
+    const userId: string = req.jwtPayload!.id;
+    const { id } = req.params;
+
+    try {
+      const tournament = leaveTournament(id, userId);
+      if (!tournament) {
+        return { success: true, deleted: true };
+      }
+      return { success: true, tournament };
+    } catch (err) {
+      req.log.error({ err }, 'leaveTournament failed');
       return reply.code(400).send({
         success: false,
         error: (err as Error).message,
@@ -292,6 +264,56 @@ export default async function routes(app: FastifyInstance): Promise<void> {
     return { success: true, tournament };
   });
 
+
+
+  // Internal endpoint: allow backend services to push user-scoped realtime events
+  // (e.g., friend request updates) without exposing this functionality to clients.
+  app.post<{
+    Body: { userIds: string[]; event: string; payload?: unknown };
+  }>('/internal/user-event', async (req, reply) => {
+    const expected = process.env.INTERNAL_WS_TOKEN;
+    const providedHeader = req.headers['x-internal-token'];
+    const provided = Array.isArray(providedHeader) ? providedHeader[0] : providedHeader;
+
+    if (!expected || provided !== expected) {
+      return reply.code(403).send({ success: false, error: 'Forbidden' });
+    }
+
+    const { userIds, event, payload } = (req.body ?? {}) as {
+      userIds?: unknown;
+      event?: unknown;
+      payload?: unknown;
+    };
+
+    if (!Array.isArray(userIds) || typeof event !== 'string' || event.trim().length === 0) {
+      return reply.code(400).send({
+        success: false,
+        error: 'Invalid body. Expected { userIds: string[], event: string, payload?: any }',
+      });
+    }
+
+    const targets = new Set(userIds.map(String).filter(Boolean));
+    if (targets.size === 0) {
+      return reply.send({ success: true, delivered: 0 });
+    }
+
+    const msg = JSON.stringify({
+      type: 'user:event',
+      event,
+      payload,
+      ts: Date.now(),
+    });
+
+    let delivered = 0;
+    forEachConnection((uid, socket) => {
+      if (!targets.has(uid)) return;
+      if (socket.readyState !== socket.OPEN) return;
+      socket.send(msg);
+      delivered += 1;
+    });
+
+    return reply.send({ success: true, delivered });
+  });
   // ---------- WEBSOCKET ROUTE ----------
 
   app.get(

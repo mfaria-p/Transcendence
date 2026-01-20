@@ -1,9 +1,30 @@
 import { disconnectPresenceSocket } from './utils-ws.js';
 
+
+function expiresSoon(token: string, thresholdMs = 30_000): boolean {
+  const [, payloadBase64] = token.split('.')
+  const payload = JSON.parse(atob(payloadBase64))
+  const expMs = payload.exp * 1000
+  return Date.now() >= (expMs - thresholdMs)
+}
+
+async function refreshSession(): Promise<void> {
+  const response = await fetch('/api/auth/refresh', {
+    method: 'POST',
+    credentials: 'include',
+  });
+  const data: any = await response.json();
+  localStorage.setItem('access_token', data.at);
+}
+
 //Verify if the current session is still valid
 export async function verifySession(accessToken: string): Promise<void> {
   try {
-    const response = await fetch('/api/auth/me', {
+    if (expiresSoon(accessToken)) {
+      await refreshSession();
+      accessToken = localStorage.getItem('access_token')!;
+    }
+    let response = await fetch('/api/auth/me', {
       headers: {
         'Authorization': `Bearer ${accessToken}`,
       },
@@ -17,7 +38,6 @@ export async function verifySession(accessToken: string): Promise<void> {
       throw new Error(`Auth check failed (${response.status})`);
     }
   } catch (error) {
-    console.error('Session verification failed:', error);
     throw error;
   }
 }
@@ -36,7 +56,11 @@ export async function handleApiCall(
   url: string,
   options: RequestInit = {}
 ): Promise<Response> {
-  const response = await fetch(url, {
+  if (expiresSoon(accessToken!)) {
+    await refreshSession();
+    accessToken = localStorage.getItem('access_token')!;
+  }
+  let response = await fetch(url, {
     ...options,
     headers: {
       ...options.headers,
@@ -60,7 +84,6 @@ export async function handleApiCall(
 export function showMessage(message: string, type: 'success' | 'error'): void {
   const container = document.getElementById('messageContainer');
   if (!container) {
-    console.warn('Message container not found');
     return;
   }
 
@@ -87,7 +110,6 @@ export async function handleLogout(): Promise<void> {
       credentials: 'include',
     });
   } catch (error) {
-    console.error('Logout error:', error);
   } finally {
     localStorage.removeItem('access_token');
     localStorage.removeItem('user');
@@ -108,9 +130,7 @@ export async function provisionProfile(accessToken: string): Promise<void> {
     });
 
     if (!response.ok) {
-      console.warn('Profile provision failed:', response.status);
     }
   } catch (error) {
-    console.error('Profile provision error:', error);
   }
 }

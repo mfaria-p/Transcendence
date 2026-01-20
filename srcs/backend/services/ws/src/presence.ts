@@ -6,33 +6,6 @@ type UserId = string;
 
 const connectionsByUser = new Map<UserId, Set<WebSocket>>();
 
-export function getUserSockets(userId: string): Set<WebSocket> | undefined {
-    return connectionsByUser.get(userId);
-}
-
-export function sendToUser(userId: string, payload: unknown): void {
-    const sockets = connectionsByUser.get(userId);
-    if (!sockets || sockets.size === 0) return;
-
-    const json = JSON.stringify(payload);
-    for (const socket of sockets) {
-        if (socket.readyState === socket.OPEN) {
-            socket.send(json);
-        }
-    }
-}
-
-export function broadcast(payload: unknown): void {
-    const json = JSON.stringify(payload);
-    for (const sockets of connectionsByUser.values()) {
-        for (const socket of sockets) {
-            if (socket.readyState === socket.OPEN) {
-                socket.send(json);
-            }
-        }
-    }
-}
-
 export function addConnection(userId: string, socket: WebSocket): { firstConnection: boolean } {
     let set = connectionsByUser.get(userId);
     if (!set) {

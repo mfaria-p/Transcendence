@@ -9,9 +9,8 @@
  */
 
 import type WebSocket from 'ws';
-import { sendToUser } from './presence.js';
-import { getMatchByRoomId, markMatchPlayingByRoomId, reportMatchResultByRoomId } from './tournament.js';
-import { emitTournamentUpdate, emitTournamentsChanged } from './events.js';
+import { forEachConnection } from './presence.js';
+import { getMatchByRoomId, reportMatchResultByRoomId } from './tournament.js';
 
 export interface GameMessage {
   type: string;
@@ -101,6 +100,9 @@ function parseTournamentRoomId(roomId: string): { tournamentId: string; matchId:
   return { tournamentId, matchId };
 }
 
+// Padding horizontal dos paddles (deve corresponder ao frontend)
+const PADDLE_PADDING_X = 16;
+
 function createInitialState(): GameState {
   const width = 800;
   const height = 450;
@@ -133,6 +135,15 @@ function resetBall(room: GameRoom, direction: Side): void {
   const sign = direction === 'right' ? 1 : -1;
   s.ballVX = Math.cos(angle) * speed * sign;
   s.ballVY = Math.sin(angle) * speed;
+}
+
+function sendToUser(userId: string, payload: unknown): void {
+  const json = JSON.stringify(payload);
+  forEachConnection((uid, socket) => {
+    if (uid === userId && socket.readyState === socket.OPEN) {
+      socket.send(json);
+    }
+  });
 }
 
 function debugToUser(userId: string, event: string, data?: Record<string, unknown>): void {
@@ -201,16 +212,6 @@ function startGame(room: GameRoom): void {
   if (!room.left || !room.right) return;
 
   room.status = 'playing';
-
-  // tournament: update match status -> "playing" once the authoritative loop starts
-  if (room.isTournament) {
-    const tournament = markMatchPlayingByRoomId(room.id);
-    if (tournament) {
-      emitTournamentUpdate(tournament);
-      emitTournamentsChanged();
-    }
-  }
-
   // reset flags para não interferir em futuros reusos
   room.ready.left = false;
   room.ready.right = false;
@@ -314,10 +315,11 @@ function checkPaddleCollision(room: GameRoom): void {
   const ballRight = s.ballX + s.ballSize;
   const ballTop = s.ballY;
   const ballBottom = s.ballY + s.ballSize;
+  const ballCenterY = s.ballY + s.ballSize / 2;
 
-  // paddle esquerda
-  const paddleLeftX1 = 0;
-  const paddleLeftX2 = s.paddleWidth;
+  // paddle esquerda (com padding)
+  const paddleLeftX1 = PADDLE_PADDING_X;
+  const paddleLeftX2 = PADDLE_PADDING_X + s.paddleWidth;
   const paddleLeftY1 = s.leftY;
   const paddleLeftY2 = s.leftY + s.paddleHeight;
 
@@ -328,13 +330,19 @@ function checkPaddleCollision(room: GameRoom): void {
     ballTop <= paddleLeftY2 &&
     s.ballVX < 0
   ) {
-    s.ballX = s.paddleWidth;
-    s.ballVX *= -1;
+    // Corrigir posição da bola para não ficar dentro do paddle
+    s.ballX = paddleLeftX2;
+    s.ballVX = -s.ballVX;
+    
+    // Adicionar variação vertical baseado em onde atingiu o paddle
+    const paddleCenterY = paddleLeftY1 + s.paddleHeight / 2;
+    const hitOffset = (ballCenterY - paddleCenterY) / (s.paddleHeight / 2);
+    s.ballVY += hitOffset * 150;
   }
 
-  // paddle direita
-  const paddleRightX2 = s.width;
-  const paddleRightX1 = s.width - s.paddleWidth;
+  // paddle direita (com padding)
+  const paddleRightX2 = s.width - PADDLE_PADDING_X;
+  const paddleRightX1 = s.width - PADDLE_PADDING_X - s.paddleWidth;
   const paddleRightY1 = s.rightY;
   const paddleRightY2 = s.rightY + s.paddleHeight;
 
@@ -345,8 +353,14 @@ function checkPaddleCollision(room: GameRoom): void {
     ballTop <= paddleRightY2 &&
     s.ballVX > 0
   ) {
-    s.ballX = s.width - s.paddleWidth - s.ballSize;
-    s.ballVX *= -1;
+    // Corrigir posição da bola para não ficar dentro do paddle
+    s.ballX = paddleRightX1 - s.ballSize;
+    s.ballVX = -s.ballVX;
+    
+    // Adicionar variação vertical baseado em onde atingiu o paddle
+    const paddleCenterY = paddleRightY1 + s.paddleHeight / 2;
+    const hitOffset = (ballCenterY - paddleCenterY) / (s.paddleHeight / 2);
+    s.ballVY += hitOffset * 150;
   }
 }
 
@@ -399,11 +413,9 @@ function finishGame(room: GameRoom, forfeitLoserId?: string): void {
     if (room.right) sendToUser(room.right.userId, payload);
 
     if (room.isTournament && room.tournamentId && room.matchId) {
-      const update = reportMatchResultByRoomId(room.id, winnerUserId);
-      if (update) {
-        emitTournamentUpdate(update.tournament);
-        emitTournamentsChanged();
-      }
+      // Updates tournament state and broadcasts user-scoped snapshots (tournaments:update)
+      // so that only relevant users receive private tournament details.
+      reportMatchResultByRoomId(room.id, winnerUserId);
     }
   }
 

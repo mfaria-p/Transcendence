@@ -5,6 +5,8 @@ import { initHeader } from './shared/header.js';
 document.addEventListener('DOMContentLoaded', async () => {
   const userStr = localStorage.getItem('user');
   const accessToken = localStorage.getItem('access_token');
+  const params = new URLSearchParams(location.search);
+  const isAiMode = params.get('mode') === 'ai';
   
   console.log('Auth check - userStr:', userStr);
   console.log('Auth check - accessToken:', accessToken);
@@ -17,7 +19,6 @@ document.addEventListener('DOMContentLoaded', async () => {
       initHeader({ active: 'home' });
       connectPresenceSocket();
     } catch (error) {
-      console.error('Error verifying session:', error);
       disconnectPresenceSocket();
       localStorage.removeItem('access_token');
       localStorage.removeItem('user');

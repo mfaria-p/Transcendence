@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link href="https://fonts.googleapis.com/css2?family=Oxanium:wght@400;600;700&display=swap" rel="stylesheet">
+	<link href="./output.css" rel="stylesheet">
+	<title>Pong - Privacy Policy </title>
+</head>
+
+<body class="terms-body">
+	<div id="globalHeader"></div>
+	<main class="terms-shell">
+		<article class="terms-card">
+			<header class="terms-header">
+				<p class="terms-kicker">42 Porto Project &mdash; Transcendence</p>
+				<h1>Privacy Policy</h1>
+				<p class="terms-lead">This Privacy Policy explains how the Transcendence platform collects, uses, and
+					protects your data. This project is academic and intended for evaluation within the 42 Porto
+					curriculum.</p>
+			</header>
+
+			<section class="terms-section">
+				<h2>1. Data Collection</h2>
+				<ul>
+					<li>We collect basic account information (username, email) for authentication purposes.</li>
+					<li>Game data (matches, scores, statistics) is stored to provide platform functionality.</li>
+					<li>Session data and authentication tokens are used to maintain secure access.</li>
+					<li>Profile information (avatar, display name) is collected if provided by users.</li>
+				</ul>
+			</section>
+
+			<section class="terms-section">
+				<h2>2. Use of Data</h2>
+				<ul>
+					<li>Data is used exclusively to operate and demonstrate the Transcendence platform.</li>
+					<li>Information is processed to provide game features, user profiles, and matchmaking.</li>
+					<li>No data is sold, shared with third parties, or used for commercial purposes.</li>
+					<li>Data may be used for academic evaluation and demonstration purposes within 42 Porto.</li>
+				</ul>
+			</section>
+
+			<section class="terms-section">
+				<h2>3. Data Storage and Security</h2>
+				<ul>
+					<li>Data is stored in secure databases with access restricted to project team members.</li>
+					<li>Passwords are hashed using industry-standard encryption algorithms.</li>
+					<li>Authentication tokens are managed securely and expire after inactivity.</li>
+					<li>All data may be removed at the end of the academic evaluation period.</li>
+				</ul>
+			</section>
+
+			<section class="terms-section">
+				<h2>4. Third-Party Authentication</h2>
+				<ul>
+					<li>OAuth authentication (e.g., Google) may be used for account access.</li>
+					<li>When using third-party authentication, their respective privacy policies also apply.</li>
+					<li>We only receive necessary information (email, name) from OAuth providers.</li>
+				</ul>
+			</section>
+
+			<section class="terms-section">
+				<h2>5. Cookies and Tracking</h2>
+				<ul>
+					<li>Session cookies are used to maintain authentication state.</li>
+					<li>No third-party tracking or analytics tools are used for commercial purposes.</li>
+					<li>Cookies are essential for platform functionality and cannot be disabled while using the service.
+					</li>
+				</ul>
+			</section>
+
+			<section class="terms-section">
+				<h2>6. User Rights</h2>
+				<ul>
+					<li>You can request access to your personal data stored in the platform.</li>
+					<li>You may request deletion of your account and associated data.</li>
+					<li>Data correction requests can be submitted to the project team.</li>
+					<li>Given the academic nature of the project, data retention policies may vary.</li>
+				</ul>
+			</section>
+
+			<section class="terms-section">
+				<h2>7. Data Retention</h2>
+				<ul>
+					<li>Data is retained for the duration of the academic project evaluation period.</li>
+					<li>All data may be permanently deleted after the project concludes.</li>
+					<li>Users will be notified if significant changes to data retention policies occur.</li>
+				</ul>
+			</section>
+
+			<section class="terms-section">
+				<h2>8. Children's Privacy</h2>
+				<ul>
+					<li>This platform is intended for use by 42 Porto students (18+ years old).</li>
+					<li>We do not knowingly collect data from individuals under 18 years of age.</li>
+				</ul>
+			</section>
+
+			<section class="terms-section">
+				<h2>9. Changes to This Policy</h2>
+				<ul>
+					<li>This Privacy Policy may be updated as the project evolves.</li>
+					<li>Significant changes will be communicated to active users.</li>
+					<li>Continued use of the platform constitutes acceptance of policy updates.</li>
+				</ul>
+			</section>
+
+			<section class="terms-section">
+				<h2>10. Contact</h2>
+				<p>For privacy-related questions, data requests, or concerns, contact the Transcendence project team at
+					42 Porto.</p>
+			</section>
+
+			<footer class="terms-footer">
+				<a class="terms-back" href="./landing.html" data-back-link>Back</a>
+			</footer>
+		</article>
+		<div id="globalFooterMount"></div>
+	</main>
+
+
+	<script type="module">
+		import { initHeader } from './shared/header.js';
+		import { initFooter } from './shared/footer.js';
+		initHeader();
+		initFooter({ containerId: 'globalFooterMount' });
+
+		const backLink = document.querySelector('[data-back-link]');
+		backLink?.addEventListener('click', (event) => {
+			if (window.history.length > 1) {
+				event.preventDefault();
+				window.history.back();
+			}
+		});
+	</script>
+
+</body>
+
+</html>

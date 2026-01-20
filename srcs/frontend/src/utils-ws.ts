@@ -5,13 +5,10 @@ let manualClose = false;
 type PresenceListener = (event: 'online' | 'offline', userId: string) => void;
 const presenceListeners: Set<PresenceListener> = new Set();
 
-type TournamentsChangedListener = () => void;
-const tournamentsChangedListeners: Set<TournamentsChangedListener> = new Set();
+type TournamentsListener = (payload: { tournaments: unknown[] }) => void;
+const tournamentsListeners: Set<TournamentsListener> = new Set();
 
-type TournamentUpdateListener = (tournament: unknown) => void;
-const tournamentUpdateListeners: Set<TournamentUpdateListener> = new Set();
-
-type UserEventListener = (event: string, data?: unknown) => void;
+type UserEventListener = (event: string, payload?: unknown) => void;
 const userEventListeners: Set<UserEventListener> = new Set();
 
 export function addPresenceListener(listener: PresenceListener): void {
@@ -22,20 +19,12 @@ export function removePresenceListener(listener: PresenceListener): void {
   presenceListeners.delete(listener);
 }
 
-export function addTournamentsChangedListener(listener: TournamentsChangedListener): void {
-  tournamentsChangedListeners.add(listener);
+export function addTournamentsListener(listener: TournamentsListener): void {
+  tournamentsListeners.add(listener);
 }
 
-export function removeTournamentsChangedListener(listener: TournamentsChangedListener): void {
-  tournamentsChangedListeners.delete(listener);
-}
-
-export function addTournamentUpdateListener(listener: TournamentUpdateListener): void {
-  tournamentUpdateListeners.add(listener);
-}
-
-export function removeTournamentUpdateListener(listener: TournamentUpdateListener): void {
-  tournamentUpdateListeners.delete(listener);
+export function removeTournamentsListener(listener: TournamentsListener): void {
+  tournamentsListeners.delete(listener);
 }
 
 export function addUserEventListener(listener: UserEventListener): void {
@@ -47,48 +36,35 @@ export function removeUserEventListener(listener: UserEventListener): void {
 }
 
 function notifyPresenceListeners(event: 'online' | 'offline', userId: string): void {
-  presenceListeners.forEach(listener => {
+  presenceListeners.forEach((listener) => {
     try {
       listener(event, userId);
-    } catch (error) {
-      console.error('[Presence WS] Error in listener:', error);
+    } catch {
     }
   });
 }
 
-function notifyTournamentsChangedListeners(): void {
-  tournamentsChangedListeners.forEach(listener => {
+function notifyTournamentsListeners(tournaments: unknown[]): void {
+  tournamentsListeners.forEach((listener) => {
     try {
-      listener();
-    } catch (error) {
-      console.error('[Realtime WS] Error in tournaments listener:', error);
+      listener({ tournaments });
+    } catch {
     }
   });
 }
 
-function notifyTournamentUpdateListeners(tournament: unknown): void {
-  tournamentUpdateListeners.forEach(listener => {
+function notifyUserEventListeners(eventName: string, payload?: unknown): void {
+  userEventListeners.forEach((listener) => {
     try {
-      listener(tournament);
-    } catch (error) {
-      console.error('[Realtime WS] Error in tournament update listener:', error);
-    }
-  });
-}
-
-function notifyUserEventListeners(event: string, data?: unknown): void {
-  userEventListeners.forEach(listener => {
-    try {
-      listener(event, data);
-    } catch (error) {
-      console.error('[Realtime WS] Error in user event listener:', error);
+      listener(eventName, payload);
+    } catch {
     }
   });
 }
 
 export function connectPresenceSocket(): void {
   const token = localStorage.getItem('access_token');
-  
+
   if (!token) {
     console.log('[Presence WS] No access token found, skipping connection');
     return;
@@ -103,8 +79,7 @@ export function connectPresenceSocket(): void {
 
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
   const url = `${protocol}//${window.location.host}/ws?token=${encodeURIComponent(token)}`;
-  
-  console.log('[Presence WS] Attempting to connect to:', url);
+
   ws = new WebSocket(url);
 
   ws.onopen = () => {
@@ -112,58 +87,46 @@ export function connectPresenceSocket(): void {
     if (reconnectTimer) {
       window.clearTimeout(reconnectTimer);
       reconnectTimer = null;
-      console.log('[Presence WS] Cleared reconnect timer');
     }
-    
+
     // Send subscribe message
     const subscribeMsg = JSON.stringify({ type: 'subscribe_presence' });
-    console.log('[Presence WS] Sending subscribe message:', subscribeMsg);
     ws?.send(subscribeMsg);
   };
 
   ws.onmessage = (event) => {
-    console.log('[Presence WS] Message received:', event.data);
     try {
       const message = JSON.parse(event.data);
-      console.log('[Presence WS] Parsed message:', message);
-      
+
       switch (message.type) {
         case 'hello':
-          console.log('[Presence WS] Hello message received. UserId:', message.userId, 'Online users:', message.onlineUsers);
+          // optional debug
           break;
+
         case 'presence':
-          console.log(`[Presence WS] Presence update: User ${message.userId} is now ${message.event}`);
-          notifyPresenceListeners(message.event, message.userId);
+          notifyPresenceListeners(message.event, String(message.userId));
           break;
+
         case 'pong':
-          console.log('[Presence WS] Pong received');
           break;
-        case 'tournaments:changed':
-          notifyTournamentsChangedListeners();
+
+        case 'tournaments:update':
+          notifyTournamentsListeners(message.tournaments ?? []);
           break;
-        case 'tournament:update':
-          notifyTournamentUpdateListeners(message.tournament);
-          break;
+
         case 'user:event':
-          if (typeof message.event === 'string') {
-            notifyUserEventListeners(message.event, message.data);
-          }
+          notifyUserEventListeners(String(message.event ?? ''), message.payload);
           break;
+
         default:
-          console.log('[Presence WS] Unknown message type:', message.type);
+          // optional debug
+          break;
       }
-    } catch (error) {
-      console.error('[Presence WS] Failed to parse message:', error);
+    } catch {
     }
   };
 
-  ws.onerror = (error) => {
-    console.error('[Presence WS] WebSocket error:', error);
-    console.error('[Presence WS] Error details:', {
-      readyState: ws?.readyState,
-      url: ws?.url,
-      protocol: ws?.protocol
-    });
+  ws.onerror = () => {
   };
 
   ws.onclose = (event) => {
@@ -171,13 +134,12 @@ export function connectPresenceSocket(): void {
       code: event.code,
       reason: event.reason,
       wasClean: event.wasClean,
-      manualClose: manualClose
+      manualClose: manualClose,
     });
-    
+
     ws = null;
-    
+
     if (!manualClose && localStorage.getItem('access_token')) {
-      console.log('[Presence WS] Will attempt to reconnect in 2 seconds...');
       reconnectTimer = window.setTimeout(() => {
         console.log('[Presence WS] Attempting reconnection...');
         connectPresenceSocket();
@@ -195,19 +157,16 @@ export function disconnectPresenceSocket(): void {
   if (reconnectTimer) {
     window.clearTimeout(reconnectTimer);
     reconnectTimer = null;
-    console.log('[Presence WS] Cleared reconnect timer');
   }
 
   if (ws) {
-    console.log('[Presence WS] Closing WebSocket connection');
     ws.close();
     ws = null;
   }
 
   presenceListeners.clear();
-  tournamentsChangedListeners.clear();
-  tournamentUpdateListeners.clear();
+  tournamentsListeners.clear();
   userEventListeners.clear();
-  
+
   console.log('[Presence WS] Disconnected');
 }

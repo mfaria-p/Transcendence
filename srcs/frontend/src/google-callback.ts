@@ -49,7 +49,6 @@ async function handleGoogleCallback() {
     throw new Error('Google authentication failed - no credentials received');
 
   } catch (error: any) {
-    console.error('Google callback error:', error);
     
     if (loadingSpinner) loadingSpinner.classList.add('hidden');
     if (statusText) statusText.classList.add('hidden');

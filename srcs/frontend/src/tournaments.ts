@@ -1,9 +1,6 @@
 import { initHeader } from './shared/header.js';
-import {
-  connectPresenceSocket,
-  addTournamentsChangedListener,
-  addTournamentUpdateListener,
-} from './utils-ws.js';
+import { verifySession, clearSessionAndRedirect, showMessage } from './utils-api.js';
+import { connectPresenceSocket, addTournamentsListener } from './utils-ws.js';
 
 interface User {
   id: string;
@@ -40,29 +37,41 @@ interface Tournament {
 
 class TournamentsPage {
   private currentUser: User | null = null;
-  private accessToken: string | null = null;
   private isLoading = false;
   private nameCache = new Map<string, string>();
   private fetchingNames = new Set<string>();
   private tournamentsCache: Tournament[] = [];
   private historyCache: Tournament[] = [];
   private waitingOverlay: HTMLDivElement | null = null;
-  private waitingInterval: number | null = null;
   private waitingTournamentId: string | null = null;
   private waitingOwnerAutoStartTriggered = false;
   private waitingAutoStartIfOwner = false;
-  private realtimeReloadTimer: number | null = null;
   private privateCodeBanner: HTMLDivElement | null = null;
+  private handleBeforeUnload = (): void => {
+    if (this.waitingTournamentId) {
+      this.leaveTournamentKeepalive(this.waitingTournamentId);
+    }
+  };
+  private tournamentsWsListener = (payload: { tournaments: unknown[] }): void => {
+    const tournaments = (payload.tournaments ?? []) as Tournament[];
+    this.processTournaments(tournaments);
+    this.handleWaitingTournamentUpdate(tournaments);
+  };
+  private listPollingInterval: number | null = null;
+  private listPollingMs = 5000;
 
   constructor() {
     void this.init();
   }
 
+  private accessToken(): string | null {
+    return localStorage.getItem('access_token');
+  }
+
   private async init(): Promise<void> {
     const userStr = localStorage.getItem('user');
-    this.accessToken = localStorage.getItem('access_token');
 
-    if (!userStr || !this.accessToken) {
+    if (!userStr || !this.accessToken()!) {
       window.location.href = './login.html';
       return;
     }
@@ -76,76 +85,25 @@ class TournamentsPage {
       return;
     }
 
+    // Verify session before proceeding
+    try {
+      await verifySession(this.accessToken()!);
+    } catch (error) {
+      if (error instanceof Error && error.message === 'Session expired') {
+        showMessage('Session expired. Redirecting to login...', 'error');
+        setTimeout(() => {
+          clearSessionAndRedirect();
+        }, 2000);
+        return;
+      }
+    }
+
     initHeader({ active: 'tournaments' });
-
-    // Realtime (WebSocket) connection: used for tournaments list invalidation
-    // and tournament-specific updates (waiting room / bracket changes).
-    connectPresenceSocket();
-    this.setupRealtimeListeners();
-
+    window.addEventListener('beforeunload', this.handleBeforeUnload);
     this.setupEventListeners();
+    connectPresenceSocket();
+    addTournamentsListener(this.tournamentsWsListener);
     await this.loadTournaments();
-  }
-
-  private setupRealtimeListeners(): void {
-    // Debounced list reload when any tournament changes.
-    addTournamentsChangedListener(() => {
-      this.scheduleReload();
-    });
-
-    // Tournament snapshots pushed by the server (only to participants/owner).
-    addTournamentUpdateListener((tournament) => {
-      this.handleTournamentUpdate(tournament);
-    });
-  }
-
-  private scheduleReload(): void {
-    if (this.realtimeReloadTimer !== null) return;
-    this.realtimeReloadTimer = window.setTimeout(() => {
-      this.realtimeReloadTimer = null;
-      void this.loadTournaments();
-    }, 250);
-  }
-
-  private handleTournamentUpdate(raw: unknown): void {
-    const tournament = raw as Tournament | null;
-    if (!tournament || typeof tournament.id !== 'string') return;
-
-    // If the user is currently in a waiting overlay for this tournament,
-    // update the counter + auto-redirect when it starts.
-    if (this.waitingTournamentId && tournament.id === this.waitingTournamentId) {
-      this.renderWaitingOverlay(tournament);
-      void this.maybeHandleWaitingTournament(tournament);
-    }
-
-    // Keep list view fresh.
-    this.scheduleReload();
-  }
-
-  private async maybeHandleWaitingTournament(tournament: Tournament): Promise<void> {
-    if (!this.currentUser) return;
-    if (!this.waitingTournamentId || tournament.id !== this.waitingTournamentId) return;
-
-    if (tournament.status === 'running') {
-      this.stopWaitingPopup();
-      await this.redirectToMatch(tournament);
-      return;
-    }
-
-    const playerCount = tournament.players.length;
-    const cap = tournament.maxPlayers;
-    const isOwner = this.currentUser.id === tournament.ownerId;
-
-    if (
-      this.waitingAutoStartIfOwner &&
-      isOwner &&
-      !this.waitingOwnerAutoStartTriggered &&
-      tournament.status === 'waiting' &&
-      playerCount >= cap
-    ) {
-      this.waitingOwnerAutoStartTriggered = true;
-      await this.startTournament(tournament.id, null, { redirectAfterStart: false, skipMessage: true });
-    }
   }
 
   private setupEventListeners(): void {
@@ -166,15 +124,38 @@ class TournamentsPage {
     });
   }
 
+  private processTournaments(tournaments: Tournament[]): void {
+    const cutoffMs = 21 * 60 * 1000;
+    const now = Date.now();
+
+    const ongoing = tournaments.filter((t) => {
+      const referenceTs = t.updatedAt ?? t.createdAt ?? 0;
+      const age = now - referenceTs;
+      const isStaleWaiting = t.status === 'waiting' && age > cutoffMs;
+      return t.status !== 'finished' && !isStaleWaiting;
+    });
+    const finishedSorted = tournaments
+      .filter((t) => t.status === 'finished')
+      .sort((a, b) => (b.updatedAt ?? b.createdAt) - (a.updatedAt ?? a.createdAt))
+      .slice(0, 10);
+
+    const ongoingSorted = [...ongoing].sort((a, b) => (b.updatedAt ?? b.createdAt) - (a.updatedAt ?? a.createdAt));
+
+    this.tournamentsCache = ongoingSorted;
+    this.historyCache = finishedSorted;
+    this.renderTournaments(ongoingSorted);
+    this.renderHistory(finishedSorted);
+  }
+
   private async loadTournaments(): Promise<void> {
-    if (!this.accessToken || this.isLoading) return;
+    if (!this.accessToken()! || this.isLoading) return;
     this.isLoading = true;
     this.toggleLoadingState(true);
 
     try {
       const response = await fetch('/api/realtime/tournaments', {
         headers: {
-          'Authorization': `Bearer ${this.accessToken}`,
+          'Authorization': `Bearer ${this.accessToken()!}`,
         },
       });
 
@@ -185,28 +166,8 @@ class TournamentsPage {
       const data = await response.json();
       const tournaments: Tournament[] = data.tournaments ?? [];
 
-      const cutoffMs = 21 * 60 * 1000;
-      const now = Date.now();
-
-      const ongoing = tournaments.filter((t) => {
-        const referenceTs = t.updatedAt ?? t.createdAt ?? 0;
-        const age = now - referenceTs;
-        const isStaleWaiting = t.status === 'waiting' && age > cutoffMs;
-        return t.status !== 'finished' && !isStaleWaiting;
-      });
-      const finishedSorted = tournaments
-        .filter((t) => t.status === 'finished')
-        .sort((a, b) => (b.updatedAt ?? b.createdAt) - (a.updatedAt ?? a.createdAt))
-        .slice(0, 10);
-
-      const ongoingSorted = [...ongoing].sort((a, b) => (b.updatedAt ?? b.createdAt) - (a.updatedAt ?? a.createdAt));
-
-      this.tournamentsCache = ongoingSorted;
-      this.historyCache = finishedSorted;
-      this.renderTournaments(ongoingSorted);
-      this.renderHistory(finishedSorted);
+      this.processTournaments(tournaments);
     } catch (error) {
-      console.error('loadTournaments error:', error);
       this.showMessage('Unable to load tournaments.', 'error');
     } finally {
       this.isLoading = false;
@@ -222,6 +183,33 @@ class TournamentsPage {
       refreshButton.classList.toggle('cursor-not-allowed', isLoading);
     }
   }
+
+  private startListPolling(): void {
+    if (this.listPollingInterval !== null) {
+      window.clearInterval(this.listPollingInterval);
+    }
+
+    this.listPollingInterval = window.setInterval(() => {
+      if (document.visibilityState === 'hidden') return;
+      void this.loadTournaments();
+    }, this.listPollingMs);
+  }
+
+  private stopListPolling(): void {
+    if (this.listPollingInterval !== null) {
+      window.clearInterval(this.listPollingInterval);
+      this.listPollingInterval = null;
+    }
+  }
+
+  private handleVisibilityChange = (): void => {
+    if (document.visibilityState === 'hidden') {
+      this.stopListPolling();
+    } else {
+      this.startListPolling();
+      void this.loadTournaments();
+    }
+  };
 
   private renderTournaments(tournaments: Tournament[]): void {
     const list = document.getElementById('tournamentsList');
@@ -250,7 +238,8 @@ class TournamentsPage {
         !isPrivate &&
         ((tournament.status === 'waiting' && hasOpenSlot) ||
           (tournament.status === 'running' && tournament.maxPlayers === 2 && hasOpenSlot));
-      const canStart = isOwner && tournament.status === 'waiting' && tournament.players.length >= 2;
+      const canStart = isOwner && tournament.status === 'waiting' && tournament.players.length === tournament.maxPlayers;
+      const canLeave = isParticipant && tournament.status === 'waiting';
       const activeMatch = this.getCurrentMatchForUser(tournament);
 
       const statusClasses = this.getStatusClasses(tournament.status);
@@ -298,6 +287,7 @@ class TournamentsPage {
           <div class="flex flex-wrap gap-3">
             ${canJoin ? '<button data-action="join" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg transition">Join</button>' : ''}
             ${canStart ? '<button data-action="start" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition">Start</button>' : ''}
+            ${canLeave ? '<button data-action="leave" class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg transition">Leave</button>' : ''}
             ${activeMatch ? `<a href="./match.html?roomId=${activeMatch.roomId}" data-action="enter-room" class="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg transition">Enter room</a>` : ''}
             <button data-action="details" class="bg-gray-700 hover:bg-gray-600 text-white px-4 py-2 rounded-lg transition">Details</button>
           </div>
@@ -323,6 +313,11 @@ class TournamentsPage {
       const startButton = card.querySelector('[data-action="start"]') as HTMLButtonElement | null;
       startButton?.addEventListener('click', () => {
         void this.startTournament(tournament.id, startButton);
+      });
+
+      const leaveButton = card.querySelector('[data-action="leave"]') as HTMLButtonElement | null;
+      leaveButton?.addEventListener('click', () => {
+        void this.leaveTournament(tournament.id, leaveButton);
       });
 
       const copyBtn = card.querySelector(`[data-copy-code="${tournament.id}"]`) as HTMLButtonElement | null;
@@ -443,7 +438,7 @@ class TournamentsPage {
   }
 
   private async enqueueProfileFetch(userId: string): Promise<void> {
-    if (!this.accessToken) return;
+    if (!this.accessToken()!) return;
     if (this.nameCache.has(userId) || this.fetchingNames.has(userId)) return;
     this.fetchingNames.add(userId);
     try {
@@ -454,7 +449,6 @@ class TournamentsPage {
       this.renderTournaments(this.tournamentsCache);
       this.renderHistory(this.historyCache);
     } catch (err) {
-      console.warn('Failed to fetch player name', userId, err);
     } finally {
       this.fetchingNames.delete(userId);
     }
@@ -463,7 +457,7 @@ class TournamentsPage {
   private async loadWinnerName(tournament: Tournament): Promise<void> {
     const winnerId = tournament.winnerId;
     if (!winnerId || this.nameCache.has(winnerId) || this.fetchingNames.has(winnerId)) return;
-    if (!this.accessToken) return;
+    if (!this.accessToken()!) return;
 
     this.fetchingNames.add(winnerId);
     try {
@@ -477,17 +471,16 @@ class TournamentsPage {
         el.textContent = display;
       }
     } catch (err) {
-      console.warn('Failed to fetch winner name', winnerId, err);
     } finally {
       this.fetchingNames.delete(winnerId);
     }
   }
 
   private async fetchUserProfile(userId: string): Promise<{ name?: string; username?: string; id?: string } | null> {
-    if (!this.accessToken) return null;
+    if (!this.accessToken()!) return null;
     try {
       const res = await fetch(`/api/auth/${userId}`, {
-        headers: { 'Authorization': `Bearer ${this.accessToken}` },
+        headers: { 'Authorization': `Bearer ${this.accessToken()!}` },
       });
       if (!res.ok) return null;
       const data = await res.json();
@@ -544,7 +537,7 @@ class TournamentsPage {
   }
 
   private async createTournament(): Promise<void> {
-    if (!this.accessToken) return;
+    if (!this.accessToken()!) return;
 
     const nameInput = document.getElementById('tournamentName') as HTMLInputElement | null;
     const sizeSelect = document.getElementById('tournamentSize') as HTMLSelectElement | null;
@@ -568,7 +561,7 @@ class TournamentsPage {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${this.accessToken}`,
+          'Authorization': `Bearer ${this.accessToken()!}`,
         },
         body: JSON.stringify(payload),
       });
@@ -608,7 +601,6 @@ class TournamentsPage {
 
       await this.loadTournaments();
     } catch (error) {
-      console.error('createTournament error:', error);
       this.showMessage((error as Error).message ?? 'Error creating tournament.', 'error');
     }
   }
@@ -645,7 +637,7 @@ class TournamentsPage {
   }
 
   private async joinPrivateTournament(): Promise<void> {
-    if (!this.accessToken) return;
+    if (!this.accessToken()!) return;
 
     const input = document.getElementById('privateJoinCode') as HTMLInputElement | null;
     const raw = input?.value.trim() ?? '';
@@ -666,7 +658,7 @@ class TournamentsPage {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${this.accessToken}`,
+          'Authorization': `Bearer ${this.accessToken()!}`,
         },
         body: JSON.stringify({ code }),
       });
@@ -692,7 +684,6 @@ class TournamentsPage {
 
       await this.loadTournaments();
     } catch (error) {
-      console.error('joinPrivateTournament error:', error);
       this.showMessage((error as Error).message ?? 'Could not join.', 'error');
     } finally {
       if (btn) {
@@ -703,7 +694,7 @@ class TournamentsPage {
   }
 
   private async joinTournament(tournamentId: string, button?: HTMLButtonElement): Promise<void> {
-    if (!this.accessToken) return;
+    if (!this.accessToken()!) return;
 
     if (button) {
       button.disabled = true;
@@ -714,7 +705,7 @@ class TournamentsPage {
       const response = await fetch(`/api/realtime/tournaments/${tournamentId}/join`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${this.accessToken}`,
+          'Authorization': `Bearer ${this.accessToken()!}`,
         },
       });
 
@@ -743,8 +734,72 @@ class TournamentsPage {
 
       await this.loadTournaments();
     } catch (error) {
-      console.error('joinTournament error:', error);
       this.showMessage((error as Error).message ?? 'Error joining tournament.', 'error');
+    } finally {
+      if (button) {
+        button.disabled = false;
+        button.classList.remove('opacity-50', 'cursor-not-allowed');
+      }
+    }
+  }
+
+  private leaveTournamentKeepalive(tournamentId: string): void {
+    if (!this.accessToken) return;
+    fetch(`/api/realtime/tournaments/${tournamentId}/leave`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${this.accessToken}`,
+      },
+      body: '{}',
+      keepalive: true,
+    }).catch(() => {
+      /* ignore */
+    });
+  }
+
+  private async leaveTournament(
+    tournamentId: string,
+    button?: HTMLButtonElement | null,
+    options?: { silent?: boolean },
+  ): Promise<boolean> {
+    if (!this.accessToken) return false;
+
+    if (button) {
+      button.disabled = true;
+      button.classList.add('opacity-50', 'cursor-not-allowed');
+    }
+
+    try {
+      const response = await fetch(`/api/realtime/tournaments/${tournamentId}/leave`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${this.accessToken}`,
+        },
+        body: '{}',
+      });
+
+      const data = await response.json().catch(() => null);
+      if (!response.ok) {
+        throw new Error(data?.error ?? 'Unable to leave the tournament');
+      }
+
+      if (this.waitingTournamentId === tournamentId) {
+        this.stopWaitingPopup();
+      }
+
+      await this.loadTournaments();
+
+      if (!options?.silent) {
+        this.showMessage('You left the tournament.', 'success');
+      }
+      return true;
+    } catch (error) {
+      if (!options?.silent) {
+        this.showMessage((error as Error).message ?? 'Error leaving tournament.', 'error');
+      }
+      return false;
     } finally {
       if (button) {
         button.disabled = false;
@@ -758,7 +813,7 @@ class TournamentsPage {
     button?: HTMLButtonElement | null,
     options?: { redirectAfterStart?: boolean; skipMessage?: boolean },
   ): Promise<Tournament | null> {
-    if (!this.accessToken) return null;
+    if (!this.accessToken()!) return null;
 
     if (button) {
       button.disabled = true;
@@ -769,7 +824,7 @@ class TournamentsPage {
       const response = await fetch(`/api/realtime/tournaments/${tournamentId}/start`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${this.accessToken}`,
+          'Authorization': `Bearer ${this.accessToken()!}`,
         },
       });
 
@@ -791,7 +846,6 @@ class TournamentsPage {
       await this.loadTournaments();
       return tournament;
     } catch (error) {
-      console.error('startTournament error:', error);
       this.showMessage((error as Error).message ?? 'Error starting tournament.', 'error');
       return null;
     } finally {
@@ -808,17 +862,54 @@ class TournamentsPage {
     this.stopWaitingPopup();
     this.waitingTournamentId = tournament.id;
     this.waitingOwnerAutoStartTriggered = false;
-    this.waitingAutoStartIfOwner = Boolean(options?.autoStartIfOwner);
+    this.waitingAutoStartIfOwner = options?.autoStartIfOwner ?? false;
+
     this.renderWaitingOverlay(tournament);
 
-    // Fetch once to avoid relying on stale state, then rely on realtime websocket updates.
-    void this.fetchTournament(tournament.id).then(async (latest) => {
-      if (!latest) return;
-      if (!this.waitingTournamentId || this.waitingTournamentId !== tournament.id) return;
-      this.renderWaitingOverlay(latest);
-      await this.maybeHandleWaitingTournament(latest);
-    });
+    // Handle current state immediately (e.g., tournament already full).
+    this.handleWaitingTournamentUpdate([tournament]);
   }
+
+  private handleWaitingTournamentUpdate(tournaments: Tournament[]): void {
+    if (!this.waitingTournamentId) return;
+
+    const latest = tournaments.find((t) => t && typeof t === "object" && (t as Tournament).id === this.waitingTournamentId) as
+      | Tournament
+      | undefined;
+
+    if (!latest) {
+      // If we no longer see this tournament, stop waiting.
+      this.stopWaitingPopup();
+      return;
+    }
+
+    this.renderWaitingOverlay(latest);
+
+    if (latest.status === "running") {
+      void this.redirectToMatch(latest);
+      return;
+    }
+
+    if (latest.status !== "waiting") {
+      this.stopWaitingPopup();
+      return;
+    }
+
+    const playerCount = latest.players.length;
+    const cap = latest.maxPlayers;
+    const isOwner = this.currentUser?.id === latest.ownerId;
+
+    if (
+      this.waitingAutoStartIfOwner &&
+      isOwner &&
+      !this.waitingOwnerAutoStartTriggered &&
+      playerCount >= cap
+    ) {
+      this.waitingOwnerAutoStartTriggered = true;
+      void this.startTournament(latest.id, null, { redirectAfterStart: false, skipMessage: true });
+    }
+  }
+
 
   private renderWaitingOverlay(tournament: Tournament): void {
     const count = tournament.players.length;
@@ -826,11 +917,12 @@ class TournamentsPage {
 
     if (!this.waitingOverlay) {
       const overlay = document.createElement('div');
-      overlay.className = 'fixed bottom-4 right-4 z-50 bg-gray-900 border border-green-500/60 shadow-2xl rounded-xl p-4 w-72';
+      overlay.className = 'fixed bottom-4 left-6 z-50 bg-gray-900 border border-green-500/60 shadow-2xl rounded-xl p-4 w-72';
       overlay.innerHTML = `
         <p class="text-sm text-green-300 font-semibold">Waiting for players...</p>
         <p id="waitingCounter" class="text-2xl font-bold text-white mt-1"></p>
         <p class="text-xs text-gray-400 mt-2">You will be redirected automatically when the lobby is full.</p>
+        <button id="leaveWaitingButton" class="mt-3 w-full bg-red-600 hover:bg-red-700 text-white px-3 py-2 rounded transition">Leave queue</button>
       `;
       document.body.appendChild(overlay);
       this.waitingOverlay = overlay;
@@ -840,13 +932,16 @@ class TournamentsPage {
     if (counter) {
       counter.textContent = `Players: ${count} / ${cap}`;
     }
+
+    const leaveBtn = this.waitingOverlay.querySelector('#leaveWaitingButton') as HTMLButtonElement | null;
+    if (leaveBtn) {
+      leaveBtn.onclick = () => {
+        void this.leaveTournament(tournament.id, leaveBtn);
+      };
+    }
   }
 
   private stopWaitingPopup(): void {
-    if (this.waitingInterval !== null) {
-      window.clearInterval(this.waitingInterval);
-      this.waitingInterval = null;
-    }
     this.waitingTournamentId = null;
     this.waitingOwnerAutoStartTriggered = false;
     this.waitingAutoStartIfOwner = false;
@@ -857,17 +952,16 @@ class TournamentsPage {
   }
 
   private async fetchTournament(tournamentId: string): Promise<Tournament | null> {
-    if (!this.accessToken) return null;
+    if (!this.accessToken()!) return null;
 
     try {
       const res = await fetch(`/api/realtime/tournaments/${tournamentId}`, {
-        headers: { 'Authorization': `Bearer ${this.accessToken}` },
+        headers: { 'Authorization': `Bearer ${this.accessToken()!}` },
       });
       if (!res.ok) return null;
       const data = await res.json().catch(() => null);
       return (data?.tournament as Tournament) ?? null;
     } catch (err) {
-      console.warn('fetchTournament failed', err);
       return null;
     }
   }
@@ -879,21 +973,8 @@ class TournamentsPage {
     const match = this.getCurrentMatchForUser(resolved);
     if (match) {
       window.location.href = `./match.html?roomId=${match.roomId}`;
-    }
-  }
-
-  private async handleLogout(): Promise<void> {
-    try {
-      await fetch('/api/auth/logout', {
-        method: 'POST',
-        credentials: 'include',
-      });
-    } catch (error) {
-      console.error('logout error:', error);
-    } finally {
-      localStorage.removeItem('access_token');
-      localStorage.removeItem('user');
-      window.location.href = './login.html';
+    } else {
+      this.showMessage('No active match found. Please try again.', 'error');
     }
   }
 

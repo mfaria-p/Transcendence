@@ -1,4 +1,6 @@
 import crypto from 'node:crypto';
+import type WebSocket from 'ws';
+import { forEachConnection } from './presence.js';
 
 export type TournamentStatus = 'waiting' | 'running' | 'finished';
 export type MatchStatus = 'pending' | 'playing' | 'finished';
@@ -65,12 +67,39 @@ export function getTournament(id: string): Tournament | undefined {
   return tournaments.get(id);
 }
 
+function safeSend(socket: WebSocket, payload: unknown): void {
+  if (socket.readyState === socket.OPEN) {
+    socket.send(JSON.stringify(payload));
+  }
+}
+
+function broadcastTournamentSnapshot(): void {
+  forEachConnection((userId, socket) => {
+    const view = listTournaments(userId);
+    safeSend(socket, { type: 'tournaments:update', tournaments: view });
+  });
+}
+
 export function createTournament(input: {
   ownerId: string;
   name?: string;
   maxPlayers?: number;
   isPrivate?: boolean;
 }): Tournament {
+  // Block multiple concurrent 4-player tournaments per owner until they leave
+  for (const t of tournaments.values()) {
+    if (t.ownerId === input.ownerId && t.maxPlayers === 4 && t.status === 'waiting') {
+      throw new Error('You already have a 4-player tournament waiting; leave it before creating another');
+    }
+  }
+
+  // Block creating any tournament while the user is queued in a waiting 4-player tournament (owner or not)
+  for (const t of tournaments.values()) {
+    if (t.status === 'waiting' && t.maxPlayers === 4 && t.players.includes(input.ownerId)) {
+      throw new Error('Leave your current 4-player tournament before creating a new one');
+    }
+  }
+
   const maxPlayers = input.maxPlayers && input.maxPlayers > 1 ? input.maxPlayers : 4;
   const isPrivate = Boolean(input.isPrivate);
   const visibility: 'public' | 'private' = isPrivate ? 'private' : 'public';
@@ -96,6 +125,7 @@ export function createTournament(input: {
   }
 
   tournaments.set(t.id, t);
+  broadcastTournamentSnapshot();
   return t;
 }
 
@@ -122,6 +152,7 @@ export function joinTournament(tournamentId: string, userId: string, joinCode?: 
 
     t.players.push(userId);
     t.updatedAt = now();
+    broadcastTournamentSnapshot();
     return t;
   }
 
@@ -148,6 +179,7 @@ export function joinTournament(tournamentId: string, userId: string, joinCode?: 
       pendingWithSlot.player2Id = userId;
     }
     t.updatedAt = now();
+    broadcastTournamentSnapshot();
     return t;
   }
 
@@ -161,6 +193,38 @@ export function joinTournamentWithCode(tournamentId: string, userId: string, joi
   }
 
   return joinTournament(tournamentId, userId, joinCode);
+}
+
+export function leaveTournament(tournamentId: string, userId: string): Tournament | null {
+  const t = tournaments.get(tournamentId);
+  if (!t) {
+    throw new Error('Tournament not found');
+  }
+
+  if (t.status !== 'waiting') {
+    throw new Error('Tournament already started');
+  }
+
+  const idx = t.players.indexOf(userId);
+  if (idx === -1) {
+    return t;
+  }
+
+  t.players.splice(idx, 1);
+
+  if (t.players.length === 0) {
+    tournaments.delete(tournamentId);
+    broadcastTournamentSnapshot();
+    return null;
+  }
+
+  if (t.ownerId === userId) {
+    t.ownerId = t.players[0] ?? t.ownerId;
+  }
+
+  t.updatedAt = now();
+  broadcastTournamentSnapshot();
+  return t;
 }
 
 export function findTournamentByJoinCode(code: string): Tournament | undefined {
@@ -217,6 +281,11 @@ export function startTournament(tournamentId: string): Tournament {
   }
   if (t.status !== 'waiting') {
     throw new Error('Tournament already started');
+  }
+
+  // For 4-player tournaments, require full lobby before starting
+  if (t.maxPlayers === 4 && t.players.length < t.maxPlayers) {
+    throw new Error('Tournament needs 4 players to start');
   }
 
   // Caminho 1v1: podemos iniciar com apenas um jogador (host entra na sala e espera oponente).
@@ -303,6 +372,7 @@ export function startTournament(tournamentId: string): Tournament {
   t.matches = matches;
   t.status = 'running';
   t.updatedAt = now();
+  broadcastTournamentSnapshot();
   return t;
 }
 
@@ -319,23 +389,6 @@ export function getMatchByRoomId(
   if (!match) return undefined;
 
   return { tournament: t, match };
-}
-
-/**
- * Marks a match as "playing" based on the game room id.
- *
- * This is used by the game server when the authoritative loop starts.
- */
-export function markMatchPlayingByRoomId(roomId: string): Tournament | undefined {
-  const info = getMatchByRoomId(roomId);
-  if (!info) return undefined;
-
-  const { tournament, match } = info;
-  if (match.status !== 'finished' && match.status !== 'playing') {
-    match.status = 'playing';
-    tournament.updatedAt = now();
-  }
-  return tournament;
 }
 
 /**
@@ -383,7 +436,9 @@ export function reportMatchResultByRoomId(
   }
 
   if (finalMatch) {
+    broadcastTournamentSnapshot();
     return { tournament, match, finalMatch };
   }
+  broadcastTournamentSnapshot();
   return { tournament, match };
 }

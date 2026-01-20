@@ -4,7 +4,7 @@ import type {FastifyInstance, FastifyRequest, FastifyReply} from 'fastify';
 import type {Profile, FriendRequest, FriendRequestStatus, Friendship} from './generated/prisma/client.js';
 import * as schemas from './schemas.js';
 import * as utils from './utils.js';
-import { pushUserEvent } from './realtime.js';
+import { emitUserEvent } from './realtime.js';
 
 export default async function (app: FastifyInstance): Promise<void> {
   app.put('/provision', {schema: schemas.putProfileOpts, preHandler: [app.authenticate]}, async (req: FastifyRequest, reply: FastifyReply) => {
@@ -83,12 +83,9 @@ export default async function (app: FastifyInstance): Promise<void> {
     const {message} = req.body as {message?: string};
 
     const request: FriendRequest = await utils.requestCreate(app.prisma, profileId, toProfileId, message);
-
-    // Best-effort realtime notification (receiver + sender)
-    void pushUserEvent([profileId, toProfileId], 'friend_request:created', {
-      fromProfileId: profileId,
-      toProfileId,
-    });
+    // Realtime notification (best-effort)
+    void emitUserEvent([toProfileId], 'friend_request:received', { fromProfileId: profileId });
+    void emitUserEvent([profileId], 'friend_request:sent', { toProfileId });
 
     return {
       success: true,
@@ -127,12 +124,9 @@ export default async function (app: FastifyInstance): Promise<void> {
 
     const request = await utils.requestUpdate(app.prisma, fromProfileId, profileId, 'ACCEPTED');
     const friend = await utils.friendCreate(app.prisma, fromProfileId, profileId);
-
-    // Best-effort realtime notification (both sides)
-    void pushUserEvent([profileId, fromProfileId], 'friend_request:accepted', {
-      fromProfileId,
-      toProfileId: profileId,
-    });
+    // Realtime notification (best-effort)
+    void emitUserEvent([fromProfileId, profileId], 'friend_request:accepted', { fromProfileId, toProfileId: profileId });
+    void emitUserEvent([fromProfileId, profileId], 'friendship:created', { profileIdA: fromProfileId, profileIdB: profileId });
 
     return {
       success: true,
@@ -148,11 +142,9 @@ export default async function (app: FastifyInstance): Promise<void> {
 
     const request = await utils.requestDelete(app.prisma, fromProfileId, profileId, 'PENDING');
 
-    // Best-effort realtime notification (both sides)
-    void pushUserEvent([profileId, fromProfileId], 'friend_request:declined', {
-      fromProfileId,
-      toProfileId: profileId,
-    });
+    // Realtime notification (best-effort)
+    void emitUserEvent([fromProfileId, profileId], 'friend_request:declined', { fromProfileId, toProfileId: profileId });
+
 
     return {
       success: true,
@@ -167,11 +159,9 @@ export default async function (app: FastifyInstance): Promise<void> {
 
     const request = await utils.requestDelete(app.prisma, profileId, toProfileId, 'PENDING');
 
-    // Best-effort realtime notification (both sides)
-    void pushUserEvent([profileId, toProfileId], 'friend_request:cancelled', {
-      fromProfileId: profileId,
-      toProfileId,
-    });
+    // Realtime notification (best-effort)
+    void emitUserEvent([toProfileId, profileId], 'friend_request:canceled', { fromProfileId: profileId, toProfileId });
+
 
     return {
       success: true,
@@ -192,11 +182,9 @@ export default async function (app: FastifyInstance): Promise<void> {
     } catch (err) {}
     const friendship = await utils.friendDelete(app.prisma, profileId, friendProfileId);
 
-    // Best-effort realtime notification (both sides)
-    void pushUserEvent([profileId, friendProfileId], 'friends:changed', {
-      profileId,
-      friendProfileId,
-    });
+    // Realtime notification (best-effort)
+    void emitUserEvent([profileId, friendProfileId], 'friendship:deleted', { profileIdA: profileId, profileIdB: friendProfileId });
+
 
     return {
       success: true,

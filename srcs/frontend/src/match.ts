@@ -1,4 +1,5 @@
 import { initHeader } from './shared/header.js';
+import { verifySession, clearSessionAndRedirect } from './utils-api.js';
 
 interface User {
 	id: string;
@@ -78,9 +79,10 @@ type KnownServerMessage =
 	| { type: 'hello'; userId: string }
 	| { type: 'pong'; ts?: number }
 	| { type: 'presence'; event: string; userId: string }
-	| { type: 'tournaments:changed'; ts?: number }
-	| { type: 'tournament:update'; tournament: unknown; ts?: number }
-	| { type: 'user:event'; event: string; data?: unknown; ts?: number };
+	| { type: 'tournaments:update'; tournaments: unknown[] }
+	| { type: 'user:event'; event: string; payload?: unknown }
+	| { type: 'tournament:update'; tournament: unknown };
+
 
 interface TournamentMatchSummary {
 	id: string;
@@ -189,10 +191,9 @@ class TournamentMatchPage {
 	private readonly isQuickMatch: boolean;
 	private roomId: string | null;
 	private readonly initialRoomFromUrl: string | null;
-	private nextMatchInterval: number | null = null;
+	private waitingNextMatchSourceMatchId: string | null = null;
 	private nextMatchOverlay: HTMLDivElement | null = null;
 	private redirectingToNextMatch = false;
-	private waitingNextMatchFromMatchId: string | null = null;
 	private quickWaitOverlay: HTMLElement | null = null;
 	private quickWaitText: HTMLElement | null = null;
 	private quickWaitCancelBtn: HTMLButtonElement | null = null;
@@ -303,7 +304,6 @@ class TournamentMatchPage {
 				right: normalizeId(match.player2Id),
 			});
 		} catch (err) {
-			console.warn('snapshot fetch failed', err);
 		}
 	}
 
@@ -312,7 +312,8 @@ class TournamentMatchPage {
 			this.setRoomName('Quick match (searching)');
 			return;
 		}
-		this.setRoomName(this.tournamentName ?? this.roomId ?? 'Quick match');
+		const fallback = this.isQuickMatch ? 'Quick match' : 'Match';
+		this.setRoomName(this.tournamentName ?? fallback);
 	}
 
 	private connect(): void {
@@ -343,7 +344,6 @@ class TournamentMatchPage {
 			this.handleSocketClose();
 		});
 		socket.addEventListener('error', (event) => {
-			console.error('[match] WebSocket error', event);
 			this.showInlineMessage('Realtime connection error.', 'error');
 		});
 	}
@@ -375,14 +375,14 @@ class TournamentMatchPage {
 			case 'debug':
 				this.handleDebug(payload);
 				return;
-			case 'tournament:update':
-				this.handleTournamentUpdate(payload.tournament);
+			case 'tournaments:update':
+				this.handleTournamentsUpdate(payload.tournaments ?? []);
 				return;
+			case 'user:event':
 			case 'hello':
 			case 'pong':
 			case 'presence':
-			case 'tournaments:changed':
-			case 'user:event':
+			case 'tournament:update':
 				return;
 			default:
 				console.debug('Ignored WS message', payload);
@@ -394,36 +394,6 @@ class TournamentMatchPage {
 		const event = payload.event ?? 'event';
 		console.debug('[ws debug]', scope, event, payload.data);
 		// debug only (no UI toast)
-	}
-
-	private handleTournamentUpdate(raw: unknown): void {
-		const tournament = raw as any;
-		if (!tournament || typeof tournament.id !== 'string') return;
-
-		const tid = normalizeId(tournament.id);
-		if (!tid) return;
-		if (this.tournamentId && tid !== this.tournamentId) return;
-		if (!this.tournamentId) this.tournamentId = tid;
-
-		const name = typeof tournament.name === 'string' ? tournament.name : '';
-		if (name.trim().length > 0) {
-			this.tournamentName = name;
-			this.setRoomName(name);
-		}
-
-		// Private tournament code overlay for the owner (helps on refresh/other tabs)
-		const visibility = typeof tournament.visibility === 'string' ? tournament.visibility : null;
-		const joinCode = typeof tournament.joinCode === 'string' ? tournament.joinCode : null;
-		const ownerId = normalizeId(tournament.ownerId);
-		if (!this.privateCodeShown && visibility === 'private' && joinCode && ownerId === this.normalizedUser.id) {
-			this.privateCodeShown = true;
-			this.showPrivateCodeOverlay(joinCode);
-		}
-
-		// If we are waiting for the next match (final), evaluate using the latest snapshot.
-		if (this.waitingNextMatchFromMatchId) {
-			this.evaluateTournamentForNextMatch(tournament as TournamentSummary, this.waitingNextMatchFromMatchId);
-		}
 	}
 
 	private handleGameState(payload: GameStateMessage): void {
@@ -520,7 +490,8 @@ class TournamentMatchPage {
 
 		if (payload.roomId && !this.tournamentName) {
 			// keep showing current label; tournament name is resolved via snapshot
-			this.setRoomName(this.tournamentName ?? this.roomId ?? '');
+			const fallback = this.isQuickMatch ? 'Quick match' : 'Match';
+			this.setRoomName(this.tournamentName ?? fallback);
 		}
 
 		if (payload.yourSide && payload.yourSide !== this.yourSide) {
@@ -775,8 +746,7 @@ class TournamentMatchPage {
 			this.shouldReconnect = false;
 			try {
 				this.socket?.close();
-			} catch (err) {
-				console.warn('quick wait cancel close socket failed', err);
+			} catch {
 			}
 			this.setQuickWaitVisible(false);
 			window.location.href = './multiplayer.html';
@@ -891,7 +861,6 @@ class TournamentMatchPage {
 				this.resultAnimationInstance.setSpeed(0.9);
 			}
 		} catch (err) {
-			console.warn('Failed to play result animation', err);
 		}
 	}
 
@@ -993,8 +962,6 @@ class TournamentMatchPage {
 				console.log('[match] Ready button clicked!');
 				this.sendReadySignal();
 			});
-		} else {
-			console.error('[match] Ready button NOT found!');
 		}
 	}
 
@@ -1158,7 +1125,6 @@ class TournamentMatchPage {
 				this.userNameCache.set(id, display);
 				this.updatePlayers({ ...this.players });
 			} catch (err) {
-				console.warn('Failed to fetch username for', id, err);
 			} finally {
 				this.fetchingNames.delete(id);
 			}
@@ -1187,7 +1153,6 @@ class TournamentMatchPage {
 			const data = await res.json().catch(() => null);
 			return (data as any)?.tournament ?? null;
 		} catch (err) {
-			console.warn('fetchTournament failed', err);
 			return null;
 		}
 	}
@@ -1215,8 +1180,7 @@ class TournamentMatchPage {
 			try {
 				await navigator.clipboard.writeText(code);
 				this.showInlineMessage('Invite code copied!', 'success');
-			} catch (err) {
-				console.warn('copy code failed', err);
+			} catch {
 				this.showInlineMessage('Could not copy code.', 'error');
 			}
 		});
@@ -1236,48 +1200,63 @@ class TournamentMatchPage {
 	private startWaitingForNextMatch(tournament: TournamentSummary, currentMatchId: string): void {
 		this.stopWaitingForNextMatch();
 		this.redirectingToNextMatch = false;
-		this.waitingNextMatchFromMatchId = currentMatchId;
-		this.evaluateTournamentForNextMatch(tournament, currentMatchId);
+		this.waitingNextMatchSourceMatchId = currentMatchId;
+
+		// Render immediately using the snapshot we already have.
+		this.updateNextMatchWaitState(tournament);
 	}
 
-	private ensureNextMatchOverlay(): void {
-		if (this.nextMatchOverlay) return;
-		const overlay = document.createElement('div');
-		overlay.className = 'fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-[12000]';
-		overlay.innerHTML = `
-			<div class="bg-gray-900 border border-green-500/50 rounded-2xl p-6 shadow-2xl max-w-md w-11/12 text-center space-y-3">
-				<h3 class="text-xl font-bold text-green-300">Waiting for final</h3>
-				<p class="text-gray-200">Waiting for the other semifinal winner.</p>
-				<p id="nextMatchCounter" class="text-2xl font-bold text-white"></p>
-				<p class="text-xs text-gray-400">We will auto-redirect when the final opens.</p>
-			</div>
-		`;
-		document.body.appendChild(overlay);
-		this.nextMatchOverlay = overlay;
+	private handleTournamentsUpdate(tournaments: unknown[]): void {
+		if (!this.waitingNextMatchSourceMatchId || !this.tournamentId) return;
+
+		const found = (tournaments as unknown[]).find(
+			(item) => item && typeof item === 'object' && (item as any).id === this.tournamentId,
+		) as TournamentSummary | undefined;
+
+		if (!found) return;
+		this.updateNextMatchWaitState(found);
 	}
 
-	private updateNextMatchOverlay(count: number, cap: number): void {
-		this.ensureNextMatchOverlay();
-		const counter = this.nextMatchOverlay?.querySelector('#nextMatchCounter');
-		if (counter) {
-			counter.textContent = `Players in final: ${count} / ${cap}`;
-		}
-	}
+	private updateNextMatchWaitState(tournament: TournamentSummary): void {
+		const currentMatchId = this.waitingNextMatchSourceMatchId;
+		if (!currentMatchId) return;
 
-	private evaluateTournamentForNextMatch(latest: TournamentSummary, currentMatchId: string): void {
-		if (!latest.matches || latest.matches.length === 0) return;
+		const render = (state: { count: number; cap: number }) => {
+			if (!this.nextMatchOverlay) {
+				const overlay = document.createElement('div');
+				overlay.className = 'fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-[12000]';
+				overlay.innerHTML = `
+					<div class="bg-gray-900 border border-green-500/50 rounded-2xl p-6 shadow-2xl max-w-md w-11/12 text-center space-y-3">
+						<h3 class="text-xl font-bold text-green-300">Waiting for final</h3>
+						<p class="text-gray-200">Waiting for the other semifinal winner.</p>
+						<p id="nextMatchCounter" class="text-2xl font-bold text-white"></p>
+						<p class="text-xs text-gray-400">We will auto-redirect when the final opens.</p>
+					</div>
+				`;
+				document.body.appendChild(overlay);
+				this.nextMatchOverlay = overlay;
+			}
 
-		const nextMatch = latest.matches.find((m) =>
-			(m.sourceMatch1Id === currentMatchId || m.sourceMatch2Id === currentMatchId) &&
-			(m.status === 'pending' || m.status === 'playing' || m.status === 'finished')
+			const counter = this.nextMatchOverlay.querySelector('#nextMatchCounter');
+			if (counter) {
+				counter.textContent = `Players in final: ${state.count} / ${state.cap}`;
+			}
+		};
+
+		const nextMatch = tournament.matches.find(
+			(m) =>
+				(m.sourceMatch1Id === currentMatchId || m.sourceMatch2Id === currentMatchId) &&
+				(m.status === 'pending' || m.status === 'playing' || m.status === 'finished'),
 		);
+
 		if (!nextMatch) return;
 
 		const playersReady = [nextMatch.player1Id, nextMatch.player2Id].filter(Boolean).length;
-		this.updateNextMatchOverlay(playersReady, 2);
+		render({ count: playersReady, cap: 2 });
 
 		const hasRoom = Boolean(nextMatch.roomId && nextMatch.roomId.trim().length > 0);
 		const readyForFinal = hasRoom && playersReady >= 2;
+
 		if (!this.redirectingToNextMatch && (readyForFinal || nextMatch.status === 'playing' || nextMatch.status === 'finished')) {
 			this.redirectingToNextMatch = true;
 			this.stopWaitingForNextMatch();
@@ -1291,12 +1270,7 @@ class TournamentMatchPage {
 	}
 
 	private stopWaitingForNextMatch(): void {
-		// Clear any legacy polling interval (kept for backwards compatibility)
-		if (this.nextMatchInterval !== null) {
-			window.clearInterval(this.nextMatchInterval);
-			this.nextMatchInterval = null;
-		}
-		this.waitingNextMatchFromMatchId = null;
+		this.waitingNextMatchSourceMatchId = null;
 		if (this.nextMatchOverlay) {
 			this.nextMatchOverlay.remove();
 			this.nextMatchOverlay = null;
@@ -1358,8 +1332,7 @@ class TournamentMatchPage {
 			url.searchParams.set('roomId', roomId);
 			if (this.isQuickMatch) url.searchParams.set('mode', 'quick');
 			window.history.replaceState({}, '', url.toString());
-		} catch (err) {
-			console.warn('Failed to update URL with room id', err);
+		} catch {
 		}
 	}
 
@@ -1555,8 +1528,7 @@ class TournamentMatchPage {
 			if (normalizeId(tournament.winnerId) !== this.normalizedUser.id) return;
 			this.championShownFor.add(payload.tournamentId);
 			await this.showChampionOverlay(tournament.name ?? 'Tournament');
-		} catch (err) {
-			console.warn('Error while checking tournament champion', err);
+		} catch {
 		}
 	}
 
@@ -1572,8 +1544,7 @@ class TournamentMatchPage {
 			if (normalizeId(tournament.winnerId) === this.normalizedUser.id) return;
 			this.loserShownFor.add(payload.tournamentId);
 			await this.showLoserOverlay(tournament.name ?? 'Tournament');
-		} catch (err) {
-			console.warn('Failed to show loser overlay', err);
+		} catch {
 		}
 	}
 
@@ -1633,8 +1604,7 @@ class TournamentMatchPage {
 			if (typeof this.championAnimationInstance.setSpeed === 'function') {
 				this.championAnimationInstance.setSpeed(0.8);
 			}
-		} catch (err) {
-			console.warn('Could not play champion animation', err);
+		} catch {
 		}
 	}
 
@@ -1662,8 +1632,7 @@ class TournamentMatchPage {
 			if (typeof this.loserAnimationInstance.setSpeed === 'function') {
 				this.loserAnimationInstance.setSpeed(0.8);
 			}
-		} catch (err) {
-			console.warn('Could not play loser animation', err);
+		} catch {
 		}
 	}
 
@@ -1674,8 +1643,7 @@ class TournamentMatchPage {
 				const res = await fetch(src);
 				if (!res.ok) throw new Error(`Failed to fetch lottie: ${res.status}`);
 				return await res.json();
-			} catch (err) {
-				console.warn('Failed to fetch lottie from URL', src, err);
+			} catch {
 				return null;
 			}
 		}
@@ -1742,8 +1710,7 @@ function renderAuth(container: HTMLElement, user: User): void {
 	logoutButton?.addEventListener('click', async () => {
 		try {
 			await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' });
-		} catch (err) {
-			console.error('logout error', err);
+		} catch {
 		} finally {
 			localStorage.removeItem('access_token');
 			localStorage.removeItem('user');
@@ -1767,7 +1734,7 @@ function showMessage(message: string, type: 'success' | 'error'): void {
 	}, 2500);
 }
 
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
 	const params = new URLSearchParams(window.location.search);
 	const roomId = getRoomIdFromUrl();
 	const isQuickMatch = params.get('mode') === 'quick' || !roomId;
@@ -1782,13 +1749,33 @@ document.addEventListener('DOMContentLoaded', () => {
 	let user: User;
 	try {
 		user = JSON.parse(userStr) as User;
-	} catch (err) {
-		console.error('Error reading user from localStorage', err);
+	} catch {
 		localStorage.removeItem('user');
 		localStorage.removeItem('access_token');
 		window.location.href = './login.html';
 		return;
 	}
+
+	// Verify session before proceeding
+    try {
+        console.log('[match] Verifying session...');
+        await verifySession(token);
+        console.log('[match] Session verified successfully');
+    } catch (error) {
+        if (error instanceof Error && error.message === 'Session expired') {
+            showMessage('Session expired. Redirecting to login...', 'error');
+            setTimeout(() => {
+                clearSessionAndRedirect();
+            }, 2000);
+            return;
+        }
+        // For any other error, also redirect to login
+        showMessage('Authentication error. Please login again.', 'error');
+        setTimeout(() => {
+            clearSessionAndRedirect();
+        }, 2000);
+        return;
+    }
 
 	initHeader({ active: isQuickMatch ? 'quick' : 'tournaments' });
 
@@ -1799,10 +1786,6 @@ document.addEventListener('DOMContentLoaded', () => {
 	setupMenuAutoHide();
 });
 
-// Configure your Lottie sources here. Set to a URL (string) or leave as inline JSON.
-// Example: const WIN_LOTTIE_SRC = '/static/win.json'; const LOSE_LOTTIE_SRC = '/static/lose.json';
-// Use your custom Lottie file (relative path so it works under the same origin)
-// If your app is served under a sub-path, keep this absolute-from-site-root. Ensure dist/assets/win.json exists in the built image.
 const WIN_LOTTIE_SRC: string | object = '/assets/win.json';
 const LOSE_LOTTIE_SRC: string | object = '/assets/lose.json';
 

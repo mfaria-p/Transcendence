@@ -16,19 +16,22 @@ interface Profile {
 class ProfileManager {
   private currentUser: User | null = null;
   private currentProfile: Profile | null = null;
-  private accessToken: string | null = null;
   private friendOnlineStatus: Map<string, boolean> = new Map();
   private isOAuthAccount: boolean = false;
+  private userEventsDebounce: number | null = null;
 
   constructor() {
     this.init();
   }
 
+  private accessToken(): string | null {
+    return localStorage.getItem('access_token');
+  }
+
   private async init(): Promise<void> {
     const userStr = localStorage.getItem('user');
-    this.accessToken = localStorage.getItem('access_token');
 
-    if (!userStr || !this.accessToken) {
+    if (!userStr || !this.accessToken()!) {
       window.location.href = './login.html';
       return;
     }
@@ -37,12 +40,11 @@ class ProfileManager {
       this.currentUser = JSON.parse(userStr);
 
       try {
-        await verifySession(this.accessToken);
+        await verifySession(this.accessToken()!);
       } catch (error) {
         if (error instanceof Error && error.message === 'Session expired') {
           throw error; // will be handled below
         }
-        console.warn('Session check failed, keeping stored session (non-expiring error):', error);
       }
       
       // Initialize global header
@@ -58,7 +60,6 @@ class ProfileManager {
       this.loadFriendRequests();
       this.loadFriends();
     } catch (error) {
-      console.error('Init error:', error);
       
       if (error instanceof Error && error.message === 'Session expired') {
         showMessage('Session expired. Redirecting to login...', 'error');
@@ -85,22 +86,29 @@ class ProfileManager {
   }
 
   private setupUserEventListener(): void {
-    addUserEventListener((event) => {
-      // Friend requests / friendships are updated server-side in realtime.
-      // When we get a notification, re-fetch the affected lists.
-      if (event.startsWith('friend_request') || event === 'friends:changed') {
+    addUserEventListener((eventName) => {
+      if (!eventName) return;
+
+      // Only handle events that can affect this page UI
+      if (!eventName.startsWith("friend") && !eventName.startsWith("profile")) return;
+
+      // Debounce UI reloads in case multiple events arrive quickly
+      if (this.userEventsDebounce !== null) {
+        window.clearTimeout(this.userEventsDebounce);
+      }
+      this.userEventsDebounce = window.setTimeout(() => {
         void this.loadFriendRequests();
         void this.loadFriends();
-      }
+      }, 200);
     });
   }
+
 
   private updateFriendStatusBadge(friendId: string, isOnline: boolean): void {
     // Find ALL elements with this friend ID (there might be multiple contexts)
     const friendElement = document.querySelector(`[data-friend-id="${friendId}"]`);
     
     if (!friendElement) {
-      console.warn(`Could not find friend element for ${friendId}`);
       return;
     }
 
@@ -115,20 +123,19 @@ class ProfileManager {
       
       console.log(`Updated ${friendId} badge to ${isOnline ? 'ONLINE (green)' : 'OFFLINE (gray)'}`);
     } else {
-      console.warn(`Could not find status-badge for friend ${friendId}`);
     }
   }
 
   private async loadProfile(): Promise<void> {
     try {
-      const accountResponse = await handleApiCall(this.accessToken, '/api/auth/me');
+      const accountResponse = await handleApiCall(this.accessToken()!, '/api/auth/me');
       if (accountResponse.ok) {
         const data = await accountResponse.json();
         this.isOAuthAccount = data.isOAuthAccount || false;
         console.log('Is OAuth account:', this.isOAuthAccount);
         console.log('Account data:', data);
       }
-      const response = await handleApiCall(this.accessToken, '/api/user/me');
+      const response = await handleApiCall(this.accessToken()!, '/api/user/me');
 
       if (response.ok) {
         const data = await response.json();
@@ -142,7 +149,6 @@ class ProfileManager {
       }
 
       if (response.status >= 500) {
-        console.warn('User service unavailable while loading profile:', response.status);
         showMessage('User service indisponível. Tenta novamente em breve.', 'error');
         return;
       }
@@ -152,7 +158,6 @@ class ProfileManager {
       if (error instanceof Error && error.message === 'Session expired') {
         return;
       }
-      console.error('Load profile error:', error);
       showMessage('Não foi possível carregar o perfil agora.', 'error');
     }
   }
@@ -300,7 +305,7 @@ class ProfileManager {
     }
 
     try {
-      const response = await handleApiCall(this.accessToken, '/api/user/provision', {
+      const response = await handleApiCall(this.accessToken()!), '/api/user/provision', {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -322,7 +327,6 @@ class ProfileManager {
       }
     } catch (error) {
       if (error instanceof Error && error.message !== 'Session expired') {
-        console.error('Save avatar error:', error);
         showMessage('Failed to update profile picture', 'error');
       }
     }
@@ -370,7 +374,7 @@ class ProfileManager {
     }
 
     try {
-      const response = await handleApiCall(this.accessToken, '/api/auth/me', {
+      const response = await handleApiCall(this.accessToken()!), '/api/auth/me', {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -402,7 +406,6 @@ class ProfileManager {
       }
     } catch (error) {
       if (error instanceof Error && error.message !== 'Session expired') {
-        console.error('Save username error:', error);
         showMessage('Failed to update username', 'error');
       }
     }
@@ -446,7 +449,7 @@ class ProfileManager {
     }
 
     try {
-      const response = await handleApiCall(this.accessToken, '/api/auth/me', {
+      const response = await handleApiCall(this.accessToken()!, '/api/auth/me', {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -477,7 +480,6 @@ class ProfileManager {
       }
     } catch (error) {
       if (error instanceof Error && error.message !== 'Session expired') {
-        console.error('Save email error:', error);
         showMessage('Failed to update email', 'error');
       }
     }
@@ -583,7 +585,7 @@ class ProfileManager {
     }
 
     try {
-      const response = await handleApiCall(this.accessToken, '/api/auth/me/password', {
+      const response = await handleApiCall(this.accessToken()!, '/api/auth/me/password', {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -603,7 +605,6 @@ class ProfileManager {
       }
     } catch (error) {
       if (error instanceof Error && error.message !== 'Session expired') {
-        console.error('Save password error:', error);
         showMessage('Failed to update password', 'error');
       }
     }
@@ -624,7 +625,7 @@ class ProfileManager {
     }
 
     try {
-      const response = await handleApiCall(this.accessToken, `/api/auth/search?prefix=${encodeURIComponent(searchTerm)}`);
+      const response = await handleApiCall(this.accessToken()!, `/api/auth/search?prefix=${encodeURIComponent(searchTerm)}`);
 
       if (response.ok) {
         const data = await response.json();
@@ -645,7 +646,7 @@ class ProfileManager {
           // Try to fetch avatar from user service
           let avatarUrl = null;
           try {
-            const profileRes = await handleApiCall(this.accessToken, `/api/user/${account.id}`);
+            const profileRes = await handleApiCall(this.accessToken()!, `/api/user/${account.id}`);
             if (profileRes.ok) {
               const profileData = await profileRes.json();
               avatarUrl = profileData.profile?.avatarUrl;
@@ -686,7 +687,6 @@ class ProfileManager {
       }
     } catch (error) {
       if (error instanceof Error && error.message !== 'Session expired') {
-        console.error('Search users error:', error);
         showMessage('Failed to search users', 'error');
       }
     }
@@ -697,7 +697,7 @@ class ProfileManager {
     if (!friendRequestsList) return;
 
     try {
-      const response = await handleApiCall(this.accessToken, '/api/user/friend-request/received');
+      const response = await handleApiCall(this.accessToken()!, '/api/user/friend-request/received');
 
       if (response.ok) {
         const data = await response.json();
@@ -717,7 +717,7 @@ class ProfileManager {
           const fromProfileId = request.fromProfileId;
           
           try {
-            const authResponse = await handleApiCall(this.accessToken, `/api/auth/${fromProfileId}`);
+            const authResponse = await handleApiCall(this.accessToken()!, `/api/auth/${fromProfileId}`);
             
             let username = 'Unknown User';
             let email = '';
@@ -731,7 +731,7 @@ class ProfileManager {
             // Fetch profile from user service for avatar
             let avatarUrl: string | null = null;
             try {
-              const profileResponse = await handleApiCall(this.accessToken, `/api/user/${fromProfileId}`);
+              const profileResponse = await handleApiCall(this.accessToken()!, `/api/user/${fromProfileId}`);
               
               if (profileResponse.ok) {
                 const profileData = await profileResponse.json();
@@ -790,7 +790,6 @@ class ProfileManager {
 
             friendRequestsList.appendChild(requestDiv);
           } catch (error) {
-            console.error('Failed to fetch user info:', error);
           }
         }
       } else {
@@ -798,7 +797,6 @@ class ProfileManager {
       }
     } catch (error) {
       if (error instanceof Error && error.message !== 'Session expired') {
-        console.error('Load friend requests error:', error);
         showMessage('Failed to load friend requests', 'error');
       }
     }
@@ -806,7 +804,7 @@ class ProfileManager {
 
   private async acceptFriendRequest(fromProfileId: string): Promise<void> {
     try {
-      const response = await handleApiCall(this.accessToken, `/api/user/friend-request/${fromProfileId}/accept`, {
+      const response = await handleApiCall(this.accessToken()!, `/api/user/friend-request/${fromProfileId}/accept`, {
         method: 'POST',
       });
 
@@ -820,7 +818,6 @@ class ProfileManager {
       }
     } catch (error) {
       if (error instanceof Error && error.message !== 'Session expired') {
-        console.error('Accept friend request error:', error);
         showMessage('Failed to accept friend request', 'error');
       }
     }
@@ -828,7 +825,7 @@ class ProfileManager {
 
   private async declineFriendRequest(fromProfileId: string): Promise<void> {
     try {
-      const response = await handleApiCall(this.accessToken, `/api/user/friend-request/${fromProfileId}/decline`, {
+      const response = await handleApiCall(this.accessToken()!, `/api/user/friend-request/${fromProfileId}/decline`, {
         method: 'POST',
       });
 
@@ -841,7 +838,6 @@ class ProfileManager {
       }
     } catch (error) {
       if (error instanceof Error && error.message !== 'Session expired') {
-        console.error('Decline friend request error:', error);
         showMessage('Failed to decline friend request', 'error');
       }
     }
@@ -852,7 +848,7 @@ class ProfileManager {
     if (!friendsList) return;
 
     try {
-      const response = await handleApiCall(this.accessToken, '/api/user/friend');
+      const response = await handleApiCall(this.accessToken()!, '/api/user/friend');
 
       if (response.ok) {
         const data = await response.json();
@@ -873,7 +869,7 @@ class ProfileManager {
             : friendship.profileAId;
           
           try {
-            const authResponse = await handleApiCall(this.accessToken, `/api/auth/${friendId}`);
+            const authResponse = await handleApiCall(this.accessToken()!, `/api/auth/${friendId}`);
             
             if (!authResponse.ok) continue;
             
@@ -883,7 +879,7 @@ class ProfileManager {
             // Fetch profile from user service for avatar
             let avatarUrl: string | null = null;
             try {
-              const profileResponse = await handleApiCall(this.accessToken, `/api/user/${friendId}`);
+              const profileResponse = await handleApiCall(this.accessToken()!, `/api/user/${friendId}`);
               
               if (profileResponse.ok) {
                 const profileData = await profileResponse.json();
@@ -896,7 +892,7 @@ class ProfileManager {
             // Fetch online status from ws service
             let isOnline = false;
             try {
-              const presenceResponse = await handleApiCall(this.accessToken, `/api/realtime/presence/${friendId}`);
+              const presenceResponse = await handleApiCall(this.accessToken()!, `/api/realtime/presence/${friendId}`);
               
               if (presenceResponse.ok) {
                 const presenceData = await presenceResponse.json();
@@ -951,7 +947,6 @@ class ProfileManager {
             
             friendsList.appendChild(friendDiv);
           } catch (error) {
-            console.error('Failed to fetch friend profile:', error);
           }
         }
       } else {
@@ -959,7 +954,6 @@ class ProfileManager {
       }
     } catch (error) {
       if (error instanceof Error && error.message !== 'Session expired') {
-        console.error('Load friends error:', error);
         showMessage('Failed to load friends', 'error');
       }
     }
@@ -969,7 +963,7 @@ class ProfileManager {
     if (!confirm('Are you sure you want to remove this friend?')) return;
 
     try {
-      const response = await handleApiCall(this.accessToken, `/api/user/friend/${friendId}`, {
+      const response = await handleApiCall(this.accessToken()!, `/api/user/friend/${friendId}`, {
         method: 'DELETE',
       });
 
@@ -982,7 +976,6 @@ class ProfileManager {
       }
     } catch (error) {
       if (error instanceof Error && error.message !== 'Session expired') {
-        console.error('Remove friend error:', error);
         showMessage('Failed to remove friend', 'error');
       }
     }
@@ -1012,7 +1005,7 @@ class ProfileManager {
     }
 
     try {
-      const response = await handleApiCall(this.accessToken, `/api/auth/me`, {
+      const response = await handleApiCall(this.accessToken()!, `/api/auth/me`, {
         method: 'DELETE',
       });
 
@@ -1025,7 +1018,6 @@ class ProfileManager {
       }
     } catch (error) {
       if (error instanceof Error && error.message !== 'Session expired') {
-        console.error('Delete account error:', error);
         showMessage('Failed to delete account', 'error');
       }
     }

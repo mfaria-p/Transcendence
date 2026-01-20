@@ -1724,7 +1724,7 @@ body:not(.menu-collapsed) .menu-toggle .menu-icon {
 	}
 
 	body.menu-collapsed .menu-btn span:last-child {
-		display: inline;
+		display: none;
 	}
 
 	body.menu-hidden .menu-column {

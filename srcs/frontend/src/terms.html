@@ -6,7 +6,7 @@
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
 	<link href="https://fonts.googleapis.com/css2?family=Oxanium:wght@400;600;700&display=swap" rel="stylesheet">
 	<link href="./output.css" rel="stylesheet">
-	<title>Terms and Conditions | Transcendence</title>
+	<title>Pong - Terms and Conditions</title>
 </head>
 
 <body class="terms-body">
@@ -87,7 +87,7 @@
 			</section>
 
 			<footer class="terms-footer">
-				<a class="terms-back" href="./landing.html">Back</a>
+				<a class="terms-back" href="./landing.html" data-back-link>Back</a>
 			</footer>
 				</article>
 				<div id="globalFooterMount"></div>
@@ -99,6 +99,14 @@
 				import { initFooter } from './shared/footer.js';
 				initHeader();
 				initFooter({ containerId: 'globalFooterMount' });
+
+				const backLink = document.querySelector('[data-back-link]');
+				backLink?.addEventListener('click', (event) => {
+					if (window.history.length > 1) {
+						event.preventDefault();
+						window.history.back();
+					}
+				});
 			</script>
 
 </body>

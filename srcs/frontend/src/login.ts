@@ -48,6 +48,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
       const response = await fetch('/api/auth/login', {
         method: 'POST',
+        credentials: 'include',
         headers: {
           'Content-Type': 'application/json',
           'Accept': 'application/json'
@@ -75,8 +76,7 @@ document.addEventListener('DOMContentLoaded', () => {
           localStorage.setItem('access_token', data.at);
           
           if (data.account) {
-            provisionProfile(data.at).catch(err => {
-              console.warn('Profile provision failed:', err);
+            provisionProfile(data.at).catch(() => {
             });
           }
         }
@@ -108,7 +108,6 @@ document.addEventListener('DOMContentLoaded', () => {
         loginButton.classList.remove('opacity-50', 'cursor-not-allowed');
       }
     } catch (error: any) {
-      console.error('Login error:', error);
       
       const message = error.name === 'AbortError' 
         ? 'Request timed out. Please try again.' 
@@ -133,7 +132,6 @@ document.addEventListener('DOMContentLoaded', () => {
       // Redirect to backend Google OAuth endpoint
       window.location.href = '/api/auth/google/login';
     } catch (error) {
-      console.error('Google login error:', error);
       errorMessage.textContent = 'Failed to initiate Google login';
       errorMessage.classList.remove('hidden');
       

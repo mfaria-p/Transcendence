@@ -9,7 +9,7 @@ import {randomBytes} from 'crypto';
 import * as schemas from './schemas.js';
 import * as utils from './utils.js';
 
-const RT_COOKIE: string = 'refresh_token';
+const RT_COOKIE: string = 'refresh-token';
 
 // TODO
 // signed cookies
@@ -42,7 +42,7 @@ export default async function (app: FastifyInstance): Promise<void> {
     await utils.rtCreate(app.prisma, rt, account!.id);
 
     reply.setCookie(RT_COOKIE, rt, {
-      httpOnly: true, secure: true, sameSite: 'lax', path: '/auth/refresh', maxAge: 30 * 24 * 60 * 60,
+      httpOnly: true, secure: true, sameSite: 'lax', path: '/api/auth', maxAge: 30 * 24 * 60 * 60,
     });
 
     return {
@@ -54,7 +54,9 @@ export default async function (app: FastifyInstance): Promise<void> {
   });
 
   app.post('/refresh', {schema: schemas.postRefreshOpts}, async (req: FastifyRequest, reply: FastifyReply) => {
-    const rt: string | undefined = req.cookies[RT_COOKIE];
+    process.stderr.write(`[REFRESH] ${JSON.stringify(req.cookies)}\n`);
+    const rt: any = req.cookies[RT_COOKIE];
+    process.stderr.write(`[REFRESH] ${rt}\n`);
     if (!rt) return reply.code(401).send({
       sucess: false,
       message: 'Missing refresh token',
@@ -73,7 +75,7 @@ export default async function (app: FastifyInstance): Promise<void> {
     const at: string = utils.atGenerate(app.jwt, {sub: rtRecord.accountId});
 
     reply.setCookie(RT_COOKIE, rtNew, {
-      httpOnly: true, secure: true, sameSite: 'lax', path: '/auth/refresh', maxAge: 30 * 24 * 60 * 60,
+      httpOnly: true, secure: true, sameSite: 'lax', path: '/api/auth', maxAge: 30 * 24 * 60 * 60,
     });
 
     return {
@@ -86,7 +88,7 @@ export default async function (app: FastifyInstance): Promise<void> {
   app.post('/logout', {schema: schemas.postLogoutOpts}, async (req: FastifyRequest, reply: FastifyReply) => {
     const rt: string | undefined = req.cookies[RT_COOKIE];
     if (rt) {
-      reply.clearCookie(RT_COOKIE, {path: '/auth/refresh'});
+      reply.clearCookie(RT_COOKIE, {path: '/api/auth'});
       const rtRecord: RefreshToken | null = await utils.rtVerifyHash(app.prisma, utils.rtHash(rt));
       if (!rtRecord) return reply.code(401).send({
         success: false,
