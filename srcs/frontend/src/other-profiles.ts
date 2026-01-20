@@ -1,4 +1,4 @@
-import { connectPresenceSocket, disconnectPresenceSocket, addPresenceListener } from './utils-ws.js';
+import { connectPresenceSocket, disconnectPresenceSocket, addPresenceListener, addUserEventListener } from './utils-ws.js';
 import { verifySession, clearSessionAndRedirect, handleApiCall, showMessage, handleLogout } from './utils-api.js';
 import { initHeader } from './shared/header.js';
 
@@ -27,6 +27,7 @@ class UserProfileViewer {
   private userId: string | null = null;
   private friendshipStatus: 'none' | 'friend' | 'pending_sent' | 'pending_received' = 'none';
   private isOnline: boolean = false;
+  private userEventsDebounce: number | null = null;
 
   constructor() {
     this.init();
@@ -53,6 +54,7 @@ class UserProfileViewer {
       
       connectPresenceSocket();
       this.setupPresenceListener();
+      this.setupUserEventListener();
       
       const urlParams = new URLSearchParams(window.location.search);
       this.userId = urlParams.get('id');
@@ -84,6 +86,32 @@ class UserProfileViewer {
       }
     });
   }
+
+  private setupUserEventListener(): void {
+    addUserEventListener((eventName, payload) => {
+      if (!eventName) return;
+
+      // Only react to friend-related events.
+      if (!eventName.startsWith("friend")) return;
+
+      // If we are not viewing anyone, ignore.
+      if (!this.userId) return;
+
+      // Debounce: multiple events can arrive quickly (e.g., accept triggers 2 updates).
+      if (this.userEventsDebounce !== null) {
+        window.clearTimeout(this.userEventsDebounce);
+      }
+
+      this.userEventsDebounce = window.setTimeout(() => {
+        void this.checkFriendshipStatus().then(() => {
+          this.displayFriendActions();
+          // If they became friends, show/hide the online badge correctly.
+          this.updateStatusBadge(this.isOnline);
+        });
+      }, 200);
+    });
+  }
+
 
   private updateStatusBadge(isOnline: boolean): void {
     const statusBadge = document.getElementById('statusBadge');

@@ -74,6 +74,8 @@ services:
     environment:
       - USER_PORT=3002
       - JWT_SECRET=${JWT_SECRET}
+      - REALTIME_INTERNAL_URL=http://ws:3003
+      - INTERNAL_WS_TOKEN=${INTERNAL_WS_TOKEN}
       - NODE_ENV=production
     expose:
       - "3002"
@@ -87,6 +89,7 @@ services:
     environment:
       - WS_PORT=3003
       - JWT_SECRET=${JWT_SECRET}
+      - INTERNAL_WS_TOKEN=${INTERNAL_WS_TOKEN}
       - NODE_ENV=production
     expose:
       - "3003"

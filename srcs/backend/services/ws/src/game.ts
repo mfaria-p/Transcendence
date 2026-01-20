@@ -413,21 +413,9 @@ function finishGame(room: GameRoom, forfeitLoserId?: string): void {
     if (room.right) sendToUser(room.right.userId, payload);
 
     if (room.isTournament && room.tournamentId && room.matchId) {
-      const update = reportMatchResultByRoomId(room.id, winnerUserId);
-      if (update) {
-        const { tournament } = update;
-        // broadcast simples do estado do torneio para todos os jogadores ligados
-        const tPayload = {
-          type: 'tournament:update' as const,
-          tournament,
-        };
-        const json = JSON.stringify(tPayload);
-        forEachConnection((_uid, socket) => {
-          if (socket.readyState === socket.OPEN) {
-            socket.send(json);
-          }
-        });
-      }
+      // Updates tournament state and broadcasts user-scoped snapshots (tournaments:update)
+      // so that only relevant users receive private tournament details.
+      reportMatchResultByRoomId(room.id, winnerUserId);
     }
   }
 
