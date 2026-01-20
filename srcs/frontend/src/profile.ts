@@ -30,7 +30,7 @@ class ProfileManager {
   private async init(): Promise<void> {
     const userStr = localStorage.getItem('user');
 
-    if (!userStr || !this.accessToken()!) {
+    if (!userStr || !this.accessToken()) {
       window.location.href = './login.html';
       return;
     }
@@ -284,7 +284,7 @@ class ProfileManager {
     }
 
     try {
-      const response = await handleApiCall(this.accessToken()!), '/api/user/provision', {
+      const response = await handleApiCall(this.accessToken()!, '/api/user/provision', {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -353,7 +353,7 @@ class ProfileManager {
     }
 
     try {
-      const response = await handleApiCall(this.accessToken()!), '/api/auth/me', {
+      const response = await handleApiCall(this.accessToken()!, '/api/auth/me', {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
