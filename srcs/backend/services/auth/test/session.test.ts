@@ -4,7 +4,7 @@ import argon2 from 'argon2';
 import {buildServer} from '../src/build.js';
 import * as utils from '../src/utils.js'
 
-const RT_COOKIE: string = 'refresh_token';
+const RT_COOKIE: string = 'refresh-token';
 
 function extractCookies(raw: string | string[] | undefined): {[key: string]: string} {
   const setCookie = Array.isArray(raw) ? raw : raw ? [raw] : [];

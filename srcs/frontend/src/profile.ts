@@ -16,7 +16,6 @@ interface Profile {
 class ProfileManager {
   private currentUser: User | null = null;
   private currentProfile: Profile | null = null;
-  private accessToken: string | null = null;
   private friendOnlineStatus: Map<string, boolean> = new Map();
   private isOAuthAccount: boolean = false;
 
@@ -24,11 +23,14 @@ class ProfileManager {
     this.init();
   }
 
+  private accessToken(): string | null {
+    return localStorage.getItem('access_token');
+  }
+
   private async init(): Promise<void> {
     const userStr = localStorage.getItem('user');
-    this.accessToken = localStorage.getItem('access_token');
 
-    if (!userStr || !this.accessToken) {
+    if (!userStr || !this.accessToken()!) {
       window.location.href = './login.html';
       return;
     }
@@ -37,7 +39,7 @@ class ProfileManager {
       this.currentUser = JSON.parse(userStr);
 
       try {
-        await verifySession(this.accessToken);
+        await verifySession(this.accessToken()!);
       } catch (error) {
         if (error instanceof Error && error.message === 'Session expired') {
           throw error; // will be handled below
@@ -105,14 +107,14 @@ class ProfileManager {
 
   private async loadProfile(): Promise<void> {
     try {
-      const accountResponse = await handleApiCall(this.accessToken, '/api/auth/me');
+      const accountResponse = await handleApiCall(this.accessToken()!, '/api/auth/me');
       if (accountResponse.ok) {
         const data = await accountResponse.json();
         this.isOAuthAccount = data.isOAuthAccount || false;
         console.log('Is OAuth account:', this.isOAuthAccount);
         console.log('Account data:', data);
       }
-      const response = await handleApiCall(this.accessToken, '/api/user/me');
+      const response = await handleApiCall(this.accessToken()!, '/api/user/me');
 
       if (response.ok) {
         const data = await response.json();
@@ -282,7 +284,7 @@ class ProfileManager {
     }
 
     try {
-      const response = await handleApiCall(this.accessToken, '/api/user/provision', {
+      const response = await handleApiCall(this.accessToken()!), '/api/user/provision', {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -351,7 +353,7 @@ class ProfileManager {
     }
 
     try {
-      const response = await handleApiCall(this.accessToken, '/api/auth/me', {
+      const response = await handleApiCall(this.accessToken()!), '/api/auth/me', {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -426,7 +428,7 @@ class ProfileManager {
     }
 
     try {
-      const response = await handleApiCall(this.accessToken, '/api/auth/me', {
+      const response = await handleApiCall(this.accessToken()!, '/api/auth/me', {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -562,7 +564,7 @@ class ProfileManager {
     }
 
     try {
-      const response = await handleApiCall(this.accessToken, '/api/auth/me/password', {
+      const response = await handleApiCall(this.accessToken()!, '/api/auth/me/password', {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -602,7 +604,7 @@ class ProfileManager {
     }
 
     try {
-      const response = await handleApiCall(this.accessToken, `/api/auth/search?prefix=${encodeURIComponent(searchTerm)}`);
+      const response = await handleApiCall(this.accessToken()!, `/api/auth/search?prefix=${encodeURIComponent(searchTerm)}`);
 
       if (response.ok) {
         const data = await response.json();
@@ -623,7 +625,7 @@ class ProfileManager {
           // Try to fetch avatar from user service
           let avatarUrl = null;
           try {
-            const profileRes = await handleApiCall(this.accessToken, `/api/user/${account.id}`);
+            const profileRes = await handleApiCall(this.accessToken()!, `/api/user/${account.id}`);
             if (profileRes.ok) {
               const profileData = await profileRes.json();
               avatarUrl = profileData.profile?.avatarUrl;
@@ -674,7 +676,7 @@ class ProfileManager {
     if (!friendRequestsList) return;
 
     try {
-      const response = await handleApiCall(this.accessToken, '/api/user/friend-request/received');
+      const response = await handleApiCall(this.accessToken()!, '/api/user/friend-request/received');
 
       if (response.ok) {
         const data = await response.json();
@@ -694,7 +696,7 @@ class ProfileManager {
           const fromProfileId = request.fromProfileId;
           
           try {
-            const authResponse = await handleApiCall(this.accessToken, `/api/auth/${fromProfileId}`);
+            const authResponse = await handleApiCall(this.accessToken()!, `/api/auth/${fromProfileId}`);
             
             let username = 'Unknown User';
             let email = '';
@@ -708,7 +710,7 @@ class ProfileManager {
             // Fetch profile from user service for avatar
             let avatarUrl: string | null = null;
             try {
-              const profileResponse = await handleApiCall(this.accessToken, `/api/user/${fromProfileId}`);
+              const profileResponse = await handleApiCall(this.accessToken()!, `/api/user/${fromProfileId}`);
               
               if (profileResponse.ok) {
                 const profileData = await profileResponse.json();
@@ -781,7 +783,7 @@ class ProfileManager {
 
   private async acceptFriendRequest(fromProfileId: string): Promise<void> {
     try {
-      const response = await handleApiCall(this.accessToken, `/api/user/friend-request/${fromProfileId}/accept`, {
+      const response = await handleApiCall(this.accessToken()!, `/api/user/friend-request/${fromProfileId}/accept`, {
         method: 'POST',
       });
 
@@ -802,7 +804,7 @@ class ProfileManager {
 
   private async declineFriendRequest(fromProfileId: string): Promise<void> {
     try {
-      const response = await handleApiCall(this.accessToken, `/api/user/friend-request/${fromProfileId}/decline`, {
+      const response = await handleApiCall(this.accessToken()!, `/api/user/friend-request/${fromProfileId}/decline`, {
         method: 'POST',
       });
 
@@ -825,7 +827,7 @@ class ProfileManager {
     if (!friendsList) return;
 
     try {
-      const response = await handleApiCall(this.accessToken, '/api/user/friend');
+      const response = await handleApiCall(this.accessToken()!, '/api/user/friend');
 
       if (response.ok) {
         const data = await response.json();
@@ -846,7 +848,7 @@ class ProfileManager {
             : friendship.profileAId;
           
           try {
-            const authResponse = await handleApiCall(this.accessToken, `/api/auth/${friendId}`);
+            const authResponse = await handleApiCall(this.accessToken()!, `/api/auth/${friendId}`);
             
             if (!authResponse.ok) continue;
             
@@ -856,7 +858,7 @@ class ProfileManager {
             // Fetch profile from user service for avatar
             let avatarUrl: string | null = null;
             try {
-              const profileResponse = await handleApiCall(this.accessToken, `/api/user/${friendId}`);
+              const profileResponse = await handleApiCall(this.accessToken()!, `/api/user/${friendId}`);
               
               if (profileResponse.ok) {
                 const profileData = await profileResponse.json();
@@ -869,7 +871,7 @@ class ProfileManager {
             // Fetch online status from ws service
             let isOnline = false;
             try {
-              const presenceResponse = await handleApiCall(this.accessToken, `/api/realtime/presence/${friendId}`);
+              const presenceResponse = await handleApiCall(this.accessToken()!, `/api/realtime/presence/${friendId}`);
               
               if (presenceResponse.ok) {
                 const presenceData = await presenceResponse.json();
@@ -940,7 +942,7 @@ class ProfileManager {
     if (!confirm('Are you sure you want to remove this friend?')) return;
 
     try {
-      const response = await handleApiCall(this.accessToken, `/api/user/friend/${friendId}`, {
+      const response = await handleApiCall(this.accessToken()!, `/api/user/friend/${friendId}`, {
         method: 'DELETE',
       });
 
@@ -982,7 +984,7 @@ class ProfileManager {
     }
 
     try {
-      const response = await handleApiCall(this.accessToken, `/api/auth/me`, {
+      const response = await handleApiCall(this.accessToken()!, `/api/auth/me`, {
         method: 'DELETE',
       });
 

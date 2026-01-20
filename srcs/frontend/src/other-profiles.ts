@@ -24,7 +24,6 @@ interface ViewedUser {
 class UserProfileViewer {
   private currentUser: User | null = null;
   private viewedUser: ViewedUser | null = null;
-  private accessToken: string | null = null;
   private userId: string | null = null;
   private friendshipStatus: 'none' | 'friend' | 'pending_sent' | 'pending_received' = 'none';
   private isOnline: boolean = false;
@@ -33,11 +32,15 @@ class UserProfileViewer {
     this.init();
   }
 
+  private accessToken(): string | null {
+    return localStorage.getItem('access_token');
+  }
+
   private async init(): Promise<void> {
     const userStr = localStorage.getItem('user');
-    this.accessToken = localStorage.getItem('access_token');
+    this.accessToken()! = localStorage.getItem('access_token');
 
-    if (!userStr || !this.accessToken) {
+    if (!userStr || !this.accessToken()!) {
       window.location.href = './login.html';
       return;
     }
@@ -45,7 +48,7 @@ class UserProfileViewer {
     try {
       this.currentUser = JSON.parse(userStr);
       
-      await verifySession(this.accessToken);
+      await verifySession(this.accessToken()!);
 
       initHeader({ active: 'profile' });
       
@@ -106,7 +109,7 @@ class UserProfileViewer {
 
   private async loadUserProfile(userId: string): Promise<void> {
     try {
-      const authResponse = await handleApiCall(this.accessToken, `/api/auth/${userId}`);
+      const authResponse = await handleApiCall(this.accessToken()!, `/api/auth/${userId}`);
 
       if (!authResponse.ok) {
         if (authResponse.status === 404) {
@@ -122,7 +125,7 @@ class UserProfileViewer {
 
       let avatarUrl: string | undefined = undefined;
       try {
-        const profileResponse = await handleApiCall(this.accessToken, `/api/user/${userId}`);
+        const profileResponse = await handleApiCall(this.accessToken()!, `/api/user/${userId}`);
         
         if (profileResponse.ok) {
           const profileData = await profileResponse.json();
@@ -133,7 +136,7 @@ class UserProfileViewer {
       }
 
       try {
-        const presenceResponse = await handleApiCall(this.accessToken, `/api/realtime/presence/${userId}`);
+        const presenceResponse = await handleApiCall(this.accessToken()!, `/api/realtime/presence/${userId}`);
         
         if (presenceResponse.ok) {
           const presenceData = await presenceResponse.json();
@@ -198,7 +201,7 @@ class UserProfileViewer {
     if (!this.userId) return;
 
     try {
-      const friendsResponse = await handleApiCall(this.accessToken, '/api/user/friend');
+      const friendsResponse = await handleApiCall(this.accessToken()!, '/api/user/friend');
 
       if (friendsResponse.ok) {
         const data = await friendsResponse.json();
@@ -213,7 +216,7 @@ class UserProfileViewer {
         }
       }
 
-      const receivedRequestsResponse = await handleApiCall(this.accessToken, '/api/user/friend-request/received');
+      const receivedRequestsResponse = await handleApiCall(this.accessToken()!, '/api/user/friend-request/received');
 
       if (receivedRequestsResponse.ok) {
         const data = await receivedRequestsResponse.json();
@@ -229,7 +232,7 @@ class UserProfileViewer {
         }
       }
 
-      const sentRequestsResponse = await handleApiCall(this.accessToken, '/api/user/friend-request/sent');
+      const sentRequestsResponse = await handleApiCall(this.accessToken()!, '/api/user/friend-request/sent');
 
       if (sentRequestsResponse.ok) {
         const data = await sentRequestsResponse.json();
@@ -308,7 +311,7 @@ class UserProfileViewer {
     if (!this.userId) return;
 
     try {
-      const response = await handleApiCall(this.accessToken, `/api/user/friend-request/${this.userId}`, {
+      const response = await handleApiCall(this.accessToken()!, `/api/user/friend-request/${this.userId}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -337,7 +340,7 @@ class UserProfileViewer {
     if (!this.userId) return;
 
     try {
-      const response = await handleApiCall(this.accessToken, `/api/user/friend-request/${this.userId}`, {
+      const response = await handleApiCall(this.accessToken()!, `/api/user/friend-request/${this.userId}`, {
         method: 'DELETE',
       });
 
@@ -360,7 +363,7 @@ class UserProfileViewer {
     if (!this.userId) return;
 
     try {
-      const response = await handleApiCall(this.accessToken, `/api/user/friend-request/${this.userId}/accept`, {
+      const response = await handleApiCall(this.accessToken()!, `/api/user/friend-request/${this.userId}/accept`, {
         method: 'POST',
       });
 
@@ -384,7 +387,7 @@ class UserProfileViewer {
     if (!this.userId) return;
 
     try {
-      const response = await handleApiCall(this.accessToken, `/api/user/friend-request/${this.userId}/decline`, {
+      const response = await handleApiCall(this.accessToken()!, `/api/user/friend-request/${this.userId}/decline`, {
         method: 'POST',
       });
 
@@ -409,7 +412,7 @@ class UserProfileViewer {
     if (!confirm('Are you sure you want to remove this friend?')) return;
 
     try {
-      const response = await handleApiCall(this.accessToken, `/api/user/friend/${this.userId}`, {
+      const response = await handleApiCall(this.accessToken()!, `/api/user/friend/${this.userId}`, {
         method: 'DELETE',
       });
 
