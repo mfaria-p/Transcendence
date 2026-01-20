@@ -305,7 +305,7 @@ class ProfileManager {
     }
 
     try {
-      const response = await handleApiCall(this.accessToken()!), '/api/user/provision', {
+      const response = await handleApiCall(this.accessToken()!, '/api/user/provision', {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -374,7 +374,7 @@ class ProfileManager {
     }
 
     try {
-      const response = await handleApiCall(this.accessToken()!), '/api/auth/me', {
+      const response = await handleApiCall(this.accessToken()!, '/api/auth/me', {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
