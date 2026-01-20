@@ -221,6 +221,7 @@ class PongGame {
         console.log('[Pong] Mobile start button TOUCHED');
         if (!this.gameRunning && !this.countdownActive) {
           this.startCountdown();
+          document.body.classList.add('game-running');
           this.hideMobileOverlay();
         }
       });
@@ -561,6 +562,7 @@ class PongGame {
     this.player2.y = this.canvas.height / 2 - this.player2.height / 2;
     
     this.gameRunning = false;
+    document.body.classList.remove('game-running');
     this.showMobileOverlay();
   }
 
