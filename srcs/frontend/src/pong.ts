@@ -54,9 +54,9 @@ class PongGame {
   private readonly BALL_SPEED = 550; 
   private readonly MAX_BALL_SPEED = 1100; 
 
-  private readonly AI_READ_BOUNCE_CHANCE = 0.9;
-  private readonly AI_ERROR_RANGE = 60;
-  private readonly AI_REACTION_TIME_S = 0.35;
+  private readonly AI_READ_BOUNCE_CHANCE = 0.8;
+  private readonly AI_ERROR_RANGE = 70;
+  private readonly AI_REACTION_TIME_S = 0.4;
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -127,7 +127,7 @@ class PongGame {
     const height = canvas.height - ball.height;
 
     // misread ball speed threshold
-    if (this.ball.dx < 800 || Math.random() < this.AI_READ_BOUNCE_CHANCE) {
+    if (this.ball.dx < 700 || Math.random() < this.AI_READ_BOUNCE_CHANCE) {
       while (predictedY < 0 || predictedY > height) {
         if (predictedY < 0) predictedY = -predictedY;
         else if (predictedY > height)
