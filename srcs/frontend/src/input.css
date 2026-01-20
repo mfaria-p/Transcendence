@@ -1652,7 +1652,7 @@ body:not(.menu-collapsed) .menu-toggle .menu-icon {
 	}
 }
 
-@media (max-width: 900px) {
+@media (max-width: 1024px) {
 	body {
 		padding-bottom: 92px;
 	}
@@ -1727,9 +1727,10 @@ body:not(.menu-collapsed) .menu-toggle .menu-icon {
 		display: none;
 	}
 
-	body.menu-hidden .menu-column {
-		transform: translateY(110%);
-	}
+	body.menu-hidden .menu-column,
+    body.game-running .menu-column {
+        transform: translateY(110%);
+    }
 }
 
 /* Terms page styling (kept for parity) */
