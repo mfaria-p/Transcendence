@@ -175,8 +175,6 @@ _This project has been created as part of the 42 curriculum by luguimar, ecorona
 - **How used:** Brainstorming, summarization, and incremental edits reviewed by the team.
 - **Which parts:** Minor bug fixing suggestions, refactoring ideas, and documentation text only. No core logic or project architecture was generated automatically.
 
-Isto protege-vos numa defesa oral.
-
 ## Known Limitations
 
 - WebSocket stability may vary on older browsers without full support.
