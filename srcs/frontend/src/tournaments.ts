@@ -53,9 +53,11 @@ class TournamentsPage {
       this.leaveTournamentKeepalive(this.waitingTournamentId);
     }
   };
-  private tournamentsWsListener = (payload: { tournaments: Tournament[] }): void => {
-    this.processTournaments(payload.tournaments ?? []);
+  private tournamentsWsListener = (payload: { tournaments: unknown[] }): void => {
+    this.processTournaments((payload.tournaments ?? []) as Tournament[]);
   };
+  private listPollingInterval: number | null = null;
+  private listPollingMs = 5000;
 
   constructor() {
     void this.init();
@@ -232,7 +234,7 @@ class TournamentsPage {
         !isPrivate &&
         ((tournament.status === 'waiting' && hasOpenSlot) ||
           (tournament.status === 'running' && tournament.maxPlayers === 2 && hasOpenSlot));
-      const canStart = isOwner && tournament.status === 'waiting' && tournament.players.length >= 2;
+      const canStart = isOwner && tournament.status === 'waiting' && tournament.players.length === tournament.maxPlayers;
       const canLeave = isParticipant && tournament.status === 'waiting';
       const activeMatch = this.getCurrentMatchForUser(tournament);
 
