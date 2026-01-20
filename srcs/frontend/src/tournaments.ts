@@ -71,7 +71,7 @@ class TournamentsPage {
   private async init(): Promise<void> {
     const userStr = localStorage.getItem('user');
 
-    if (!userStr || !this.accessToken()!) {
+    if (!userStr || !this.accessToken()) {
       window.location.href = './login.html';
       return;
     }
@@ -148,7 +148,7 @@ class TournamentsPage {
   }
 
   private async loadTournaments(): Promise<void> {
-    if (!this.accessToken()! || this.isLoading) return;
+    if (!this.accessToken() || this.isLoading) return;
     this.isLoading = true;
     this.toggleLoadingState(true);
 
@@ -438,7 +438,7 @@ class TournamentsPage {
   }
 
   private async enqueueProfileFetch(userId: string): Promise<void> {
-    if (!this.accessToken()!) return;
+    if (!this.accessToken()) return;
     if (this.nameCache.has(userId) || this.fetchingNames.has(userId)) return;
     this.fetchingNames.add(userId);
     try {
@@ -457,7 +457,7 @@ class TournamentsPage {
   private async loadWinnerName(tournament: Tournament): Promise<void> {
     const winnerId = tournament.winnerId;
     if (!winnerId || this.nameCache.has(winnerId) || this.fetchingNames.has(winnerId)) return;
-    if (!this.accessToken()!) return;
+    if (!this.accessToken()) return;
 
     this.fetchingNames.add(winnerId);
     try {
@@ -477,7 +477,7 @@ class TournamentsPage {
   }
 
   private async fetchUserProfile(userId: string): Promise<{ name?: string; username?: string; id?: string } | null> {
-    if (!this.accessToken()!) return null;
+    if (!this.accessToken()) return null;
     try {
       const res = await fetch(`/api/auth/${userId}`, {
         headers: { 'Authorization': `Bearer ${this.accessToken()!}` },
@@ -537,7 +537,7 @@ class TournamentsPage {
   }
 
   private async createTournament(): Promise<void> {
-    if (!this.accessToken()!) return;
+    if (!this.accessToken()) return;
 
     const nameInput = document.getElementById('tournamentName') as HTMLInputElement | null;
     const sizeSelect = document.getElementById('tournamentSize') as HTMLSelectElement | null;
@@ -637,7 +637,7 @@ class TournamentsPage {
   }
 
   private async joinPrivateTournament(): Promise<void> {
-    if (!this.accessToken()!) return;
+    if (!this.accessToken()) return;
 
     const input = document.getElementById('privateJoinCode') as HTMLInputElement | null;
     const raw = input?.value.trim() ?? '';
@@ -694,7 +694,7 @@ class TournamentsPage {
   }
 
   private async joinTournament(tournamentId: string, button?: HTMLButtonElement): Promise<void> {
-    if (!this.accessToken()!) return;
+    if (!this.accessToken()) return;
 
     if (button) {
       button.disabled = true;
@@ -744,12 +744,12 @@ class TournamentsPage {
   }
 
   private leaveTournamentKeepalive(tournamentId: string): void {
-    if (!this.accessToken) return;
+    if (!this.accessToken()) return;
     fetch(`/api/realtime/tournaments/${tournamentId}/leave`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${this.accessToken}`,
+        'Authorization': `Bearer ${this.accessToken()!}`,
       },
       body: '{}',
       keepalive: true,
@@ -763,7 +763,7 @@ class TournamentsPage {
     button?: HTMLButtonElement | null,
     options?: { silent?: boolean },
   ): Promise<boolean> {
-    if (!this.accessToken) return false;
+    if (!this.accessToken()) return false;
 
     if (button) {
       button.disabled = true;
@@ -775,7 +775,7 @@ class TournamentsPage {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${this.accessToken}`,
+          'Authorization': `Bearer ${this.accessToken()!}`,
         },
         body: '{}',
       });
@@ -813,7 +813,7 @@ class TournamentsPage {
     button?: HTMLButtonElement | null,
     options?: { redirectAfterStart?: boolean; skipMessage?: boolean },
   ): Promise<Tournament | null> {
-    if (!this.accessToken()!) return null;
+    if (!this.accessToken()) return null;
 
     if (button) {
       button.disabled = true;
@@ -952,7 +952,7 @@ class TournamentsPage {
   }
 
   private async fetchTournament(tournamentId: string): Promise<Tournament | null> {
-    if (!this.accessToken()!) return null;
+    if (!this.accessToken()) return null;
 
     try {
       const res = await fetch(`/api/realtime/tournaments/${tournamentId}`, {
