@@ -11,9 +11,6 @@ import * as utils from './utils.js';
 
 const RT_COOKIE: string = 'refresh-token';
 
-// TODO
-// signed cookies
-// best practice would be not delete refresh right away
 export default async function (app: FastifyInstance): Promise<void> {
   app.post('/signup', {schema: schemas.postSignupOpts}, async (req: FastifyRequest, reply: FastifyReply) => {
     const {username, email, password} = req.body as {username: string, email: string, password: string};
